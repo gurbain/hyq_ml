@@ -1,0 +1,7 @@
+# Compiled files
+*.pyc
+
+# Data
+*.png
+*.bag
+*.jpg
