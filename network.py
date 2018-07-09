@@ -2,18 +2,25 @@
 from keras.callbacks import EarlyStopping
 from keras.losses import categorical_crossentropy, mean_absolute_error
 from keras.optimizers import Adadelta
-from keras.models import Sequential, Model
+from keras.models import Sequential, Model,load_model
 from keras.layers import Dense, Activation, Flatten, Input, Concatenate
+
+import copy
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 import pickle
 import rospy as ros
 import rosbag
 from scipy.interpolate import interp1d
 from sklearn.preprocessing import MinMaxScaler
+import sys
+import time
 
+import utils
 
 ## MATPLOTLIB STYLE
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 plt.style.use('fivethirtyeight')
 plt.rc('lines', linewidth= 1)
 plt.rc('text', usetex=False)
@@ -26,15 +33,16 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, batch_size=64, epochs=5000, test_split=0.7,
-                 val_split=0.1, nn_layers=[(1024, 'relu')],
-                 stop_delta=0.00001, stop_pat=50, verbose=2,
-                 file="data/sims/simple_walk.bag"):
+    def __init__(self, batch_size=64, epochs=2, test_split=0.7,
+                 x_mem_buff_size=5, val_split=0.1, verbose=2,
+                 nn_layers=[(1024, 'relu')], stop_delta=0.00001,
+                 stop_pat=50, data_file="data/sims/simple_walk.bag"):
 
         ## ALGORITHM METAPARAMETERS
-        self.file = file
+        self.data_file = data_file
         self.batch_size = batch_size
         self.epochs = epochs
+        self.x_mem_buff_size = x_mem_buff_size
         self.test_split = test_split
         self.val_split = val_split
         self.network_layers = nn_layers
@@ -42,27 +50,35 @@ class FeedForwardNN():
         self.stop_pat = stop_pat
         self.verbose = verbose
 
-
+        self.history = None
+        self.nn = None
+        self.training_time = 0
+        self.loss = 0
+        self.acc = 0
         self.x_scaler = None
         self.y_scaler = None
 
     ## DATA PROCESSING FUNCTIONS
 
-    def get_data(self, file):
+    def load_data(self):
 
-        if ".pkl" in file:
-            return self.get_pkl(file)
-        elif ".bag" in file:
-            return self.get_bag(file)
+        self.printv("\n ===== Collecting Data =====\n")
 
-    def get_bag(self, file):
+        if ".pkl" in self.data_file:
+            x, x2, y = self.load_pkl()
+        elif ".bag" in self.data_file:
+            x, x2, y = self.load_bag()
+
+        self.format_data(x, x2, y)
+
+    def load_bag(self):
 
         x = []
         x2 = []
         y = []
 
         # Retrieve the data from the bag file
-        bag = rosbag.Bag(file, 'r')
+        bag = rosbag.Bag(self.data_file, 'r')
         t_init = bag.get_start_time()
         for topic, msg, t in bag.read_messages():
             if topic == "/hyq/robot_states":
@@ -93,14 +109,14 @@ class FeedForwardNN():
                 y.append(r)
 
         # Save usefull data to a pickle file to restore more quickly
-        with open(file.replace("bag", "pkl") , "wb") as f:
+        with open(self.data_file.replace("bag", "pkl") , "wb") as f:
             pickle.dump([x, x2, y], f, protocol=2)
 
         return x, x2, y
 
-    def get_pkl(self, file):
+    def load_pkl(self):
 
-        with open(file , "rb") as f:
+        with open(self.data_file , "rb") as f:
             [x, x2, y] = pickle.load(f)
 
         return x, x2, y
@@ -125,7 +141,7 @@ class FeedForwardNN():
 
         return np.array(y).T
 
-    def format_dataset(self, x, x2, y):
+    def format_data(self, x, x2, y):
 
         # Get values
         x_t = np.array([r["t"] for r in x])
@@ -149,12 +165,20 @@ class FeedForwardNN():
         y_new = self.interpolate(y_fct, t_new)
 
         # Concatenate all input data
-        print x_new.shape, x2_new.shape
         x_new = np.hstack((x_new, x2_new))
-        print x_new.shape
+
+        # Add memory buffer on the input data
+        x_shift = copy.copy(x_new)
+        x_buff = copy.copy(x_new)
+        for i in range(1, self.x_mem_buff_size):
+            x_shift = np.vstack((np.zeros((i, x_new.shape[1])),
+                                 x_new[:-i, :]))
+            x_buff = np.hstack((x_buff, x_shift))
+        x_new = copy.copy(x_buff)
+        del x_buff, x_shift
 
         # Shift prediction of one time step
-        x_new = np.vstack((np.zeros((1, x_new.shape[1])), x_new[1:, :]))
+        x_new = np.vstack((np.zeros((1, x_new.shape[1])), x_new[:-1, :]))
 
         # Divide into training and testing dataset
         x_train = x_new[0:int(x_new.shape[0]*self.test_split), :]
@@ -191,21 +215,26 @@ class FeedForwardNN():
         for c, r in zip(col, dat):
             self.printv(row_format.format(c, *r))
 
-        return x_train, y_train, x_test, y_test
+        self.x_train = x_train
+        self.y_train = y_train
+        self.x_test = x_test
+        self.y_test = y_test
 
     def unscale(self, x, y):
 
-        global x_scaler, y_scaler
-        x = x_scaler.inverse_transform(x)
-        y = y_scaler.inverse_transform(y)
+        x = self.x_scaler.inverse_transform(x)
+        y = self.y_scaler.inverse_transform(y)
 
         return x, y
 
     ## KERAS NETWORK FUNCTIONS
 
-    def create_nn(self, n_in, n_out):
+    def create_nn(self):
+
+        self.printv("\n\n\n ===== Creating Network =====")
 
         # Input Layer
+        n_in = self.x_train.shape[1]
         state_input = Input(shape=(n_in, 1, ),
                             name='robot_state')
         x = Flatten()(state_input)
@@ -216,19 +245,45 @@ class FeedForwardNN():
             x = Activation(l[1])(x)
 
         # Output Layer
+        n_out = self.y_train.shape[1]
         x = Dense(n_out)(x)
         x = Activation('tanh')(x)
 
         # Compile and print network
-        nn = Model(inputs=[state_input], outputs=x)
-        nn.compile(loss='mse',
+        self.nn = Model(inputs=[state_input], outputs=x)
+        self.nn.compile(loss='mse',
                    optimizer=Adadelta(),
                    metrics=['accuracy', 'mse', 'mae', 'mape', 'cosine'])
         if self.verbose > 1:
-            nn.summary()
-        return nn
+            self.nn.summary()
 
     ## PLOT AND EVALUATION FUNCTIONS
+
+    def save(self, folder=None):
+
+        self.printv("\n\n ===== Saving =====")
+
+        if folder is None:
+            folder = "data/nn_learning/" + utils.timestamp()
+            utils.mkdir(folder)
+
+        # Save training data
+        to_save = copy.copy(self.__dict__)
+        del to_save["nn"], to_save["history"].model, to_save["x_train"]
+        del to_save["y_train"], to_save["x_test"], to_save["y_test"]
+        pickle.dump(to_save, open(folder + "/network.pkl", "wb"), protocol=2)
+        del to_save
+
+        # Save model
+        if self.nn is not None:
+            self.nn.save(folder + "/model.h5")
+
+    def load(self, folder):
+
+        with open(folder + "network.pkl",'rb') as f:
+            self.__dict__ = pickle.load(f)
+
+        self.nn = load_model(folder + "/model.h5")
 
     def printv(self, txt):
 
@@ -244,18 +299,20 @@ class FeedForwardNN():
         plt.grid(True)
         plt.show()
 
-    def plot_evaluation(self, hist, x_test, y_test, show):
+    def evaluate(self, show):
 
-        score = self.nn.evaluate(x_test, y_test, verbose=2)
-        y_pred = self.nn.predict(x_test, batch_size=self.batch_size,
+        self.printv("\n\n ===== Evaluating Test Dataset =====\n")
+
+        score = self.nn.evaluate(self.x_test, self.y_test, verbose=2)
+        y_pred = self.nn.predict(self.x_test, batch_size=self.batch_size,
                                  verbose=self.verbose)
         self.printv("Test loss: " + str(score[0]))
         self.printv("Test accuracy: " + str(score[1]))
 
         if show:
             # Summarize history for accuracy
-            plt.plot(hist.history['acc'])
-            plt.plot(hist.history['val_acc'])
+            plt.plot(self.history.history['acc'])
+            plt.plot(self.history.history['val_acc'])
             plt.title('Model accuracy')
             plt.ylabel('Accuracy')
             plt.xlabel('Epoch')
@@ -263,8 +320,8 @@ class FeedForwardNN():
             plt.show()
 
             # Summarize history for loss
-            plt.plot(hist.history['loss'])
-            plt.plot(hist.history['val_loss'])
+            plt.plot(self.history.history['loss'])
+            plt.plot(self.history.history['val_loss'])
             plt.title('Model Loss')
             plt.ylabel('Loss')
             plt.xlabel('Epoch')
@@ -282,39 +339,51 @@ class FeedForwardNN():
 
     ## MAIN FUNCTION
 
-    def run(self, show=True):
+    def train(self, show=True):
 
         # Get data
-        self.printv("\n ===== Collecting Data from Rosbag =====")
-        x, x2, y = self.get_data(self.file)
-        x_train, y_train, x_test, y_test = self.format_dataset(x, x2, y)
+        self.load_data()
 
         # Create network
-        self.printv("\n\n\n ===== Creating Network =====")
-        self.nn = self.create_nn(x_train.shape[1], y_train.shape[1])
+        self.create_nn()
 
         # Train Network
         self.printv("\n\n ===== Training Network =====\n")
-        callbacks = [EarlyStopping(monitor='val_loss',  mode="min",
-                                   verbose=self.verbose, patience=self.stop_pat,
-                                   min_delta=self.stop_delta)]
-        history = self.nn.fit(x_train, y_train,
+        t_i = time.time()
+        if self.stop_delta is None:
+            callbacks = []
+        else:
+            callbacks = [EarlyStopping(monitor='val_loss',  mode="min",
+                                       verbose=self.verbose,
+                                       patience=self.stop_pat,
+                                       min_delta=self.stop_delta)]
+        self.history = self.nn.fit(self.x_train, self.y_train,
                          validation_split=self.val_split,
                          batch_size=self.batch_size,
                          epochs=self.epochs,
                          callbacks=callbacks,
                          verbose=self.verbose)
+        self.training_time = time.time() - t_i
+
+        # Save Results
+        self.save()
 
         # Show Evaluation
-        self.printv("\n\n ===== Showing Results =====")
-        loss, acc = self.plot_evaluation(history, x_test, y_test, show)
-
-        return loss, acc, history
-
+        self.loss, self.acc = self.evaluate(show)
 
 
 if __name__ == '__main__':
 
-    nn_layers = [(2048, 'relu'), (2048, 'relu')]
-    nn = FeedForwardNN(nn_layers=nn_layers, file="data/sims/rough_walk.pkl")
-    nn.run(True)
+    if len(sys.argv) > 1:
+
+        if sys.argv[1] == "test":
+            nn = FeedForwardNN()
+            nn.load(sys.argv[2])
+            nn.load_data()
+            nn.evaluate(False)
+
+        if sys.argv[1] == "train":
+            nn_layers = [(2048, 'relu'), (2048, 'relu')]
+            nn = FeedForwardNN(nn_layers=nn_layers,
+                               data_file="data/sims/rough_walk.pkl")
+            nn.train(False)
