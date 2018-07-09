@@ -6,6 +6,7 @@ from keras.models import Sequential, Model
 from keras.layers import Dense, Activation, Flatten, Input, Concatenate
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 import rospy as ros
 import rosbag
 from scipy.interpolate import interp1d
@@ -25,14 +26,13 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, n_interpol=20000, batch_size=64, epochs=5000,
-                 test_split=0.7, val_split=0.1, nn_layers=[(1024, 'relu')],
+    def __init__(self, batch_size=64, epochs=5000, test_split=0.7,
+                 val_split=0.1, nn_layers=[(1024, 'relu')],
                  stop_delta=0.00001, stop_pat=50, verbose=2,
                  file="data/sims/simple_walk.bag"):
 
         ## ALGORITHM METAPARAMETERS
         self.file = file
-        self.data_n = n_interpol
         self.batch_size = batch_size
         self.epochs = epochs
         self.test_split = test_split
@@ -42,11 +42,23 @@ class FeedForwardNN():
         self.stop_pat = stop_pat
         self.verbose = verbose
 
+
+        self.x_scaler = None
+        self.y_scaler = None
+
     ## DATA PROCESSING FUNCTIONS
 
     def get_data(self, file):
 
+        if ".pkl" in file:
+            return self.get_pkl(file)
+        elif ".bag" in file:
+            return self.get_bag(file)
+
+    def get_bag(self, file):
+
         x = []
+        x2 = []
         y = []
 
         # Retrieve the data from the bag file
@@ -57,17 +69,41 @@ class FeedForwardNN():
                 r = dict()
                 r["t"] = t.to_time()
                 r["base"] = [b.velocity for b in msg.base]
-                r["joint"] = [b.velocity for b in msg.joints]
+                r["joint"] = [b.position for b in msg.joints]
+                r["joint"] += [b.velocity for b in msg.joints]
+                r["joint"] += [b.effort for b in msg.joints]
                 x.append(r)
+            if topic == "/hyq/debug":
+                r = dict()
+                r["t"] = t.to_time()
+                stance = []
+                for i, m in enumerate(msg.name):
+                    if m in ["stanceLF",
+                             "stanceLH",
+                             "stanceRF",
+                             "stanceRH"]:
+                        stance += [msg.data[i]]
+                r["stance"] = stance
+                x2.append(r)
             if topic == "/hyq/des_joint_states":
                 r = dict()
                 r["t"] = t.to_time()
                 r["pos"] = list(msg.position)
                 r["vel"] = list(msg.velocity)
-                r["eff"] = list(msg.effort)
                 y.append(r)
 
-        return x, y
+        # Save usefull data to a pickle file to restore more quickly
+        with open(file.replace("bag", "pkl") , "wb") as f:
+            pickle.dump([x, x2, y], f, protocol=2)
+
+        return x, x2, y
+
+    def get_pkl(self, file):
+
+        with open(file , "rb") as f:
+            [x, x2, y] = pickle.load(f)
+
+        return x, x2, y
 
     def get_fct(self, x, y):
 
@@ -89,21 +125,33 @@ class FeedForwardNN():
 
         return np.array(y).T
 
-    def format_dataset(self, x, y):
+    def format_dataset(self, x, x2, y):
 
         # Get values
         x_t = np.array([r["t"] for r in x])
+        x2_t = np.array([r["t"] for r in x2])
         y_t = np.array([r["t"] for r in y])
         x_val = np.array([r["joint"] + r["base"] for r in x])
-        y_val = np.array([r["pos"] + r["vel"] + r["eff"] for r in y])
+        x2_val = np.array([r["stance"] for r in x2])
+        y_val = np.array([r["pos"] + r["vel"] for r in y])
+
+        # Get new interpolation range
+        self.data_n = max(len(x), len(x2), len(y))
 
         # Interpolate in new range
         x_fct = self.get_fct(x_t, x_val)
+        x2_fct = self.get_fct(x2_t, x2_val)
         y_fct = self.get_fct(y_t, y_val)
         t_new = np.linspace(max(np.min(x_t), np.min(y_t)),
                             min(np.max(x_t), np.max(y_t)), self.data_n)
         x_new = self.interpolate(x_fct, t_new)
+        x2_new = self.interpolate(x2_fct, t_new)
         y_new = self.interpolate(y_fct, t_new)
+
+        # Concatenate all input data
+        print x_new.shape, x2_new.shape
+        x_new = np.hstack((x_new, x2_new))
+        print x_new.shape
 
         # Shift prediction of one time step
         x_new = np.vstack((np.zeros((1, x_new.shape[1])), x_new[1:, :]))
@@ -115,15 +163,14 @@ class FeedForwardNN():
         y_test = y_new[int(y_new.shape[0]*self.test_split):, :]
 
         # Scale
-        global x_scaler, y_scaler
-        x_scaler = MinMaxScaler()
-        y_scaler = MinMaxScaler()
-        x_scaler.fit(x_train)
-        x_train = x_scaler.transform(x_train)
-        x_test = x_scaler.transform(x_test)
-        y_scaler.fit(y_train)
-        y_train = y_scaler.transform(y_train)
-        y_test = y_scaler.transform(y_test)
+        self.x_scaler = MinMaxScaler()
+        self.y_scaler = MinMaxScaler()
+        self.x_scaler.fit(x_train)
+        x_train = self.x_scaler.transform(x_train)
+        x_test = self.x_scaler.transform(x_test)
+        self.y_scaler.fit(y_train)
+        y_train = self.y_scaler.transform(y_train)
+        y_test = self.y_scaler.transform(y_test)
 
         # Expend dims for the NN
         x_train = np.expand_dims(x_train, axis=2)
@@ -132,12 +179,12 @@ class FeedForwardNN():
         # Print dimensions in a table
         lin = ["HyQ Body State (in)", "Hyq joint command (out)"]
         col = ["Training", "Validation", "Testing"]
-        dat = [[(x_train.shape[0]*(1-self.val_split),
+        dat = [[(int(x_train.shape[0]*(1-self.val_split)),
                  x_train.shape[1], x_train.shape[2]),
-                (y_train.shape[0]*(1-self.val_split), y_train.shape[1])],
-               [(x_train.shape[0]*self.val_split,
+                (int(y_train.shape[0]*(1-self.val_split)), y_train.shape[1])],
+               [(int(x_train.shape[0]*self.val_split),
                  x_train.shape[1], x_train.shape[2]),
-                (y_train.shape[0]*self.val_split, y_train.shape[1])],
+                (int(y_train.shape[0]*self.val_split), y_train.shape[1])],
                [x_test.shape, y_test.shape]]
         row_format = "{:>25}" * (len(lin) + 1)
         self.printv(row_format.format("", *lin))
@@ -239,8 +286,8 @@ class FeedForwardNN():
 
         # Get data
         self.printv("\n ===== Collecting Data from Rosbag =====")
-        x, y = self.get_data(self.file)
-        x_train, y_train, x_test, y_test = self.format_dataset(x, y)
+        x, x2, y = self.get_data(self.file)
+        x_train, y_train, x_test, y_test = self.format_dataset(x, x2, y)
 
         # Create network
         self.printv("\n\n\n ===== Creating Network =====")
@@ -268,5 +315,6 @@ class FeedForwardNN():
 
 if __name__ == '__main__':
 
-    nn = FeedForwardNN()
-    nn.run(False)
+    nn_layers = [(2048, 'relu'), (2048, 'relu')]
+    nn = FeedForwardNN(nn_layers=nn_layers, file="data/sims/rough_walk.pkl")
+    nn.run(True)
