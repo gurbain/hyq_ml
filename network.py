@@ -27,7 +27,8 @@ class FeedForwardNN():
 
     def __init__(self, n_interpol=20000, batch_size=64, epochs=5000,
                  test_split=0.7, val_split=0.1, nn_layers=[(1024, 'relu')],
-                 stop_delta=0.0001, file="data/sims/simple_walk.bag"):
+                 stop_delta=0.00001, stop_pat=50, verbose=2,
+                 file="data/sims/simple_walk.bag"):
 
         ## ALGORITHM METAPARAMETERS
         self.file = file
@@ -38,6 +39,8 @@ class FeedForwardNN():
         self.val_split = val_split
         self.network_layers = nn_layers
         self.stop_delta = stop_delta
+        self.stop_pat = stop_pat
+        self.verbose = verbose
 
     ## DATA PROCESSING FUNCTIONS
 
@@ -137,9 +140,9 @@ class FeedForwardNN():
                 (y_train.shape[0]*self.val_split, y_train.shape[1])],
                [x_test.shape, y_test.shape]]
         row_format = "{:>25}" * (len(lin) + 1)
-        print row_format.format("", *lin)
+        self.printv(row_format.format("", *lin))
         for c, r in zip(col, dat):
-            print row_format.format(c, *r)
+            self.printv(row_format.format(c, *r))
 
         return x_train, y_train, x_test, y_test
 
@@ -174,10 +177,16 @@ class FeedForwardNN():
         nn.compile(loss='mse',
                    optimizer=Adadelta(),
                    metrics=['accuracy', 'mse', 'mae', 'mape', 'cosine'])
-        print(nn.summary())
+        if self.verbose > 1:
+            nn.summary()
         return nn
 
     ## PLOT AND EVALUATION FUNCTIONS
+
+    def printv(self, txt):
+
+        if self.verbose > 1:
+            print(txt)
 
     def plot_hist(self, x):
 
@@ -192,9 +201,9 @@ class FeedForwardNN():
 
         score = self.nn.evaluate(x_test, y_test, verbose=2)
         y_pred = self.nn.predict(x_test, batch_size=self.batch_size,
-                                 verbose=2)
-        print "Test loss: " + str(score[0])
-        print "Test accuracy: " + str(score[1])
+                                 verbose=self.verbose)
+        self.printv("Test loss: " + str(score[0]))
+        self.printv("Test accuracy: " + str(score[1]))
 
         if show:
             # Summarize history for accuracy
@@ -229,30 +238,31 @@ class FeedForwardNN():
     def run(self, show=True):
 
         # Get data
-        print("\n ===== Collecting Data from Rosbag =====")
+        self.printv("\n ===== Collecting Data from Rosbag =====")
         x, y = self.get_data(self.file)
         x_train, y_train, x_test, y_test = self.format_dataset(x, y)
 
         # Create network
-        print("\n\n\n ===== Creating Network =====")
+        self.printv("\n\n\n ===== Creating Network =====")
         self.nn = self.create_nn(x_train.shape[1], y_train.shape[1])
 
         # Train Network
-        print("\n\n ===== Training Network =====\n")
-        callbacks = [EarlyStopping(monitor='val_acc', patience=3,
-                                   verbose=0, min_delta=self.stop_delta)]
+        self.printv("\n\n ===== Training Network =====\n")
+        callbacks = [EarlyStopping(monitor='val_loss',  mode="min",
+                                   verbose=self.verbose, patience=self.stop_pat,
+                                   min_delta=self.stop_delta)]
         history = self.nn.fit(x_train, y_train,
                          validation_split=self.val_split,
                          batch_size=self.batch_size,
                          epochs=self.epochs,
                          callbacks=callbacks,
-                         verbose=2)
+                         verbose=self.verbose)
 
         # Show Evaluation
-        print("\n\n ===== Showing Results =====")
+        self.printv("\n\n ===== Showing Results =====")
         loss, acc = self.plot_evaluation(history, x_test, y_test, show)
 
-        return loss, acc
+        return loss, acc, history
 
 
 

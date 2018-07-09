@@ -1,4 +1,11 @@
+from contextlib import contextmanager
+import copy
 import numpy as np
+import os
+import pickle
+import sys
+import time
+
 
 def cartesian(arrays, out=None):
     """
@@ -49,3 +56,56 @@ def cartesian(arrays, out=None):
         for j in xrange(1, arrays[0].size):
             out[j*m:(j+1)*m,1:] = out[0:m,1:]
     return out
+
+
+
+def timestamp():
+    """ Return a string stamp with current date and time """
+
+    return time.strftime("%Y%m%d-%H%M%S", time.localtime())
+
+
+def mkdir(path):
+    """ Create a directory if it does not exist yet """
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+
+def cleanup():
+
+    print('\n\n -- Quitting and killing all children processes! -- \n')
+    process = psutil.Process()
+    children = process.children(recursive=True)
+    time.sleep(0.2)
+    for p in children:
+        p.kill()
+    process.kill()
+
+
+def save_on_top(newdata, filename):
+    """ Append data to a file that is already saved """
+
+    if os.path.exists(filename):
+        data = pickle.load(open(filename, "rb"))
+        final = list(copy.copy(data)) + [copy.copy(newdata)]
+    else:
+        final = [copy.copy(newdata)]
+
+    pickle.dump(final, open(filename, "wb"), protocol=2)
+
+
+class RedirectStdStreams(object):
+    def __init__(self, stdout=None, stderr=None):
+        self._stdout = stdout or sys.stdout
+        self._stderr = stderr or sys.stderr
+
+    def __enter__(self):
+        self.old_stdout, self.old_stderr = sys.stdout, sys.stderr
+        self.old_stdout.flush(); self.old_stderr.flush()
+        sys.stdout, sys.stderr = self._stdout, self._stderr
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._stdout.flush(); self._stderr.flush()
+        sys.stdout = self.old_stdout
+        sys.stderr = self.old_stderr
