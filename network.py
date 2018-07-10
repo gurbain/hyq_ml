@@ -1,5 +1,5 @@
 ## IMPORTS
-from keras.callbacks import EarlyStopping
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.losses import categorical_crossentropy, mean_absolute_error
 from keras.optimizers import Adadelta
 from keras.models import Sequential, Model,load_model
@@ -33,15 +33,17 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, batch_size=64, epochs=2, test_split=0.7,
+    def __init__(self, batch_size=64, max_epochs=5000, test_split=0.7,
                  x_mem_buff_size=5, val_split=0.1, verbose=2,
                  nn_layers=[(1024, 'relu')], stop_delta=0.00001,
-                 stop_pat=50, data_file="data/sims/simple_walk.bag"):
+                 stop_pat=50, data_file="data/sims/simple_walk.bag",
+                 save_folder="data/nn_learning/"):
 
         ## ALGORITHM METAPARAMETERS
         self.data_file = data_file
+        self.save_folder = save_folder
         self.batch_size = batch_size
-        self.epochs = epochs
+        self.max_epochs = max_epochs
         self.x_mem_buff_size = x_mem_buff_size
         self.test_split = test_split
         self.val_split = val_split
@@ -49,6 +51,10 @@ class FeedForwardNN():
         self.stop_delta = stop_delta
         self.stop_pat = stop_pat
         self.verbose = verbose
+
+        # Create saving folder
+        self.save_folder = save_folder + utils.timestamp()
+        utils.mkdir(self.save_folder)
 
         self.history = None
         self.nn = None
@@ -259,28 +265,25 @@ class FeedForwardNN():
 
     ## PLOT AND EVALUATION FUNCTIONS
 
-    def save(self, folder=None):
+    def save(self):
 
         self.printv("\n\n ===== Saving =====")
-
-        if folder is None:
-            folder = "data/nn_learning/" + utils.timestamp()
-            utils.mkdir(folder)
 
         # Save training data
         to_save = copy.copy(self.__dict__)
         del to_save["nn"], to_save["history"].model, to_save["x_train"]
         del to_save["y_train"], to_save["x_test"], to_save["y_test"]
-        pickle.dump(to_save, open(folder + "/network.pkl", "wb"), protocol=2)
+        pickle.dump(to_save, open(self.save_folder + "/network.pkl", "wb"),
+                    protocol=2)
         del to_save
 
         # Save model
         if self.nn is not None:
-            self.nn.save(folder + "/model.h5")
+            self.nn.save(self.save_folder + "/model.h5")
 
     def load(self, folder):
 
-        with open(folder + "network.pkl",'rb') as f:
+        with open(folder + "/network.pkl",'rb') as f:
             self.__dict__ = pickle.load(f)
 
         self.nn = load_model(folder + "/model.h5")
@@ -290,7 +293,7 @@ class FeedForwardNN():
         if self.verbose > 1:
             print(txt)
 
-    def plot_hist(self, x):
+    def plot_histogram(self, x):
 
         n, bins, p = plt.hist(x, 50, facecolor='g', alpha=0.75)
 
@@ -308,6 +311,8 @@ class FeedForwardNN():
                                  verbose=self.verbose)
         self.printv("Test loss: " + str(score[0]))
         self.printv("Test accuracy: " + str(score[1]))
+        self.test_loss = score[0]
+        self.test_accuracy = score[1]
 
         if show:
             # Summarize history for accuracy
@@ -331,7 +336,7 @@ class FeedForwardNN():
             # Plot test and predicted values
             plt.plot(y_test[:, 0], label="real")
             plt.plot(y_pred[:, 0], label="predicted")
-            plt.plot(np.abs(y_test - y_pred)[:, 0], label="MAE error"),
+            plt.plot(np.abs(self.y_test - y_pred)[:, 0], label="MAE error"),
             plt.legend()
             plt.show()
 
@@ -339,7 +344,30 @@ class FeedForwardNN():
 
     ## MAIN FUNCTION
 
-    def train(self, show=True):
+    def train(self):
+
+        self.printv("\n\n ===== Training Network =====\n")
+
+        t_i = time.time()
+        callbacks = [ModelCheckpoint(self.save_folder + "/best_model.h5",
+                                     monitor='val_acc', verbose=self.verbose,
+                                     save_best_only=True, mode='max')]
+        if self.stop_delta is not None:
+            callbacks += [EarlyStopping(monitor='val_loss',  mode="min",
+                                       verbose=self.verbose,
+                                       patience=self.stop_pat,
+                                       min_delta=self.stop_delta)]
+
+        self.history = self.nn.fit(self.x_train, self.y_train,
+                         validation_split=self.val_split,
+                         batch_size=self.batch_size,
+                         epochs=self.max_epochs,
+                         callbacks=callbacks,
+                         verbose=self.verbose)
+
+        self.training_time = time.time() - t_i
+
+    def run(self, show=True):
 
         # Get data
         self.load_data()
@@ -348,28 +376,15 @@ class FeedForwardNN():
         self.create_nn()
 
         # Train Network
-        self.printv("\n\n ===== Training Network =====\n")
-        t_i = time.time()
-        if self.stop_delta is None:
-            callbacks = []
-        else:
-            callbacks = [EarlyStopping(monitor='val_loss',  mode="min",
-                                       verbose=self.verbose,
-                                       patience=self.stop_pat,
-                                       min_delta=self.stop_delta)]
-        self.history = self.nn.fit(self.x_train, self.y_train,
-                         validation_split=self.val_split,
-                         batch_size=self.batch_size,
-                         epochs=self.epochs,
-                         callbacks=callbacks,
-                         verbose=self.verbose)
-        self.training_time = time.time() - t_i
+        self.train()
 
         # Save Results
         self.save()
 
         # Show Evaluation
-        self.loss, self.acc = self.evaluate(show)
+        self.evaluate(show)
+
+        return self.test_loss, self.test_accuracy
 
 
 if __name__ == '__main__':
@@ -384,6 +399,6 @@ if __name__ == '__main__':
 
         if sys.argv[1] == "train":
             nn_layers = [(2048, 'relu'), (2048, 'relu')]
-            nn = FeedForwardNN(nn_layers=nn_layers,
+            nn = FeedForwardNN(stop_delta = None, nn_layers=nn_layers,
                                data_file="data/sims/rough_walk.pkl")
-            nn.train(False)
+            nn.run(False)

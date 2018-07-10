@@ -1,17 +1,28 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+## MATPLOTLIB STYLE
+plt.style.use('fivethirtyeight')
+plt.rc('lines', linewidth= 1)
+plt.rc('text', usetex=False)
+plt.rc('axes', facecolor='white')
+plt.rc('savefig', facecolor='white')
+plt.rc('figure', autolayout=True)
+
 
 class Neuron(object):
 
     def tran_fct(self, xStates):
 
         x = xStates.copy()
-        for idx,itm in enumerate(x):
+        for idx, itm in enumerate(x):
             if itm <= 0 :
                 x[idx] = 0
             else :
-                x[idx] = 0.786*itm/(0.110+itm)-0.014 #fitted IO curve
+                x[idx] = 0.786*itm/(0.110+itm)-0.014
+
         return x
 
-        # return np.tanh(xStates)
 
 class ReservoirNet(Neuron):
     """
@@ -19,138 +30,170 @@ class ReservoirNet(Neuron):
     using Reservoir Computing architecture, with the goal of comparing with a network of spiking populations.
     """
 
-    def __init__(self, n_in=0, n_fb=0, n_out=1, n_res=100, spec_rad=1.15, leakage=0.1, scale_bias=0.5, scale_fb=5.0, scale_noise=0.01, scale_fb_noise=0.01,
-                 verbose=False,negative_weights=True,fraction_inverted=0.0,seed=None,config=None):
-        """
-        :param n_in:
-        :param n_fb:
-        :param n_out:
-        :param n_res:
-        :param spec_rad:
-        :param leakage:
-        :param scale_bias:
-        :param scale_fb:
-        :param scale_noise:
-        :param scale_fb_noise:
-        :param verbose:
-        :param negative_weights:
-        :param fraction_inverted:
-        :param seed:
-        :param config:
-        """
-        if config != None:
-            self.load(config)
+    def __init__(self, n_in=0, n_fb=0, n_res=1000, spec_rad=0.95,
+                 leakage=0.1, scale_bias=0.5, scale_fb=5.0, verbose=3,
+                 neg_w=True, seed=None, keep_hist=True):
+
+        Neuron.__init__(self)
+
+        self.scale_bias = scale_bias
+        self.scale_fb = scale_fb
+        self.spec_rad = spec_rad
+        self.leakage = leakage
+        self.seed = seed
+        self.neg_w = neg_w
+        self.verbose = verbose
+        self.keep_hist = keep_hist
+
+        self.n_in = n_in
+        self.n_fb = n_fb
+        self.n_res = n_res
+
+    def start(self):
+
+        self.printv("\n\n ===== Initializing Reservoir =====")
+
+        # Get random generator
+        if self.seed == None:
+            self.rng = np.random.RandomState(np.random.randint(0,99999))
         else:
-            Neuron.__init__(self)
+            self.rng = np.random.RandomState(self.seed)
 
-            self.scale_bias = scale_bias
-            self.scale_fb = scale_fb
-            self.scale_noise = scale_noise
-            self.scale_feedback_noise = scale_fb_noise
+        # Initialize input weights
+        self.w_in = self.rng.randn(self.n_res, self.n_in)
+        if not(self.neg_w):
+            self.w_in = abs(self.w_in)
 
-            self.leakage = leakage
+        # Initialise bias
+        self.w_bias = self.rng.randn(self.n_res, 1) * self.scale_bias
 
-            self.TRANS_PERC = 0.1
+        # Initialize reservoir random weights given spectral radius
+        self.w_res = self.get_rand_mat()
 
-            self.n_in = n_in
-            self.n_fb = n_fb
-            self.n_out = n_out
-            self.n_res = n_res
+        # Initialize reservoir feedback (not used)
+        self.w_fb = self.rng.randn(self.n_res, self.n_fb) * self.scale_fb
+        if not(self.neg_w):
+            self.w_fb = abs(self.w_fb)
 
-            if seed == None:
-                self.rng=np.random.RandomState(np.random.randint(0,99999))
-            else:
-                self.rng=np.random.RandomState(seed)
+        # Create connection probability
+        self.p_connect_res = self.create_conn_mat()
+        self.p_connect_fb = 0.1
+        self.p_connect_in = 1.0
 
-            self.w_out = self.rng.randn(n_out,n_res) # (to,from)
-            if not (negative_weights):
-                self.w_out = abs(self.w_out)
-            self.w_in = self.rng.randn(n_res, n_in)
-            if not(negative_weights):
-                self.w_in = abs(self.w_in)
-            self.w_bias = self.rng.randn(n_res,1) * self.scale_bias
-            self.w_bias = 0.0 #mimics resting noise level of approx 50 Hz
-            self.w_res = self.get_rand_mat(n_res, spec_rad,negative_weights=negative_weights) # (to,from)
+        # Create arrays of zeros for the initial states
+        self.x = np.zeros((self.n_res, 1))
+        self.u = np.zeros(self.n_in)
 
-            self.w_fb = self.rng.randn(n_res, n_fb) * self.scale_fb
-            # while(min(self.w_fb)<-0.5): #large negative fb weight results in inactive population
-            #     self.w_fb[self.w_fb.argmin()] = self.rng.randn() * self.scale_fb
+        # Set iteration number to 0
+        self.it = 0
 
-            if not(negative_weights):
-                self.w_fb = abs(self.w_fb)
+    def get_coord(self, ind, x_d, y_d):
 
-            self.p_connect_res = self.createConnectivityMatrix() # (to,from)
-            # p_connect_fb = np.ones((n_res))*0.1 # fixed Pconnect for feedback connections
-            # self.p_connect_fb = p_connect_fb.reshape(-1,1)
-            # self.p_connect_in = np.ones((n_res,1))
-            self.p_connect_fb = 0.1
-            self.p_connect_in = 1.0
+        if not (isinstance(ind, (int, long)) & isinstance(x_d, (int, long)) & isinstance(y_d, (int, long))):
+            raise Exception('population index, x dimension and y dimension must be integer types')
+        z_d = x_d * y_d
 
-            self.N_inverted = int(np.round(n_res*fraction_inverted))
-            # set initial state
-            # self.x = self.rng.randn(n_res, 1)
-            self.x = np.zeros((n_res, 1))
-            self.u = np.zeros(n_in)
-            self.y = np.zeros((n_out, 1))
+        z = ind / z_d
+        y = (ind - z * z_d) / x_d
+        x = ind - z * z_d - y * x_d
 
-            self.verbose = verbose
-
-            self.Y = np.array([])
-            self.X = np.array([])
-
-    def get_coord(self, ID, xD, yD):
-
-        if not (isinstance(ID, (int, long)) & isinstance(xD, (int, long)) & isinstance(yD, (int, long))):
-            raise Exception('population ID, xDimension and yDimension must be integer types')
-        zD = xD * yD
-
-        z = ID / zD
-        y = (ID - z * zD) / xD
-        x = ID - z * zD - y * xD
         return x, y, z
 
-    def get_prob(self, ID0, ID1, xD, yD, C=0.3, lamb=1.0):
+    def get_prob(self, id_0, id_1, x_d, y_d, c=0.3, lamb=1.0):
 
-        if ID0 == ID1:
+        if id_0 == id_1:
             prob = 0.
         else:
-            x0, y0, z0 = self.getCoordinates(ID0, xD, yD)
-            x1, y1, z1 = self.getCoordinates(ID1, xD, yD)
-            d = np.sqrt((x0 - x1) ** 2 + (y0 - y1) ** 2 + (z0 - z1) ** 2)  # eucl distance
-            prob = C * np.power(np.e, -np.square(d / lamb))
+            x_0, y_0, z_0 = self.get_coord(id_0, x_d, y_d)
+            x_1, y_1, z_1 = self.get_coord(id_1, x_d, y_d)
+            d = np.sqrt((x_0 - x_1) ** 2 +
+                        (y_0 - y_1) ** 2 + (z_0 - z_1) ** 2)  # eucl distance
+
+            prob = c * np.power(np.e, -np.square(d / lamb))
+
         return prob
 
     def create_conn_mat(self):
-        p_connect = np.empty((self.n_res,self.n_res))
+
+        p_connect = np.empty((self.n_res, self.n_res))
+
         for fr in range(self.n_res):
             for to in range(self.n_res):
-                p_connect[fr,to] = self.getProb(to,fr,xD=3,yD=3) # (to,from)
+                p_connect[fr, to] = self.get_prob(to, fr, x_d=3, y_d=3)
+
         return p_connect
 
-    def get_rand_mat(self, dim, spec_rad,negative_weights=True):
+    def get_rand_mat(self):
 
-        mat = self.rng.randn(dim, dim)
-        if not(negative_weights):
+        mat = self.rng.randn(self.n_res, self.n_res)
+
+        if not(self.neg_w):
             mat = abs(mat)
+
         w, v = np.linalg.eig(mat)
-        mat = np.divide(mat, (np.amax(np.absolute(w)) / spec_rad))
+        mat = np.divide(mat, (np.amax(np.absolute(w)) / self.spec_rad))
 
         return mat
 
+    def step(self, u=None, y=None):
 
-    def update_state_quick(self, u=None, y=None):
+        if self.verbose > 2:
+            print "Iteration " + str(self.it + 1)
 
-        t0 = time.time()
-        inp = np.dot(self.w_in, u) * self.p_connect_in
-        t1 = time.time()
+        self.u = u
+        inp = np.mat(np.dot(self.w_in, self.u) * self.p_connect_in).T
 
-        ## calculate x_new = x_prev*w + bias  + fb + input + noise
-        x_temp = np.dot(self.w_res*self.p_connect_res, self.x)# + self.w_bias  + inp + noise+ fb
-        t1 = time.time()
+        x_temp = np.dot(self.w_res*self.p_connect_res, self.x) + \
+                 self.w_bias  + inp
 
-        ## calculate new reservoir state with leakage
-        self.x = (1 - self.leakage) * self.x + self.leakage * self.tran_fct(x_temp)
-        t2 = time.time()
+        self.x = (1 - self.leakage) * self.x + \
+                 self.leakage * self.tran_fct(x_temp)
 
-        return
+        if self.keep_hist:
+            if self.it == 0:
+                self.x_hist = self.x.T
+                self.u_hist = self.u.T
+            else:
+                self.x_hist = np.vstack((self.x_hist, self.x.T))
+                self.u_hist = np.vstack((self.u_hist, self.u.T))
 
+        self.it += 1
+
+        return self.x
+
+    def run(self, u=None):
+
+        # Random initialization of reservoir weights
+        r.start()
+        num_it = u.shape[0]
+
+        # Process the input step by step
+        self.printv("\n\n ===== Updating Reservoir =====\n")
+        for i in range(num_it):
+            r.step(inputs[i, :])
+
+    def printv(self, txt):
+
+        if self.verbose > 1:
+            print(txt)
+
+    def plot_state_hist(self):
+
+        for i in range(self.n_res):
+            plt.plot(self.x_hist[:, i] + i)
+
+        plt.show()
+
+if __name__ == "__main__":
+
+    # Create an impulse array
+    inputs = np.zeros((100, 25))
+    inputs[10:20, :] = 1.0
+    n_in = inputs.shape[1]
+
+    # Create and run reservoir
+    r = ReservoirNet(n_in=n_in)
+    r.run(inputs)
+    r.plot_state_hist()
+
+    print r.x_hist, r.x_hist.shape
