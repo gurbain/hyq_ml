@@ -3,6 +3,7 @@ import copy
 import numpy as np
 import os
 import pickle
+import psutil
 import sys
 import time
 
@@ -93,6 +94,21 @@ def save_on_top(newdata, filename):
         final = [copy.copy(newdata)]
 
     pickle.dump(final, open(filename, "wb"), protocol=2)
+
+def split(str, delim=" "):
+    index = 0
+    string = ""
+    array = []
+    while index < len(str):
+        if str[index] not in delim: 
+            string += str[index]
+        else:
+            if string: 
+                array.append(string)
+                string = ""
+        index += 1
+    if string: array.append(string)
+    return array
 
 
 class RedirectStdStreams(object):

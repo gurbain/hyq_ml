@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
+import re
 import rospy as ros
 import rosbag
 from scipy.interpolate import interp1d
@@ -17,6 +18,7 @@ from sklearn.preprocessing import MinMaxScaler
 import sys
 import time
 
+import reservoir
 import utils
 
 ## MATPLOTLIB STYLE
@@ -34,9 +36,9 @@ class FeedForwardNN():
     ## ALGORITHM METAPARAMETERS
 
     def __init__(self, batch_size=64, max_epochs=5000, test_split=0.7,
-                 x_mem_buff_size=5, val_split=0.1, verbose=2,
-                 nn_layers=[(1024, 'relu')], stop_delta=0.00001,
-                 stop_pat=50, data_file="data/sims/simple_walk.bag",
+                 x_mem_buff_size=5, val_split=0.1, verbose=2, stop_pat=50,
+                 nn_layers=[(900, 'lsm', 0.9), (2048, 'relu'), (512, 'relu')],
+                 stop_delta=0.00001, data_file="data/sims/simple_walk.bag",
                  save_folder="data/nn_learning/"):
 
         ## ALGORITHM METAPARAMETERS
@@ -51,10 +53,7 @@ class FeedForwardNN():
         self.stop_delta = stop_delta
         self.stop_pat = stop_pat
         self.verbose = verbose
-
-        # Create saving folder
-        self.save_folder = save_folder + utils.timestamp()
-        utils.mkdir(self.save_folder)
+        self.save_folder = save_folder
 
         self.history = None
         self.nn = None
@@ -70,12 +69,34 @@ class FeedForwardNN():
 
         self.printv("\n ===== Collecting Data =====\n")
 
-        if ".pkl" in self.data_file:
-            x, x2, y = self.load_pkl()
-        elif ".bag" in self.data_file:
-            x, x2, y = self.load_bag()
+        if not "processed" in self.data_file:
+            if ".bag" in self.data_file:
+                # Load the bag file
+                x, x2, y = self.load_bag()
 
-        self.format_data(x, x2, y)
+                # Format the data
+                x_new, y_new = self.format_data(x, x2, y)
+
+                # Save data in numpy array
+                with open(self.data_file.replace("bag", "pkl") , "wb") as f:
+                    pickle.dump([x_new, y_new], f, protocol=2)
+
+            if ".pkl" in self.data_file:
+                x_new, y_new = self.load_pkl()
+
+            # Add memory and LSTM
+            x_new = self.add_recurs(x_new)
+
+            # Save preprocessed data
+            pn = utils.split(self.data_file, "/.")
+            pn[-2] += "_processed"
+            with open('/'.join(pn[:-1]) + '.' + pn[-1] , "wb") as f:
+                pickle.dump([x_new, y_new], f, protocol=2)
+
+        else:
+            x_new, y_new = self.load_pkl()
+
+        self.split_data(x_new, y_new)
 
     def load_bag(self):
 
@@ -114,18 +135,14 @@ class FeedForwardNN():
                 r["vel"] = list(msg.velocity)
                 y.append(r)
 
-        # Save usefull data to a pickle file to restore more quickly
-        with open(self.data_file.replace("bag", "pkl") , "wb") as f:
-            pickle.dump([x, x2, y], f, protocol=2)
-
         return x, x2, y
 
     def load_pkl(self):
 
         with open(self.data_file , "rb") as f:
-            [x, x2, y] = pickle.load(f)
+            [x, y] = pickle.load(f)
 
-        return x, x2, y
+        return x, y
 
     def get_fct(self, x, y):
 
@@ -173,34 +190,23 @@ class FeedForwardNN():
         # Concatenate all input data
         x_new = np.hstack((x_new, x2_new))
 
-        # Add memory buffer on the input data
-        x_shift = copy.copy(x_new)
-        x_buff = copy.copy(x_new)
-        for i in range(1, self.x_mem_buff_size):
-            x_shift = np.vstack((np.zeros((i, x_new.shape[1])),
-                                 x_new[:-i, :]))
-            x_buff = np.hstack((x_buff, x_shift))
-        x_new = copy.copy(x_buff)
-        del x_buff, x_shift
-
-        # Shift prediction of one time step
-        x_new = np.vstack((np.zeros((1, x_new.shape[1])), x_new[:-1, :]))
-
-        # Divide into training and testing dataset
-        x_train = x_new[0:int(x_new.shape[0]*self.test_split), :]
-        y_train = y_new[0:int(y_new.shape[0]*self.test_split), :]
-        x_test = x_new[int(x_new.shape[0]*self.test_split):, :]
-        y_test = y_new[int(y_new.shape[0]*self.test_split):, :]
-
         # Scale
         self.x_scaler = MinMaxScaler()
         self.y_scaler = MinMaxScaler()
-        self.x_scaler.fit(x_train)
-        x_train = self.x_scaler.transform(x_train)
-        x_test = self.x_scaler.transform(x_test)
-        self.y_scaler.fit(y_train)
-        y_train = self.y_scaler.transform(y_train)
-        y_test = self.y_scaler.transform(y_test)
+        self.x_scaler.fit(x_new)
+        self.y_scaler.fit(y_new)
+        x_new = self.x_scaler.transform(x_new)
+        y_new = self.y_scaler.transform(y_new)
+
+        return x_new, y_new
+
+    def split_data(self, x, y):
+
+        # Divide into training and testing dataset
+        x_train = x[0:int(x.shape[0]*self.test_split), :]
+        y_train = y[0:int(y.shape[0]*self.test_split), :]
+        x_test = x[int(x.shape[0]*self.test_split):, :]
+        y_test = y[int(y.shape[0]*self.test_split):, :]
 
         # Expend dims for the NN
         x_train = np.expand_dims(x_train, axis=2)
@@ -226,6 +232,29 @@ class FeedForwardNN():
         self.x_test = x_test
         self.y_test = y_test
 
+    def add_recurs(self, x):
+
+        # Add memory buffer on the input data
+        x_shift = copy.copy(x)
+        x_buff = copy.copy(x)
+        for i in range(1, self.x_mem_buff_size):
+            x_shift = np.vstack((np.zeros((i, x.shape[1])),
+                                 x[:-i, :]))
+            x_buff = np.hstack((x_buff, x_shift))
+        x = copy.copy(x_buff)
+        del x_buff, x_shift
+
+        # Shift prediction of one time step
+        x = np.vstack((np.zeros((1, x.shape[1])), x[:-1, :]))
+
+        # Add a LSM
+        for l in self.network_layers:
+            if l[1] == 'lsm':
+                r = reservoir.ReservoirNet(n_in=x.shape[1])
+                x = r.run(x)
+
+        return x
+
     def unscale(self, x, y):
 
         x = self.x_scaler.inverse_transform(x)
@@ -247,8 +276,9 @@ class FeedForwardNN():
 
         # Network layers
         for l in self.network_layers:
-            x = Dense(l[0])(x)
-            x = Activation(l[1])(x)
+            if l[1] != 'lsm':
+                x = Dense(l[0])(x)
+                x = Activation(l[1])(x)
 
         # Output Layer
         n_out = self.y_train.shape[1]
@@ -283,10 +313,15 @@ class FeedForwardNN():
 
     def load(self, folder):
 
+        # Load this class
         with open(folder + "/network.pkl",'rb') as f:
             self.__dict__ = pickle.load(f)
 
+        # Load network
         self.nn = load_model(folder + "/model.h5")
+
+        # Load dataset
+        self.load_data()
 
     def printv(self, txt):
 
@@ -307,8 +342,10 @@ class FeedForwardNN():
         self.printv("\n\n ===== Evaluating Test Dataset =====\n")
 
         score = self.nn.evaluate(self.x_test, self.y_test, verbose=2)
-        y_pred = self.nn.predict(self.x_test, batch_size=self.batch_size,
-                                 verbose=self.verbose)
+        y_pred = self.y_scaler.inverse_transform(self.nn.predict(self.x_test,
+                                                 batch_size=self.batch_size,
+                                                 verbose=self.verbose))
+        y_truth = self.y_scaler.inverse_transform(self.y_test)
         self.printv("Test loss: " + str(score[0]))
         self.printv("Test accuracy: " + str(score[1]))
         self.test_loss = score[0]
@@ -334,13 +371,13 @@ class FeedForwardNN():
             plt.show()
 
             # Plot test and predicted values
-            plt.plot(y_test[:, 0], label="real")
+            plt.plot(y_truth[:, 0], label="real")
             plt.plot(y_pred[:, 0], label="predicted")
-            plt.plot(np.abs(self.y_test - y_pred)[:, 0], label="MAE error"),
+            plt.plot(np.abs(y_truth - y_pred)[:, 0], label="MAE error")
             plt.legend()
             plt.show()
 
-        return score[0], score[1]
+        return y_truth, y_pred
 
     ## MAIN FUNCTION
 
@@ -369,6 +406,10 @@ class FeedForwardNN():
 
     def run(self, show=True):
 
+        # Create saving folder
+        self.save_folder = self.save_folder + utils.timestamp()
+        utils.mkdir(self.save_folder)
+
         # Get data
         self.load_data()
 
@@ -391,14 +432,16 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 1:
 
+        if sys.argv[1] == "process_data":
+            nn = FeedForwardNN(data_file=sys.argv[2])
+            nn.load_data()
+
         if sys.argv[1] == "test":
             nn = FeedForwardNN()
             nn.load(sys.argv[2])
-            nn.load_data()
             nn.evaluate(False)
 
         if sys.argv[1] == "train":
-            nn_layers = [(2048, 'relu'), (2048, 'relu')]
-            nn = FeedForwardNN(stop_delta = None, nn_layers=nn_layers,
+            nn = FeedForwardNN(stop_delta = None,
                                data_file="data/sims/rough_walk.pkl")
             nn.run(False)

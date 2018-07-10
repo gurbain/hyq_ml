@@ -1,5 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
+import sys
+import time
+
 
 ## MATPLOTLIB STYLE
 plt.style.use('fivethirtyeight')
@@ -12,16 +16,18 @@ plt.rc('figure', autolayout=True)
 
 class Neuron(object):
 
-    def tran_fct(self, xStates):
+    def tran_fct(self, x):
 
-        x = xStates.copy()
-        for idx, itm in enumerate(x):
-            if itm <= 0 :
-                x[idx] = 0
-            else :
-                x[idx] = 0.786*itm/(0.110+itm)-0.014
+        return np.tanh(x)
 
-        return x
+        # x_temp = x.copy()
+        # for idx, itm in enumerate(x_temp):
+        #     if itm <= 0 :
+        #         x_temp[idx] = 0
+        #     else :
+        #         x_temp[idx] = 0.786*itm/(0.110+itm)-0.014
+
+        # return x_temp
 
 
 class ReservoirNet(Neuron):
@@ -30,8 +36,8 @@ class ReservoirNet(Neuron):
     using Reservoir Computing architecture, with the goal of comparing with a network of spiking populations.
     """
 
-    def __init__(self, n_in=0, n_fb=0, n_res=1000, spec_rad=0.95,
-                 leakage=0.1, scale_bias=0.5, scale_fb=5.0, verbose=3,
+    def __init__(self, n_in=0, n_fb=0, n_res=200, spec_rad=0.9, sparse=False,
+                 leakage=0.1, scale_bias=0., scale_fb=5.0, verbose=3,
                  neg_w=True, seed=None, keep_hist=True):
 
         Neuron.__init__(self)
@@ -39,6 +45,7 @@ class ReservoirNet(Neuron):
         self.scale_bias = scale_bias
         self.scale_fb = scale_fb
         self.spec_rad = spec_rad
+        self.sparse_con = sparse
         self.leakage = leakage
         self.seed = seed
         self.neg_w = neg_w
@@ -53,11 +60,15 @@ class ReservoirNet(Neuron):
 
         self.printv("\n\n ===== Initializing Reservoir =====")
 
+        ti = time.time()
+
         # Get random generator
         if self.seed == None:
             self.rng = np.random.RandomState(np.random.randint(0,99999))
         else:
             self.rng = np.random.RandomState(self.seed)
+        t1 = time.time()
+        print t1-ti
 
         # Initialize input weights
         self.w_in = self.rng.randn(self.n_res, self.n_in)
@@ -66,19 +77,29 @@ class ReservoirNet(Neuron):
 
         # Initialise bias
         self.w_bias = self.rng.randn(self.n_res, 1) * self.scale_bias
+        t2 = time.time()
+        print t2-t1
 
         # Initialize reservoir random weights given spectral radius
         self.w_res = self.get_rand_mat()
+        t3 = time.time()
+        print t3-t2
 
         # Initialize reservoir feedback (not used)
         self.w_fb = self.rng.randn(self.n_res, self.n_fb) * self.scale_fb
         if not(self.neg_w):
             self.w_fb = abs(self.w_fb)
+        t4 = time.time()
+        print t4-t3
 
         # Create connection probability
-        self.p_connect_res = self.create_conn_mat()
+        if self.sparse_con:
+            self.p_connect_res = self.rng.randint(2,
+                                 size=(self.n_res, self.n_res))
         self.p_connect_fb = 0.1
         self.p_connect_in = 1.0
+        t5 = time.time()
+        print t5-t4
 
         # Create arrays of zeros for the initial states
         self.x = np.zeros((self.n_res, 1))
@@ -86,6 +107,10 @@ class ReservoirNet(Neuron):
 
         # Set iteration number to 0
         self.it = 0
+        self.t_compute_in = 0
+        self.t_compute_res = 0
+        self.t_compute_tf = 0
+        self.t_compute_hist = 0
 
     def get_coord(self, ind, x_d, y_d):
 
@@ -126,7 +151,6 @@ class ReservoirNet(Neuron):
     def get_rand_mat(self):
 
         mat = self.rng.randn(self.n_res, self.n_res)
-
         if not(self.neg_w):
             mat = abs(mat)
 
@@ -137,63 +161,125 @@ class ReservoirNet(Neuron):
 
     def step(self, u=None, y=None):
 
-        if self.verbose > 2:
-            print "Iteration " + str(self.it + 1)
+
+        if self.verbose > 2 and self.it % 500 == 0 and self.it !=0:
+            print "Iteration " + str(self.it) + \
+                  ": In: {:.2f}".format(self.t_compute_in) + \
+                  "s; Res: {:.2f}".format(self.t_compute_res) + \
+                  "s; TF: {:.2f}".format(self.t_compute_tf) + \
+                  "s; Hist: {:.2f}".format(self.t_compute_hist)
+            self.t_compute_in = 0
+            self.t_compute_res = 0
+            self.t_compute_tf = 0
+            self.t_compute_hist = 0
 
         self.u = u
+        ti = time.time()
         inp = np.mat(np.dot(self.w_in, self.u) * self.p_connect_in).T
+        t1 = time.time()
 
-        x_temp = np.dot(self.w_res*self.p_connect_res, self.x) + \
+        if self.sparse_con:
+            self.w_res = self.w_res * self.p_connect_res
+
+        x_temp = np.dot(self.w_res, self.x) + \
                  self.w_bias  + inp
+        t2 = time.time()
 
         self.x = (1 - self.leakage) * self.x + \
                  self.leakage * self.tran_fct(x_temp)
+        t3 = time.time()
 
         if self.keep_hist:
             if self.it == 0:
-                self.x_hist = self.x.T
-                self.u_hist = self.u.T
+                self.x_hist = self.x.T.tolist()
+                self.u_hist = self.u.T.tolist()
             else:
-                self.x_hist = np.vstack((self.x_hist, self.x.T))
-                self.u_hist = np.vstack((self.u_hist, self.u.T))
+                self.x_hist.append(self.x.T.tolist()[0])
+                self.u_hist.append(self.u.T.tolist()[0])
+        t4 = time.time()
 
         self.it += 1
+        self.t_compute_in += t1 - ti
+        self.t_compute_res += t2 - t1
+        self.t_compute_tf += t3 - t2
+        self.t_compute_hist += t4 - t3
 
         return self.x
 
     def run(self, u=None):
 
         # Random initialization of reservoir weights
-        r.start()
+        self.start()
         num_it = u.shape[0]
 
         # Process the input step by step
         self.printv("\n\n ===== Updating Reservoir =====\n")
         for i in range(num_it):
-            r.step(inputs[i, :])
+            self.step(u[i, :])
+
+        self.x_hist = np.matrix(self.x_hist)
+
+        return self.x_hist
 
     def printv(self, txt):
 
         if self.verbose > 1:
             print(txt)
 
-    def plot_state_hist(self):
+    def plot_sum_states(self, u=None):
 
-        for i in range(self.n_res):
-            plt.plot(self.x_hist[:, i] + i)
+        self.x_hist = np.matrix(self.x_hist)
+        s = np.sum(self.x_hist, axis=1) / self.x_hist.shape[1]
+        plt.plot(s, label="sum of reservoir states")
 
+        if u is not None:
+            u_sum = np.sum(u, axis=1) / u.shape[1]
+            plt.plot(u_sum, label="sum of inputs")
+
+        plt.legend()
+        plt.show()
+
+    def plot_states(self, u=None):
+
+        max_states_plotted = 10
+
+        self.x_hist = np.matrix(self.x_hist)
+        n_res = min(self.x_hist.shape[1], max_states_plotted)
+        for i in range(n_res):
+            plt.plot(self.x_hist[:, i] + i, color="b")
+
+        n_u = min(u.shape[1], max_states_plotted)
+        if u is not None:
+            for i in range(n_u):
+                plt.plot(u[:, i] + i, color="r")
         plt.show()
 
 if __name__ == "__main__":
 
-    # Create an impulse array
-    inputs = np.zeros((100, 25))
-    inputs[10:20, :] = 1.0
-    n_in = inputs.shape[1]
+    if len(sys.argv) > 1:
 
-    # Create and run reservoir
-    r = ReservoirNet(n_in=n_in)
-    r.run(inputs)
-    r.plot_state_hist()
+        if sys.argv[1] == "test_impulse":
+            # Create an impulse array
+            inputs = np.zeros((4000, 25))
+            inputs[1100:1110, :] = 1.0
+            inputs[2300:2350, :] = 1.0
+            n_in = inputs.shape[1]
 
-    print r.x_hist, r.x_hist.shape
+            # Create and run reservoir
+            r = ReservoirNet(n_in=n_in)
+            r.run(inputs)
+            r.plot_sum_states()
+            r.plot_states()
+
+        if sys.argv[1] == "test_data":
+
+            with open(sys.argv[2] , "rb") as f:
+                [x, y] = pickle.load(f)
+
+            # Create and run reservoir
+            r = ReservoirNet(n_in=x.shape[1])
+            r.run(x)
+            r.plot_states(x)
+            r.plot_sum_states(x)
+
+

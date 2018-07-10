@@ -17,7 +17,9 @@ matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
+import network
 import utils
 
 plt.style.use('fivethirtyeight')
@@ -34,7 +36,7 @@ plt.rc('ytick', color='white')
 # plt.rc('savefig', facecolor='white')
 # plt.rc('figure', autolayout=True)
 
-RESULT_FOLDER = '/home/gurbain/hyq_ml/data/results/off_learning'
+RESULT_FOLDER = '/home/gurbain/hyq_ml/data/nn_learning'
 
 
 
@@ -77,6 +79,7 @@ class SimpleFigure(FigureCanvas):
         self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.setStyleSheet("background-color:transparent;")
         self.updateGeometry()
+
     def save(self, name="figure.png"):
 
         self.axes.xaxis.label.set_color('black')
@@ -109,14 +112,17 @@ class VizWin(QtWidgets.QGridLayout):
             self.plotMetrics(name)
         if name  == "Loss vs Layers":
             self.plotLossNLayers()
+        if name  == "Prediction":
+            self.plotPrediction()
 
     def plotMetrics(self, name):
 
-        hist = self.win.sel_conf[self.win.sel_ite]["history"]
+        hist = self.win.sel_conf[self.win.sel_ite].history
 
         self.clean()
         self.plot = SimpleFigure()
         self.addWidget(self.plot)
+        self.addWidget(NavigationToolbar(self.plot, self.win))
         self.plot.axes.cla()
 
         if name == "Accuracy":
@@ -135,6 +141,30 @@ class VizWin(QtWidgets.QGridLayout):
 
         self.plot.draw()
 
+    def plotPrediction(self):
+
+        y_truth, y_pred = self.win.sel_conf[self.win.sel_ite].evaluate(False)
+
+        self.clean()
+        self.plot = SimpleFigure()
+        self.addWidget(self.plot)
+        self.addWidget(NavigationToolbar(self.plot, self.win))
+
+        self.plot.axes.cla()
+        self.plot.axes.plot(y_truth[:, 0], linewidth=1, label="Real")
+        self.plot.axes.plot(y_pred[:, 0], linewidth=1, label="Predicted")
+        self.plot.axes.plot(np.abs(y_truth - y_pred)[:, 0], linewidth=1,
+                            label="MAE error")
+        self.plot.axes.set_title('Predicted Signal', fontsize=14)
+        self.plot.axes.set_ylabel('First Joint Position')
+        self.plot.axes.set_xlabel('Time')
+        self.plot.axes.legend(loc='upper left')
+        self.plot.axes.xaxis.label.set_color('white')
+        self.plot.axes.yaxis.label.set_color('white')
+        self.plot.axes.title.set_color('white')
+
+        self.plot.draw()
+
     def plotLossNLayers(self):
 
         self.clean()
@@ -144,6 +174,7 @@ class VizWin(QtWidgets.QGridLayout):
 
         self.plot = SimpleFigure()
         self.addWidget(self.plot)
+        self.addWidget(NavigationToolbar(self.plot, self.win))
 
         self.plot.axes.cla()
         self.plot.axes.plot(n_layers, losses, linestyle='None', marker='.')
@@ -159,7 +190,7 @@ class VizWin(QtWidgets.QGridLayout):
 
     def clean(self):
 
-        for i in reversed(range(self.count())): 
+        for i in reversed(range(self.count())):
             self.itemAt(i).widget().setParent(None)
 
     def getStyleColors(self):
@@ -197,8 +228,10 @@ class IteListWin(QtWidgets.QGridLayout):
 
         self.list.clear()
 
-        if os.path.isfile(self.win.sel_exp + "/results.pkl"):
-            self.win.sel_conf = pickle.load(open(self.win.sel_exp + "/results.pkl", "rb"))
+        if os.path.isfile(self.win.sel_exp + "/network.pkl"):
+            self.win.sel_conf = [network.FeedForwardNN()]
+            self.win.sel_conf[0].load(self.win.sel_exp)
+            self.win.sel_conf[0].verbose = 0
             for i in range(len(self.win.sel_conf)):
                 item = QtWidgets.QListWidgetItem()
                 item.setText("Iteration " + str(i+1))
@@ -337,12 +370,16 @@ class IteButWin(QtWidgets.QGridLayout):
         self.b2.installEventFilter(self)
         self.addWidget(self.b2, 1, 1)
 
+        self.b3 = QtWidgets.QPushButton("Prediction")
+        self.b3.installEventFilter(self)
+        self.addWidget(self.b3, 1, 2)
+
     def addLegend(self):
 
         self.l1 = QtWidgets.QLabel()
         self.l1.setText("Learning Evolution")
         self.l1.setAlignment(QtCore.Qt.AlignCenter)
-        self.addWidget(self.l1, 0, 0, 1, 2)
+        self.addWidget(self.l1, 0, 0, 1, 3)
 
     def eventFilter(self, object, event):
 
@@ -368,6 +405,8 @@ class IteButWin(QtWidgets.QGridLayout):
 
         if "Loss" in action:
             self.win.displayStatus("Plot the Loss evolution during Training and Validation")
+        if "Prediction" in action:
+            self.win.displayStatus("Plot the predicted signal along with the real test signal")
         if "Accuracy" in action:
             self.win.displayStatus("Plot the Loss evolution during Training and Validation")
         return True
