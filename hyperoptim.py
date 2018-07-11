@@ -5,6 +5,7 @@ from hyperopt import Trials
 from hyperopt import hp
 import numpy as np
 import pickle
+import sys
 
 import network
 import utils
@@ -44,13 +45,13 @@ def run_hyperoptim(space, folder):
         print("\n ===== Experiment "+ str(len(trials.trials)) + "/" +
               str(MAX_EVALS) + " ===== \n")
     except:
-        print("\n ===== Experiment 0/" + str(MAX_EVALS) + " ===== ")
+        print("\n ===== Experiment 0/" + str(MAX_EVALS) + " ===== \n")
         trials = Trials()
 
     # Perform optimization
     best = fmin(fn=objective, space=space, algo=tpe.suggest,
                 max_evals=curr_max, trials=trials)
-    print "Current best loss: " + \
+    print "\nCurrent best loss: " + \
           str(min([r["loss"] for r in trials.results]))
     print "Current best params: " + str(best)
 
@@ -74,8 +75,12 @@ if __name__ == '__main__':
 
     # Result save folder
     global folder
-    folder = SAVE_FOLDER + utils.timestamp()
-    utils.mkdir(folder)
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "continue":
+            folder = sys.argv[2]
+    else:
+        folder = SAVE_FOLDER + utils.timestamp()
+        utils.mkdir(folder)
 
     # Optimize
     it = 0
