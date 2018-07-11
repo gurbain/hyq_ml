@@ -68,7 +68,7 @@ class ReservoirNet(Neuron):
         else:
             self.rng = np.random.RandomState(self.seed)
         t1 = time.time()
-        print t1-ti
+        self.printv(t1-ti)
 
         # Initialize input weights
         self.w_in = self.rng.randn(self.n_res, self.n_in)
@@ -78,19 +78,19 @@ class ReservoirNet(Neuron):
         # Initialise bias
         self.w_bias = self.rng.randn(self.n_res, 1) * self.scale_bias
         t2 = time.time()
-        print t2-t1
+        self.printv(t2-t1)
 
         # Initialize reservoir random weights given spectral radius
         self.w_res = self.get_rand_mat()
         t3 = time.time()
-        print t3-t2
+        self.printv(t3-t2)
 
         # Initialize reservoir feedback (not used)
         self.w_fb = self.rng.randn(self.n_res, self.n_fb) * self.scale_fb
         if not(self.neg_w):
             self.w_fb = abs(self.w_fb)
         t4 = time.time()
-        print t4-t3
+        self.printv(t4-t3)
 
         # Create connection probability
         if self.sparse_con:
@@ -99,7 +99,7 @@ class ReservoirNet(Neuron):
         self.p_connect_fb = 0.1
         self.p_connect_in = 1.0
         t5 = time.time()
-        print t5-t4
+        self.printv(t5-t4)
 
         # Create arrays of zeros for the initial states
         self.x = np.zeros((self.n_res, 1))
@@ -161,13 +161,13 @@ class ReservoirNet(Neuron):
 
     def step(self, u=None, y=None):
 
-        # Print status and timing
+        # self.printv(status and timing
         if self.verbose > 2 and self.it % 2000 == 0 and self.it !=0:
-            print "Iteration " + str(self.it) + \
+            self.printv("Iteration " + str(self.it) + \
                   ": In: {:.2f}".format(self.t_compute_in) + \
                   "s; Res: {:.2f}".format(self.t_compute_res) + \
                   "s; TF: {:.2f}".format(self.t_compute_tf) + \
-                  "s; Hist: {:.2f}".format(self.t_compute_hist)
+                  "s; Hist: {:.2f}".format(self.t_compute_hist))
             self.t_compute_in = 0
             self.t_compute_res = 0
             self.t_compute_tf = 0

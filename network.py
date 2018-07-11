@@ -278,7 +278,8 @@ class FeedForwardNN():
         # Add a LSM
         for l in self.network_layers:
             if l[1] == 'lsm':
-                r = reservoir.ReservoirNet(n_in=x.shape[1])
+                r = reservoir.ReservoirNet(n_in=x.shape[1],
+                                           verbose=self.verbose)
                 x = r.run(x)
 
         return x

@@ -12,16 +12,16 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import network
 import utils
 
-SAVE_FOLDER = "data/results/off_learning_lsm/"
+SAVE_FOLDER = "data/off_learning_lsm/"
 DATA = "data/sims/rough_walk.pkl"
 
 
 def create_nn_pool():
 
-    layer_sizes =  [1024, 2048, 4096]
+    layer_sizes =  [1024, 4096]
     layer_num = 3
     activation = ['relu', 'tanh']
-    lsm_size = [0, 100, 500, 1000]
+    lsm_size = [0, 100, 1000]
     lsm_spec_rad = [0.7, 0.9]
 
     nn_layers = []
@@ -58,18 +58,15 @@ if __name__ == '__main__':
               str(len(nn_layers)) + " ===== ")
         print("NN Architecture: " + str(e))
         nn = network.FeedForwardNN(nn_layers=e, data_file=DATA,
-                                   save_folder=folder, verbose=0)
+                                   save_folder=folder, verbose=1)
 
         # Start and time experiment
         t_i = time.time()
-        with StringIO() as f:
-            with utils.RedirectStdStreams(stdout=f, stderr=f):
-                l, a = nn.run(show=True)
-                log = f.getvalue()
+        l, a = nn.run(show=False)
         t = time.time() - t_i
 
         # Print main metrics
-        print("Test Accuracy: {:0.5f}".format(a))
+        print("\nTest Accuracy: {:0.5f}".format(a))
         print("Test Loss: {:0.5f}".format(l))
         print("Training Time: {:0.2f}".format(t))
         print("Training Epochs: " + str(len(nn.history.epoch)))
