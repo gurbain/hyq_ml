@@ -58,7 +58,7 @@ class ReservoirNet(Neuron):
 
     def start(self):
 
-        self.printv("\n\n ===== Initializing Reservoir =====")
+        self.printv("\n\n ===== Initializing Reservoir =====\n")
 
         ti = time.time()
 
@@ -161,8 +161,8 @@ class ReservoirNet(Neuron):
 
     def step(self, u=None, y=None):
 
-
-        if self.verbose > 2 and self.it % 500 == 0 and self.it !=0:
+        # Print status and timing
+        if self.verbose > 2 and self.it % 2000 == 0 and self.it !=0:
             print "Iteration " + str(self.it) + \
                   ": In: {:.2f}".format(self.t_compute_in) + \
                   "s; Res: {:.2f}".format(self.t_compute_res) + \
@@ -173,22 +173,27 @@ class ReservoirNet(Neuron):
             self.t_compute_tf = 0
             self.t_compute_hist = 0
 
+        # Compute input value
         self.u = u
         ti = time.time()
         inp = np.mat(np.dot(self.w_in, self.u) * self.p_connect_in).T
         t1 = time.time()
 
+        # Apply connection probability if relevant
         if self.sparse_con:
             self.w_res = self.w_res * self.p_connect_res
 
+        # Compute reservoir update
         x_temp = np.dot(self.w_res, self.x) + \
                  self.w_bias  + inp
         t2 = time.time()
 
+        # Apply transfer function with leakage
         self.x = (1 - self.leakage) * self.x + \
                  self.leakage * self.tran_fct(x_temp)
         t3 = time.time()
 
+        # Save data in history
         if self.keep_hist:
             if self.it == 0:
                 self.x_hist = self.x.T.tolist()

@@ -17,6 +17,7 @@ from scipy.interpolate import interp1d
 from sklearn.preprocessing import MinMaxScaler
 import sys
 import time
+from tqdm import tqdm
 
 import reservoir
 import utils
@@ -83,24 +84,26 @@ class FeedForwardNN():
             if ".pkl" in self.data_file:
                 x_new, y_new = self.load_pkl()
 
+            # Scale
+            x_new, y_new = self.scale_data(x_new, y_new)
+
             # Add memory and LSTM
             x_new = self.add_recurs(x_new)
 
             # Save preprocessed data
             pn = utils.split(self.data_file, "/.")
             pn[-2] += "_processed"
-            with open('/'.join(pn[:-1]) + '.' + pn[-1] , "wb") as f:
+            with open('/'.join(pn[:-1]) + '.pkl' , "wb") as f:
                 pickle.dump([x_new, y_new], f, protocol=2)
 
         else:
             x_new, y_new = self.load_pkl()
 
-        x_new, y_new = self.scale_data(x_new, y_new)
         self.split_data(x_new, y_new)
 
     def load_bag(self):
 
-        self.printv("\n ===== Collecting Data Bag =====\n")
+        self.printv("\n\n ===== Collecting Data Bag =====\n")
 
         x = []
         x2 = []
@@ -109,7 +112,7 @@ class FeedForwardNN():
         # Retrieve the data from the bag file
         bag = rosbag.Bag(self.data_file, 'r')
         t_init = bag.get_start_time()
-        for topic, msg, t in bag.read_messages():
+        for topic, msg, t in tqdm(bag.read_messages()):
             if topic == "/hyq/robot_states":
                 r = dict()
                 r["t"] = t.to_time()
@@ -170,7 +173,7 @@ class FeedForwardNN():
 
     def format_data(self, x, x2, y):
 
-        self.printv("\n ===== Formating Data =====\n")
+        self.printv("\n\n ===== Formating Data =====")
 
         # Get values
         x_t = np.array([r["t"] for r in x])
@@ -207,23 +210,25 @@ class FeedForwardNN():
         self.x_scaler.fit(x)
         self.y_scaler.fit(y)
 
-        x_old_min = min(x)
-        x_old_max = max(x)
-        y_old_min = min(y)
-        y_old_max = max(y)
-        x = self.x_scaler.transform(x)
-        y = self.y_scaler.transform(y)
+        x_old_min = np.min(x)
+        x_old_max = np.max(x)
+        y_old_min = np.min(y)
+        y_old_max = np.max(y)
+        x = self.x_scaler.transform(x) - 0.5
+        y = self.y_scaler.transform(y) - 0.5
 
-        print "Input previous range: [" + str(x_old_min) + \
-              ", " + str(x_old_max) + "] and new range: [" + \
-              str(min(x)) + ", " + str(max(x)) + "]"
-        print "Output previous range: [" + str(y_old_min) + \
-              ", " + str(y_old_max) + "] and new range: [" + \
-              str(min(y)) + ", " + str(max(y)) + "]\n"
+        self.printv("Input previous range: [" + str(x_old_min) + \
+                    ", " + str(x_old_max) + "] and new range: [" + \
+                    str(np.min(x)) + ", " + str(np.max(x)) + "]")
+        self.printv("Output previous range: [" + str(y_old_min) + \
+                    ", " + str(y_old_max) + "] and new range: [" + \
+                    str(np.min(y)) + ", " + str(np.max(y)) + "]")
 
         return x, y
 
     def split_data(self, x, y):
+
+        self.printv("\n\n ===== Splitting Data =====\n")
 
         # Divide into training and testing dataset
         x_train = x[0:int(x.shape[0]*self.test_split), :]
@@ -320,24 +325,32 @@ class FeedForwardNN():
 
     def save(self):
 
-        self.printv("\n\n ===== Saving =====")
+        self.printv("\n\n ===== Saving =====\n")
 
-        f_in_folder = [f for f in listdir(self.save_folder)
-                       if isfile(join(self.save_folder, f))]
+        f_in_folder = [f for f in os.listdir(self.save_folder)
+                       if os.path.isfile(os.path.join(self.save_folder, f))]
 
-        print f_in_folder
+        if len([s for s in f_in_folder if "network" in s]) == 0:
+            index = 0
+        else:
+            index = max([int(utils.split(f, "_.")[-2]) for f in [s for s in f_in_folder if "network" in s]]) + 1
 
         # Save training data
         to_save = copy.copy(self.__dict__)
         del to_save["nn"], to_save["history"].model, to_save["x_train"]
         del to_save["y_train"], to_save["x_test"], to_save["y_test"]
-        pickle.dump(to_save, open(self.save_folder + "/network.pkl", "wb"),
-                    protocol=2)
+        pickle.dump(to_save, open(self.save_folder + "/network_" +
+                                  str(index)+ ".pkl", "wb"), protocol=2)
         del to_save
 
         # Save model
         if self.nn is not None:
-            self.nn.save(self.save_folder + "/model.h5")
+            self.nn.save(self.save_folder + "/model_" + str(index)+ ".h5")
+
+
+        self.printv("Files saved: " + self.save_folder + "/model_" + \
+                    str(index) + ".h5 and " + self.save_folder + \
+                    "/network_" + str(index)+ ".pkl")
 
     def load(self, folder):
 
@@ -372,8 +385,8 @@ class FeedForwardNN():
         score = self.nn.evaluate(self.x_test, self.y_test, verbose=2)
         y_pred = self.y_scaler.inverse_transform(self.nn.predict(self.x_test,
                                                  batch_size=self.batch_size,
-                                                 verbose=self.verbose))
-        y_truth = self.y_scaler.inverse_transform(self.y_test)
+                                                 verbose=self.verbose) + 0.5)
+        y_truth = self.y_scaler.inverse_transform(self.y_test + 0.5)
         self.printv("Test loss: " + str(score[0]))
         self.printv("Test accuracy: " + str(score[1]))
         self.test_loss = score[0]
@@ -405,7 +418,7 @@ class FeedForwardNN():
             plt.legend()
             plt.show()
 
-        return y_truth, y_pred
+        return y_truth, y_pred, score
 
     ## MAIN FUNCTION
 

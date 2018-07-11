@@ -57,14 +57,14 @@ if __name__ == '__main__':
         print("\n ===== Experiment "+ str(i+1) + "/" +
               str(len(nn_layers)) + " ===== ")
         print("NN Architecture: " + str(e))
-        nn = network.FeedForwardNN(max_epochs=2, nn_layers=e, data_file=DATA,
+        nn = network.FeedForwardNN(nn_layers=e, data_file=DATA,
                                    save_folder=folder, verbose=2)
 
         # Start and time experiment
         t_i = time.time()
         with StringIO() as f:
             with utils.RedirectStdStreams(stdout=f, stderr=f):
-                l, a, h = nn.run(show=False)
+                l, a = nn.run(show=True)
                 log = f.getvalue()
         t = time.time() - t_i
 
@@ -72,9 +72,4 @@ if __name__ == '__main__':
         print("Test Accuracy: {:0.5f}".format(a))
         print("Test Loss: {:0.5f}".format(l))
         print("Training Time: {:0.2f}".format(t))
-        print("Training Epochs: " + str(len(h.epoch)))
-
-        # Save results
-        del h.model
-        utils.save_on_top({"params": e, "test_loss": l, "test_acc": a,
-                        "train_time": t, "history": h }, filename)
+        print("Training Epochs: " + str(len(nn.history.epoch)))
