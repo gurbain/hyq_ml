@@ -58,7 +58,7 @@ if __name__ == '__main__':
               str(len(nn_layers)) + " ===== ")
         print("NN Architecture: " + str(e))
         nn = network.FeedForwardNN(nn_layers=e, data_file=DATA,
-                                   save_folder=folder, verbose=2)
+                                   save_folder=folder, verbose=0)
 
         # Start and time experiment
         t_i = time.time()
