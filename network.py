@@ -68,8 +68,6 @@ class FeedForwardNN():
 
     def load_data(self):
 
-        self.printv("\n ===== Collecting Data =====\n")
-
         if not "processed" in self.data_file:
             if ".bag" in self.data_file:
                 # Load the bag file
@@ -101,6 +99,8 @@ class FeedForwardNN():
         self.split_data(x_new, y_new)
 
     def load_bag(self):
+
+        self.printv("\n ===== Collecting Data Bag =====\n")
 
         x = []
         x2 = []
@@ -141,6 +141,8 @@ class FeedForwardNN():
 
     def load_pkl(self):
 
+        self.printv("\n ===== Collecting Data pkl =====\n")
+
         with open(self.data_file , "rb") as f:
             [x, y] = pickle.load(f)
 
@@ -167,6 +169,8 @@ class FeedForwardNN():
         return np.array(y).T
 
     def format_data(self, x, x2, y):
+
+        self.printv("\n ===== Formating Data =====\n")
 
         # Get values
         x_t = np.array([r["t"] for r in x])
@@ -196,17 +200,28 @@ class FeedForwardNN():
 
     def scale_data(self, x, y):
 
+        self.printv("\n\n ===== Scaling Data =====\n")
+
         self.x_scaler = MinMaxScaler()
         self.y_scaler = MinMaxScaler()
         self.x_scaler.fit(x)
         self.y_scaler.fit(y)
 
+        x_old_min = min(x)
+        x_old_max = max(x)
+        y_old_min = min(y)
+        y_old_max = max(y)
         x = self.x_scaler.transform(x)
         y = self.y_scaler.transform(y)
-        plt.plot(y)
-        plt.show()
-        plt.plot(x)
-        plt.show()
+
+        print "Input previous range: [" + str(x_old_min) + \
+              ", " + str(x_old_max) + "] and new range: [" + \
+              str(min(x)) + ", " + str(max(x)) + "]"
+        print "Output previous range: [" + str(y_old_min) + \
+              ", " + str(y_old_max) + "] and new range: [" + \
+              str(min(y)) + ", " + str(max(y)) + "]\n"
+
+        return x, y
 
     def split_data(self, x, y):
 
@@ -263,7 +278,7 @@ class FeedForwardNN():
 
         return x
 
-    def unscale(self, x, y):
+    def unscale_data(self, x, y):
 
         x = self.x_scaler.inverse_transform(x)
         y = self.y_scaler.inverse_transform(y)
