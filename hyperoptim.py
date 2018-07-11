@@ -11,7 +11,7 @@ import network
 import utils
 
 MAX_EVALS = 1000
-SAVE_FOLDER = "data/hyperparameter_optim/"
+SAVE_FOLDER = "data/hyopt/"
 DATA = "data/sims/rough_walk.pkl"
 
 
@@ -51,9 +51,12 @@ def run_hyperoptim(space, folder):
     # Perform optimization
     best = fmin(fn=objective, space=space, algo=tpe.suggest,
                 max_evals=curr_max, trials=trials)
+    print "\nLast loss: " + str(trials.results[-1]['loss'])
+    print "Last params: " + str(trials.results[-1]['params'])
     print "\nCurrent best loss: " + \
           str(min([r["loss"] for r in trials.results]))
     print "Current best params: " + str(best)
+
 
     # save the trials object
     with open(folder + "/hyperopt.pkl", "wb") as f:
@@ -65,11 +68,14 @@ def run_hyperoptim(space, folder):
 if __name__ == '__main__':
 
     # Create hyper parameter search space
-    space = {
+    space2 = {
         "s_lsm": hp.choice('s_lsm', [0, 100, 200, 500, 1000]),
         "lsm_sr": hp.uniform('lsm_sr', 0.5, 1),
+    }
+
+    space1 = {
         "n_l": hp.quniform('n_l', 1, 4, 1),
-        "s_l": hp.qloguniform('s_l', 2, 7, 1),
+        "s_l": hp.quniform('s_l', 200, 3000, 200),
         "act": hp.choice('act', ['relu', 'tanh'])
     }
 

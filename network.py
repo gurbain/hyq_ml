@@ -64,6 +64,7 @@ class FeedForwardNN():
         self.acc = 0
         self.x_scaler = None
         self.y_scaler = None
+        self.reservoir = []
 
     ## DATA PROCESSING FUNCTIONS
 
@@ -281,6 +282,7 @@ class FeedForwardNN():
                 r = reservoir.ReservoirNet(n_in=x.shape[1],
                                            verbose=self.verbose)
                 x = r.run(x)
+                self.reservoir.append(r)
 
         return x
 
@@ -353,14 +355,15 @@ class FeedForwardNN():
                     str(index) + ".h5 and " + self.save_folder + \
                     "/network_" + str(index)+ ".pkl")
 
-    def load(self, folder):
+    def load(self, folder, num):
 
         # Load this class
-        with open(folder + "/network.pkl",'rb') as f:
+        with open(folder + "/network_" + str(num) + ".pkl",'rb') as f:
             self.__dict__ = pickle.load(f)
+            self.reservoir = []
 
         # Load network
-        self.nn = load_model(folder + "/model.h5")
+        self.nn = load_model(folder + "/model_" + str(num) + ".h5")
 
         # Load dataset
         self.load_data()

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import datetime
+from hyperopt import Trials
 import numpy as np
 import os
 import pickle
@@ -29,15 +30,8 @@ plt.rc('figure', autolayout=True)
 plt.rc('xtick', color='white')
 plt.rc('ytick', color='white')
 
-# plt.style.use('fivethirtyeight')
-# plt.rc('text', usetex=True)
-# plt.rc('font', family='serif')
-# plt.rc('axes', facecolor='white')
-# plt.rc('savefig', facecolor='white')
-# plt.rc('figure', autolayout=True)
 
-RESULT_FOLDER = '/home/gurbain/hyq_ml/data/nn_learning'
-
+RESULT_FOLDER = '/home/gurbain/hyq_ml/data/hypopt'
 
 
 class SimpleTable(QtWidgets.QTableWidget):
@@ -110,14 +104,21 @@ class VizWin(QtWidgets.QGridLayout):
 
         if name in ["Loss", "Accuracy"]:
             self.plotMetrics(name)
-        if name  == "Loss vs Layers":
-            self.plotLossNLayers()
+        if name  == "Layer Size":
+            self.plotLossLayers(name)
+        if name  == "Layer Number":
+            self.plotLossLayers(name)
+        if name  == "Parameter Search Evol":
+            self.plotHypOptEvo()
         if name  == "Prediction":
             self.plotPrediction()
 
     def plotMetrics(self, name):
 
-        hist = self.win.sel_conf[self.win.sel_ite].history
+        nn = network.FeedForwardNN()
+        nn.verbose = 0
+        nn.load(self.win.sel_exp, self.win.sel_ite)
+        hist = nn.history
 
         self.clean()
         self.plot = SimpleFigure()
@@ -134,7 +135,7 @@ class VizWin(QtWidgets.QGridLayout):
         self.plot.axes.set_title('Model accuracy', fontsize=14)
         self.plot.axes.set_ylabel('Accuracy')
         self.plot.axes.set_xlabel('Epoch')
-        self.plot.axes.legend(['train', 'test'], loc='upper left')
+        self.plot.axes.legend(loc='upper left')
         self.plot.axes.xaxis.label.set_color('white')
         self.plot.axes.yaxis.label.set_color('white')
         self.plot.axes.title.set_color('white')
@@ -143,7 +144,10 @@ class VizWin(QtWidgets.QGridLayout):
 
     def plotPrediction(self):
 
-        y_truth, y_pred = self.win.sel_conf[self.win.sel_ite].evaluate(False)
+        nn = network.FeedForwardNN()
+        nn.verbose = 0
+        nn.load(self.win.sel_exp, self.win.sel_ite)
+        y_t, y_p, s = nn.evaluate(False)
 
         self.clean()
         self.plot = SimpleFigure()
@@ -151,9 +155,9 @@ class VizWin(QtWidgets.QGridLayout):
         self.addWidget(NavigationToolbar(self.plot, self.win))
 
         self.plot.axes.cla()
-        self.plot.axes.plot(y_truth[:, 0], linewidth=1, label="Real")
-        self.plot.axes.plot(y_pred[:, 0], linewidth=1, label="Predicted")
-        self.plot.axes.plot(np.abs(y_truth - y_pred)[:, 0], linewidth=1,
+        self.plot.axes.plot(y_t[:, 0], linewidth=1, label="Real")
+        self.plot.axes.plot(y_p[:, 0], linewidth=1, label="Predicted")
+        self.plot.axes.plot(np.abs(y_t - y_p)[:, 0], linewidth=1,
                             label="MAE error")
         self.plot.axes.set_title('Predicted Signal', fontsize=14)
         self.plot.axes.set_ylabel('First Joint Position')
@@ -165,12 +169,19 @@ class VizWin(QtWidgets.QGridLayout):
 
         self.plot.draw()
 
-    def plotLossNLayers(self):
+    def plotLossLayers(self, name):
 
         self.clean()
 
-        losses = [t["test_loss"] for t in self.win.sel_conf]
-        n_layers = [len(t["params"]["nn"]) for t in self.win.sel_conf]
+        if name == "Layer Size":
+            n_layers = [r["params"]["s_l"] for r in self.win.sel_conf.results]
+            margin = 10
+            label = "Size of Layers"
+        if name == "Layer Number":
+            n_layers = [r["params"]["n_l"] for r in self.win.sel_conf.results]
+            margin = 1
+            label = "Number of Layers"
+        losses = [r["loss"] for r in self.win.sel_conf.results]
 
         self.plot = SimpleFigure()
         self.addWidget(self.plot)
@@ -181,9 +192,34 @@ class VizWin(QtWidgets.QGridLayout):
         self.plot.axes.set_title("Test Losses for different NN Architectures",
                                  fontsize=14)
 
-        self.plot.axes.set_xlim([min(n_layers) - 1, max(n_layers) + 1])
+        self.plot.axes.set_xlim([min(n_layers) - margin,
+                                 max(n_layers) + margin])
+        self.plot.axes.set_ylim([min(losses) - 0.0001, max(losses) + 0.0001])
         self.plot.axes.set_ylabel('Loss')
-        self.plot.axes.set_xlabel('Number of NN Layers')
+        self.plot.axes.set_xlabel(label)
+        self.plot.axes.xaxis.label.set_color('white')
+        self.plot.axes.yaxis.label.set_color('white')
+        self.plot.axes.title.set_color('white')
+
+    def plotHypOptEvo(self):
+
+        self.clean()
+
+        iteration = range(len(self.win.sel_conf.results))
+        losses = [r["loss"] for r in self.win.sel_conf.results]
+
+        self.plot = SimpleFigure()
+        self.addWidget(self.plot)
+        self.addWidget(NavigationToolbar(self.plot, self.win))
+
+        self.plot.axes.cla()
+        self.plot.axes.plot(iteration, losses, linestyle='None', marker='.')
+        self.plot.axes.set_title("Evolution of the Hyper Parameters Search",
+                                 fontsize=14)
+
+        self.plot.axes.set_xlim([min(iteration) - 1, max(iteration) + 1])
+        self.plot.axes.set_ylabel('Loss')
+        self.plot.axes.set_xlabel('Search Epoch')
         self.plot.axes.xaxis.label.set_color('white')
         self.plot.axes.yaxis.label.set_color('white')
         self.plot.axes.title.set_color('white')
@@ -228,10 +264,8 @@ class IteListWin(QtWidgets.QGridLayout):
 
         self.list.clear()
 
-        if os.path.isfile(self.win.sel_exp + "/network.pkl"):
-            self.win.sel_conf = [network.FeedForwardNN()]
-            self.win.sel_conf[0].load(self.win.sel_exp)
-            self.win.sel_conf[0].verbose = 0
+        if os.path.isfile(self.win.sel_exp + "/hyperopt.pkl"):
+            self.win.sel_conf =  pickle.load(open(self.win.sel_exp + "/hyperopt.pkl"))
             for i in range(len(self.win.sel_conf)):
                 item = QtWidgets.QListWidgetItem()
                 item.setText("Iteration " + str(i+1))
@@ -311,16 +345,24 @@ class ExpButWin(QtWidgets.QGridLayout):
 
     def addButtons(self):
 
-        self.b1 = QtWidgets.QPushButton("Loss vs Layers")
+        self.b1 = QtWidgets.QPushButton("Layer Size")
         self.b1.installEventFilter(self)
         self.addWidget(self.b1, 1, 0)
+
+        self.b2 = QtWidgets.QPushButton("Layer Number")
+        self.b2.installEventFilter(self)
+        self.addWidget(self.b2, 1, 1)
+
+        self.b3 = QtWidgets.QPushButton("Parameter Search Evol")
+        self.b3.installEventFilter(self)
+        self.addWidget(self.b3, 1, 2)
 
     def addLegend(self):
 
         self.l1 = QtWidgets.QLabel()
         self.l1.setText("Metaparameters Visualization")
         self.l1.setAlignment(QtCore.Qt.AlignCenter)
-        self.addWidget(self.l1, 0, 0, 1, 1)
+        self.addWidget(self.l1, 0, 0, 1, 3)
 
     def eventFilter(self, object, event):
 
@@ -343,8 +385,12 @@ class ExpButWin(QtWidgets.QGridLayout):
 
     def displayHelp(self, action):
 
-            if action == "Loss vs Layers":
-                self.win.displayStatus("Show the value of the Loss during Test for the different NN architectures ")
+            if action == "Layer Size":
+                self.win.displayStatus("Show the value of the Loss during Test in function of NN Layer Size.")
+            if action == "Layer Size":
+                self.win.displayStatus("Show the value of the Loss during Test in function of NN number of Layers.")
+            if action == "Parameter Search Evol":
+                self.win.displayStatus("Show the evolution of the best learning loss along the Hyper-parameters search epochs.")
             return True
 
 
