@@ -35,10 +35,11 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, batch_size=64, max_epochs=5000, test_split=0.7,
-                 x_mem_buff_size=5, val_split=0.1, verbose=2, stop_pat=50,
-                 nn_layers=[(900, 'lsm', 0.9), (2048, 'relu'), (512, 'relu')],
-                 stop_delta=0.00001, data_file="data/sims/simple_walk.bag",
+    def __init__(self, batch_size=2048, max_epochs=5000, test_split=0.7,
+                 x_mem_buff_size=1, val_split=0.1, verbose=2, stop_pat=400,
+                 nn_layers=[(500, 'lsm', 0.9), (2048, 'relu'),
+                 (2048, 'relu')], stop_delta=0.001,
+                 data_file="data/sims/simple_walk.bag",
                  save_folder="data/nn_learning/"):
 
         ## ALGORITHM METAPARAMETERS
@@ -96,6 +97,7 @@ class FeedForwardNN():
         else:
             x_new, y_new = self.load_pkl()
 
+        x_new, y_new = self.scale_data(x_new, y_new)
         self.split_data(x_new, y_new)
 
     def load_bag(self):
@@ -190,15 +192,21 @@ class FeedForwardNN():
         # Concatenate all input data
         x_new = np.hstack((x_new, x2_new))
 
-        # Scale
+        return x_new, y_new
+
+    def scale_data(self, x, y):
+
         self.x_scaler = MinMaxScaler()
         self.y_scaler = MinMaxScaler()
-        self.x_scaler.fit(x_new)
-        self.y_scaler.fit(y_new)
-        x_new = self.x_scaler.transform(x_new)
-        y_new = self.y_scaler.transform(y_new)
+        self.x_scaler.fit(x)
+        self.y_scaler.fit(y)
 
-        return x_new, y_new
+        x = self.x_scaler.transform(x)
+        y = self.y_scaler.transform(y)
+        plt.plot(y)
+        plt.show()
+        plt.plot(x)
+        plt.show()
 
     def split_data(self, x, y):
 
@@ -299,6 +307,11 @@ class FeedForwardNN():
 
         self.printv("\n\n ===== Saving =====")
 
+        f_in_folder = [f for f in listdir(self.save_folder)
+                       if isfile(join(self.save_folder, f))]
+
+        print f_in_folder
+
         # Save training data
         to_save = copy.copy(self.__dict__)
         del to_save["nn"], to_save["history"].model, to_save["x_train"]
@@ -390,7 +403,7 @@ class FeedForwardNN():
                                      monitor='val_acc', verbose=self.verbose,
                                      save_best_only=True, mode='max')]
         if self.stop_delta is not None:
-            callbacks += [EarlyStopping(monitor='val_loss',  mode="min",
+            callbacks += [EarlyStopping(monitor='val_acc',  mode="max",
                                        verbose=self.verbose,
                                        patience=self.stop_pat,
                                        min_delta=self.stop_delta)]
@@ -405,10 +418,6 @@ class FeedForwardNN():
         self.training_time = time.time() - t_i
 
     def run(self, show=True):
-
-        # Create saving folder
-        self.save_folder = self.save_folder + utils.timestamp()
-        utils.mkdir(self.save_folder)
 
         # Get data
         self.load_data()
@@ -442,6 +451,7 @@ if __name__ == '__main__':
             nn.evaluate(False)
 
         if sys.argv[1] == "train":
-            nn = FeedForwardNN(stop_delta = None,
-                               data_file="data/sims/rough_walk.pkl")
+            folder = "data/nn_learning/"+ utils.timestamp()
+            utils.mkdir(folder)
+            nn = FeedForwardNN(data_file=sys.argv[2], save_folder=folder)
             nn.run(False)
