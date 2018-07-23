@@ -104,9 +104,8 @@ class VizWin(QtWidgets.QGridLayout):
 
         if name in ["Loss", "Accuracy"]:
             self.plotMetrics(name)
-        if name  == "Layer Size":
-            self.plotLossLayers(name)
-        if name  == "Layer Number":
+        if name in ["Layer Size", "Layer Number",
+                     "LSM Spectral Radius", "LSM Size"]:
             self.plotLossLayers(name)
         if name  == "Parameter Search Evol":
             self.plotHypOptEvo()
@@ -181,6 +180,14 @@ class VizWin(QtWidgets.QGridLayout):
             n_layers = [r["params"]["n_l"] for r in self.win.sel_conf.results]
             margin = 1
             label = "Number of Layers"
+        if name == "LSM Size":
+            n_layers = [r["params"]["s_lsm"] for r in self.win.sel_conf.results]
+            margin = 10
+            label = "LSM Neuron Number"
+        if name == "LSM Spectral Radius":
+            n_layers = [r["params"]["lsm_sr"] for r in self.win.sel_conf.results]
+            margin = 0.5
+            label = "Spectral Radius of the LSM Connectivity Matrix"
         losses = [r["loss"] for r in self.win.sel_conf.results]
 
         self.plot = SimpleFigure()
@@ -319,9 +326,13 @@ class ExpListWin(QtWidgets.QGridLayout):
 
             dirnames.sort(reverse=True)
             for subdirname in dirnames:
-                date = datetime.datetime.strptime(subdirname, '%Y%m%d-%H%M%S')
-                item = QtWidgets.QListWidgetItem()
-                item.setText(date.strftime("Exp %d/%m/%Y - %H:%M:%S"))
+                try:
+                    date = datetime.datetime.strptime(subdirname, '%Y%m%d-%H%M%S')
+                    item = QtWidgets.QListWidgetItem()
+                    item.setText(date.strftime("Exp %d/%m/%Y - %H:%M:%S"))
+                except ValueError:
+                    item = QtWidgets.QListWidgetItem()
+                    item.setText(subdirname)
                 item.setData(QtCore.Qt.UserRole, dirname + "/" + subdirname)
                 self.list.addItem(item)
 
@@ -357,6 +368,14 @@ class ExpButWin(QtWidgets.QGridLayout):
         self.b3.installEventFilter(self)
         self.addWidget(self.b3, 1, 2)
 
+        self.b4 = QtWidgets.QPushButton("LSM Size")
+        self.b4.installEventFilter(self)
+        self.addWidget(self.b4, 2, 0)
+
+        self.b5 = QtWidgets.QPushButton("LSM Spectral Radius")
+        self.b5.installEventFilter(self)
+        self.addWidget(self.b5, 2, 1)
+
     def addLegend(self):
 
         self.l1 = QtWidgets.QLabel()
@@ -391,6 +410,10 @@ class ExpButWin(QtWidgets.QGridLayout):
                 self.win.displayStatus("Show the value of the Loss during Test in function of NN number of Layers.")
             if action == "Parameter Search Evol":
                 self.win.displayStatus("Show the evolution of the best learning loss along the Hyper-parameters search epochs.")
+            if action == "LSM Size":
+                self.win.displayStatus("Show the value of the Loss during Test in function of the LSM reservoir size.")
+            if action == "LSM Spectral Radius":
+                self.win.displayStatus("Show the value of the Loss during Test in function of the LSM sectral radius.")
             return True
 
 

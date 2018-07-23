@@ -11,24 +11,23 @@ import network
 import utils
 
 MAX_EVALS = 1000
-SAVE_FOLDER = "data/hyopt/"
+SAVE_FOLDER = "data/hypopt/"
 DATA = "data/sims/rough_walk.pkl"
 
 
 def objective(p):
 
-    nn_layers = []
-    if p['s_lsm'] != 0:
-        nn_layers += [(int(p['s_lsm']), 'lsm', p['lsm_sr'])]
+    nn_layers = [(400, 'lsm', int(p['lsm_sr']))]
 
-    for i in range(int(p["n_l"])):
-        nn_layers += [(int(p['s_l']), p['act'])]
+    for i in range(2):
+        nn_layers += [(2048, "relu")]
 
-    nn = network.FeedForwardNN(max_epochs=100, nn_layers=nn_layers,
-                               batch_size=512, verbose=1,
+    nn = network.FeedForwardNN(max_epochs=200, nn_layers=nn_layers,
+                               batch_size=1024, verbose=1,
+                               lsm_n_read=46,
                                data_file=DATA, save_folder=folder)
-    nn.run(show=False)
-    loss = np.min(nn.history.history['val_loss'])
+    nn.train(show=False)
+    loss = np.min(nn.history['val_loss'])
 
     return {'loss': loss, 'params': p, 'status': STATUS_OK}
 
@@ -68,15 +67,12 @@ def run_hyperoptim(space, folder):
 if __name__ == '__main__':
 
     # Create hyper parameter search space
-    space2 = {
-        "s_lsm": hp.choice('s_lsm', [0, 100, 200, 500, 1000]),
-        "lsm_sr": hp.uniform('lsm_sr', 0.5, 1),
-    }
-
-    space1 = {
-        "n_l": hp.quniform('n_l', 1, 4, 1),
-        "s_l": hp.quniform('s_l', 200, 3000, 200),
-        "act": hp.choice('act', ['relu', 'tanh'])
+    space = {
+        #"s_lsm": hp.quniform('lsm_sr', 0, 1000, 50),
+        "lsm_sr": hp.uniform('lsm_sr', 0.1, 1.7),
+        # "n_l": hp.quniform('n_l', 1, 4, 1),
+        # "s_l": hp.quniform('s_l', 200, 3000, 200),
+        # "act": hp.choice('act', ['relu', 'tanh'])
     }
 
     # Result save folder

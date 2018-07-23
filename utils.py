@@ -1,12 +1,18 @@
 from contextlib import contextmanager
 import copy
+from cStringIO import StringIO
+import keras
 import numpy as np
 import os
 import pickle
 import psutil
+from sklearn.pipeline import FeatureUnion
 import sys
+import tempfile
 import time
 
+history = {}
+epoch = []
 
 def cartesian(arrays, out=None):
     """
@@ -59,7 +65,6 @@ def cartesian(arrays, out=None):
     return out
 
 
-
 def timestamp():
     """ Return a string stamp with current date and time """
 
@@ -100,10 +105,10 @@ def split(str, delim=" "):
     string = ""
     array = []
     while index < len(str):
-        if str[index] not in delim: 
+        if str[index] not in delim:
             string += str[index]
         else:
-            if string: 
+            if string:
                 array.append(string)
                 string = ""
         index += 1
@@ -125,3 +130,65 @@ class RedirectStdStreams(object):
         self._stdout.flush(); self._stderr.flush()
         sys.stdout = self.old_stdout
         sys.stderr = self.old_stderr
+
+
+def make_keras_picklable():
+    def __getstate__(self):
+        model_str = ""
+        with tempfile.NamedTemporaryFile(suffix='.hdf5', delete=True) as fd:
+            keras.models.save_model(self, fd.name, overwrite=True)
+            model_str = fd.read()
+        d = { 'model_str': model_str }
+        return d
+
+    def __setstate__(self, state):
+        with tempfile.NamedTemporaryFile(suffix='.hdf5', delete=True) as fd:
+            fd.write(state['model_str'])
+            fd.flush()
+            model = keras.models.load_model(fd.name)
+        self.__dict__ = model.__dict__
+
+
+    cls = keras.models.Model
+    cls.__getstate__ = __getstate__
+    cls.__setstate__ = __setstate__
+
+class CustomHistory(keras.callbacks.Callback):
+
+    def on_train_begin(self, logs=None):
+
+        epoch = []
+        history = {}
+
+    def on_epoch_end(self, e, logs=None):
+
+        logs = logs or {}
+        epoch.append(e)
+        for k, v in logs.items():
+            history.setdefault(k, []).append(v)
+
+def flatten(lst):
+    new_lst = []
+    flatten_helper(lst, new_lst)
+    return new_lst
+
+def flatten_helper(lst, new_lst):
+    for element in lst:
+        if isinstance(element, list):
+            flatten_helper(element, new_lst)
+        if isinstance(element, tuple):
+            flatten_helper(element, new_lst)
+        if isinstance(element, FeatureUnion):
+            flatten_helper(element.transformer_list, new_lst)
+        else:
+            new_lst.append(element)
+
+class Capturing(list):
+    def __enter__(self):
+        self._stdout = sys.stdout
+        sys.stdout = self._stringio = StringIO()
+        return self
+    def __exit__(self, *args):
+        self.extend(self._stringio.getvalue().splitlines())
+        del self._stringio    # free up some memory
+        sys.stdout = self._stdout
