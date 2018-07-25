@@ -83,6 +83,36 @@ class TimeDelay(BaseEstimator, TransformerMixin):
     def transform(self, X):
 
         self.y = self.tf.execute(X)
+
+        return self.y
+
+
+class GaussianNoise(BaseEstimator, TransformerMixin):
+
+    def __init__(self, stdev=0.1):
+
+        self.stdev = stdev
+
+    def _fit_transform(self, X):
+
+        noise = np.random.normal(0, self.stdev, X.shape)
+        self.y = X + noise
+        return self
+
+    def fit(self, X, y=None):
+
+        self = self._fit_transform(X)
+        return self
+
+    def fit_transform(self, X, y=None):
+
+        self = self._fit_transform(X)
+        return self.y
+
+    def transform(self, X):
+
+        noise = np.random.normal(0, self.stdev, X.shape)
+        self.y = X #+ noise
         return self.y
 
 
@@ -280,22 +310,27 @@ class SFA():
         self.x_slow = np.zeros((self.x.shape))
         # Stack x input in timeframes and compute a polynomial expansion
         for i in range(self.x.shape[1]):
-            timeframes = mdp.nodes.TimeDelayNode(self.delay_buff_size)
-            timeframed_x = \
-                timeframes.execute(self.x[:, i].reshape(self.x.shape[0], 1))
-            cubic_expand = mdp.nodes.PolynomialExpansionNode(self.pol_exp_deg)
-            cubic_expanded_x = cubic_expand(timeframed_x)
 
-            # Create the SFA node and process the data
-            sfa = mdp.nodes.SFANode(output_dim=1)
-            slow = sfa.execute(cubic_expanded_x)
-            x_slow = slow.flatten()
+            try:
+                timeframes = mdp.nodes.TimeDelayNode(self.delay_buff_size)
+                timeframed_x = \
+                    timeframes.execute(self.x[:, i].reshape(self.x.shape[0], 1))
+                cubic_expand = mdp.nodes.PolynomialExpansionNode(self.pol_exp_deg)
+                cubic_expanded_x = cubic_expand(timeframed_x)
 
-            # # Padding to get original dims
-            # if self.time_frame_num > 1:
-            #     x_slow = np.concatenate([[x_slow[0]], x_slow])
-            # for i in range(self.x_slow.shape[0] - x_slow.shape[0]):
-            #     x_slow = np.concatenate([x_slow, [x_slow[-1]]])
+                # Create the SFA node and process the data
+                sfa = mdp.nodes.SFANode(output_dim=1)
+                slow = sfa.execute(cubic_expanded_x)
+                x_slow = slow.flatten()
+
+                # # Padding to get original dims
+                # if self.time_frame_num > 1:
+                #     x_slow = np.concatenate([[x_slow[0]], x_slow])
+                # for i in range(self.x_slow.shape[0] - x_slow.shape[0]):
+                #     x_slow = np.concatenate([x_slow, [x_slow[-1]]])
+            except mdp.NodeException:
+                #print "Node exception. Fill with zeros."
+                x_slow = np.zeros((self.x.shape[0],))
             self.x_slow[:, i] = x_slow
 
         return self.x_slow
@@ -314,7 +349,6 @@ class SFA():
 
 
 class ESNSFA(BaseEstimator, TransformerMixin):
-
 
     def __init__(self, n_readout=15, n_components=100, n_res=5,
                  l_min=-20, l_max=0, weight_scaling=0.9,
@@ -351,8 +385,8 @@ class ESNSFA(BaseEstimator, TransformerMixin):
             x = self.esn[i].fit_transform(X)
             self.sfa[i].set_input(x)
             y_c = self.sfa[i].compute()
-            print "Filling SFA from: " + str(i*self.n_readout) + \
-                  "  to: " + str(i*self.n_readout+self.n_readout)
+            # print "Filling SFA from: " + str(i*self.n_readout) + \
+            #       "  to: " + str(i*self.n_readout+self.n_readout)
             y[:, i*self.n_readout:i*self.n_readout+self.n_readout] = y_c
 
         tf = mdp.nodes.TimeDelayNode(self.delay_buff_size)
@@ -379,8 +413,8 @@ class ESNSFA(BaseEstimator, TransformerMixin):
             x = self.esn[i].transform(X)
             self.sfa[i].set_input(x)
             y_c = self.sfa[i].compute()
-            print "Filling SFA from: " + str(i*self.n_readout) + \
-                  "  to: " + str(i*self.n_readout+self.n_readout)
+            # print "Filling SFA from: " + str(i*self.n_readout) + \
+            #       "  to: " + str(i*self.n_readout+self.n_readout)
             y[:, i*self.n_readout:i*self.n_readout+self.n_readout] = y_c
 
         tf = mdp.nodes.TimeDelayNode(self.delay_buff_size)

@@ -1,9 +1,11 @@
 ## IMPORTS
+
 from keras.callbacks import EarlyStopping, ModelCheckpoint, History, TensorBoard
 from keras.losses import categorical_crossentropy, mean_absolute_error, mean_squared_error
-from keras.optimizers import Adadelta
+from keras.optimizers import Adadelta, Adam
 from keras.models import Sequential, Model,load_model
-from keras.layers import Dense, Activation, Flatten, Input, Concatenate
+from keras.layers import Dense, Activation, Flatten, Input, Concatenate, GaussianNoise
+from keras.regularizers import l2
 from keras.wrappers.scikit_learn import KerasRegressor
 
 from sklearn.externals import joblib
@@ -43,9 +45,10 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 nn = [
-       [('td', 20, 2)],#, ('esnsfa', 200, 0.9, 5, -2, 0)],
-       [('tanh', 4096)],
-       [('tanh', 1024)]
+       #[('noise', 0.1)],
+       #[('td', 5, 1)],#, [('esnsfa', 150, 0.9, 5, -2, 0)], #
+       #[('noise', 200, 0.01)],
+       [('tanh', 1024)],
      ]
 
 
@@ -53,11 +56,11 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, batch_size=2048, max_epochs=2500, test_split=0.7,
+    def __init__(self, batch_size=4096, max_epochs=30, test_split=0.7,
                  x_mem_buff_size=1, val_split=0.1, verbose=2, stop_pat=400,
-                 nn_layers=nn, stop_delta=0.001, esn_n_read=10,
+                 nn_layers=nn, stop_delta=0.0001, esn_n_read=10,
                  data_file="data/sims/simple_walk.bag", filter_out=False,
-                 save_folder="data/nn_learning/"):
+                 regularization=0.0001, save_folder="data/nn_learning/"):
 
         ## ALGORITHM METAPARAMETERS
         self.data_file = data_file
@@ -74,6 +77,7 @@ class FeedForwardNN():
         self.stop_pat = stop_pat
         self.verbose = verbose
         self.save_folder = save_folder
+        self.regularization = regularization
 
         self.history = None
         self.nn = None
@@ -278,19 +282,20 @@ class FeedForwardNN():
 
         # Network layers
         for l in self.network_layers:
-            if l[0] in ['relu', 'tanh']:
-                x = Dense(l[1])(x)
-                x = Activation(l[0])(x)
+            if l[0][0] in ['relu', 'tanh']:
+                reg = l2(self.regularization)
+                x = Dense(l[0][1], kernel_regularizer=reg)(x)
+                x = Activation(l[0][0])(x)
 
         # Output Layer
         n_out = self.y_train.shape[1]
-        x = Dense(n_out)(x)
+        x = Dense(n_out, kernel_regularizer=l2(self.regularization))(x)
         x = Activation('tanh')(x)
 
         # Compile and print network
         self.nn = Model(inputs=[state_input], outputs=x)
         self.nn.compile(loss='mse',
-                   optimizer=Adadelta(),
+                   optimizer=Adam(),
                    metrics=['accuracy', 'mse', 'mae', 'mape', 'cosine'])
         if self.verbose > 1:
             self.nn.summary()
@@ -303,11 +308,11 @@ class FeedForwardNN():
 
         # Wrap in a regressor
         self.callbacks = [ModelCheckpoint(self.save_folder + "/best_model.h5",
-                                     monitor='val_acc', verbose=self.verbose,
-                                     save_best_only=True, mode='max'),
+                                     monitor='val_loss', verbose=self.verbose,
+                                     save_best_only=True, mode='min'),
                           utils.CustomHistory(), TensorBoard()]
         if self.stop_delta is not None:
-            self.callbacks += [EarlyStopping(monitor='val_acc',  mode="max",
+            self.callbacks += [EarlyStopping(monitor='val_loss',  mode="min",
                                        verbose=self.verbose,
                                        patience=self.stop_pat,
                                        min_delta=self.stop_delta)]
@@ -351,27 +356,37 @@ class FeedForwardNN():
                         step_name = 'td' + str(i)
                         tl += [(step_name, e)]
                         tw[step_name] = 1
+
+                    if k[0] == 'noise':
+                        e = esn.GaussianNoise(stdev=k[1])
+                        step_name = 'noise' + str(i)
+                        tl += [(step_name, e)]
+                        tw[step_name] = 1
                 pp_pipe += [('fu', FeatureUnion(transformer_list=tl,
                                                 transformer_weights=tw))]
             else:
-                if l[0] == 'esn':
+                if l[0][0] == 'esn':
                     e = esn.SimpleESN(n_readout=self.esn_n_read,
-                                      n_components=l[1],
-                                      weight_scaling=l[2])
+                                      n_components=l[0][1],
+                                      weight_scaling=l[0][2])
                     pp_pipe += [('esn' + str(i), e)]
 
-                if l[0] == 'esnsfa':
+                if l[0][0] == 'esnsfa':
                     e = esn.ESNSFA(n_readout=self.esn_n_read,
-                                   n_components=l[1],
-                                   weight_scaling=l[2],
-                                   n_res=l[3],
-                                   lambda_min=l[4],
-                                   lambda_max=l[5])
+                                   n_components=l[0][1],
+                                   weight_scaling=l[0][2],
+                                   n_res=l[0][3],
+                                   l_min=l[0][4],
+                                   l_max=l[0][5])
                     pp_pipe += [('esnsfa' + str(i), e)]
 
-                if l[0] == 'td':
-                    e = esn.TimeDelay(l[0], l[2])
+                if l[0][0] == 'td':
+                    e = esn.TimeDelay(l[0][1], l[0][2])
                     pp_pipe += [('td' + str(i), e)]
+
+                if l[0][0] == 'noise':
+                    e = esn.GaussianNoise(stdev=l[0][1])
+                    pp_pipe += [('noise' + str(i), e)]
 
             i += 1
 
@@ -455,7 +470,7 @@ class FeedForwardNN():
 
     def plot_histogram(self, x):
 
-        n, bins, p = plt.hist(x, 50, facecolor='g', alpha=0.75)
+        n, bins, p = plt.hist(x.flatten(), 50, facecolor='g', alpha=0.75)
 
         plt.xlabel('Input values')
         plt.ylabel('Distribution')
@@ -506,15 +521,18 @@ class FeedForwardNN():
         self.printv("\n\n ===== Evaluating Test Dataset =====\n")
 
         # Process features
+
         x_ft = self.in_pipe.transform(self.x_test)
         x_ft = np.expand_dims(x_ft, axis=2)
         y_ft = self.out_pipe.transform(self.y_test)
 
+        self.plot_histogram(x_ft[:, :, 0])
+
         # Process NN
         score = self.nn.evaluate(x_ft, y_ft, verbose=2)
-        y_pred = self.out_pipe.inverse_transform(self.nn.predict(x_ft,
-                    batch_size=self.batch_size,
-                    verbose=self.verbose))
+        y_pred_ft = self.nn.predict(x_ft, batch_size=self.batch_size,
+                               verbose=self.verbose)
+        y_pred = self.out_pipe.inverse_transform(y_pred_ft)
 
         y_truth = self.y_test
         self.printv("Test loss: " + str(score[0]))
@@ -539,14 +557,18 @@ class FeedForwardNN():
             plt.xlabel("Actual value")
             plt.ylabel("Predicted value")
             plt.show()
-            ts = self.t[1] - self.t[0]
-            t_max = y_truth.shape[0] * ts
-            t = np.arange(0, t_max, ts)
+            t = self.t[0:y_truth.shape[0]]
             plt.plot(t, y_truth[:, 0], label="real")
             plt.plot(t, y_pred[:, 0], label="predicted")
             plt.plot(t, np.abs(y_truth - y_pred)[:, 0],
                      label="MAE error")
             plt.legend()
+            plt.show()
+
+            ts = [0]
+            for i in range(len(self.t) - 1):
+                ts.append(self.t[i+1] - self.t[i])
+            plt.plot(self.t, ts)
             plt.show()
 
         return y_truth, y_pred, score
@@ -563,6 +585,8 @@ class FeedForwardNN():
                                  self.create_pp() + \
                                  [('xsc1', self.create_x_scaler())])
         x_ft = self.in_pipe.fit_transform(self.x_train)
+        with open("x_train.pkl", "wb") as f:
+            pickle.dump([self.t, x_ft, self.x_train], f, protocol=2)
         x_ft = np.expand_dims(x_ft, axis=2)
         self.n_in = x_ft.shape[1]
         self.printv("\nTotal input features size: " + str(x_ft.shape))
@@ -574,6 +598,7 @@ class FeedForwardNN():
                     if 'esnsfa' in e[0]:
                         ts = self.t[1] - self.t[0]
                         t_max = e[1].y.shape[0] * ts
+                        print ts, t_max
                         t = np.arange(0, t_max, ts)
                         e[1].plot_sfa(t)
 
@@ -616,15 +641,17 @@ class FeedForwardNN():
 
         return self.test_loss, self.test_accuracy
 
+    
     def predict(self, state):
 
         x_ft = self.in_pipe.transform(state)
+        self.x_ft = x_ft
         x_ft = np.expand_dims(x_ft, axis=2)
 
         y_ft = self.nn.predict(x_ft)
         y = self.out_pipe.inverse_transform(y_ft)
 
-        return y.T.flatten()
+        return y[0,:].flatten()
 
 if __name__ == '__main__':
 
