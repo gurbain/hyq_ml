@@ -15,6 +15,7 @@ from geometry_msgs.msg import Vector3, Wrench
 from rosgraph_msgs.msg import Clock
 from dls_msgs.msg import StringDoubleArray
 from dwl_msgs.msg import WholeBodyState, WholeBodyTrajectory, JointState, ContactState, BaseState
+from sensor_msgs.msg import JointState
 from std_srvs.srv import Empty
 
 stderr = sys.stderr
@@ -51,22 +52,26 @@ class HyQSim(threading.Thread):
         # ROS Topics
         self.clock_sub_name = 'clock'
         self.hyq_state_sub_name = "/hyq/robot_states"
+        self.hyq_action_sub_name = "/hyq/des_joint_states"
         self.hyq_debug_sub_name = "/hyq/debug"
         self.hyq_plan_pub_name = "/hyq/plan"
         self.sub_clock = None
         self.sub_state = None
+        self.sub_action = None
         self.sub_debug = None
         self.pub_plan = None
 
         # Simulation state
         self.sim_time = 0
         self.hyq_state = dict()
+        self.hyq_action = dict()
         self.hyq_init_wbs = None
         self.hyq_wbs = None
         self.hyq_state_it = 0
         self.hyq_traj = []
-        self.hyq_action = None
         self.hyq_traj_it = 0
+        self.process_state_flag = threading.Lock()
+        self.process_action_flag = threading.Lock()
 
         # Class behaviour
         self.verbose = verbose
@@ -90,10 +95,18 @@ class HyQSim(threading.Thread):
             self.sub_clock = ros.Subscriber(self.clock_sub_name, Clock,
                                             callback=self._reg_sim_time,
                                             queue_size=1)
+            self.sub_action = ros.Subscriber(self.hyq_action_sub_name,
+                                            JointState,
+                                            callback=self._reg_hyq_action,
+                                            queue_size=2,
+                                            buff_size=2**20,
+                                            tcp_nodelay=True)
             self.sub_state = ros.Subscriber(self.hyq_state_sub_name,
                                             WholeBodyState,
                                             callback=self._reg_hyq_state,
-                                            queue_size=1)
+                                            queue_size=2,
+                                            buff_size=2**20,
+                                            tcp_nodelay=True)
             self.sub_debug = ros.Subscriber(self.hyq_debug_sub_name,
                                             StringDoubleArray,
                                             callback=self._reg_hyq_debug,
@@ -186,77 +199,67 @@ class HyQSim(threading.Thread):
         except ros.ServiceException as e:
             print("Simulation step service call failed with error" + str(e))
 
-    def start_controller(self):
-
-        self.sim_ps.expect("PrepController>>", timeout=25)
+    def send_controller_cmd(self, cmd, rsp, timeout=1):
 
         # Set the Trunk Controller
         i = 0
         while 1:
-            if i > 10:
+            if i > 5:
                 return -1
             try:
-                self.sim_ps.sendline("trunkCont")
-                self.sim_ps.expect(".*PrepController>>.*", timeout=1)
+                self.sim_ps.sendline(cmd)
+                self.sim_ps.expect(".*" + rsp + ".*", timeout=timeout)
                 break
             except pexpect.exceptions.TIMEOUT:
                 if self.verbose > 0:
-                    print "trunkCont command timed out; retrying!"
+                    print "Command timed out; retrying!"
                     if self.verbose > 1:
                         print(str(self.sim_ps.before))
                 pass
 
-        # Change the Controller
-        i = 0
-        while 1:
-            if i > 15:
-                return -1
-            try:
-                self.sim_ps.sendline("changeController")
-                self.sim_ps.expect(".*Indice.*", timeout=1)
-                break
-            except pexpect.exceptions.TIMEOUT:
-                if self.verbose > 0:
-                    print "changeController command timed out; retrying!"
-                    if self.verbose > 1:
-                        print(str(self.sim_ps.before))
-                self.sim_ps.sendline("")
-                pass
-        i = 0
-        while 1:
-            if i > 15:
-                return -1
-            try:
-                self.sim_ps.sendline("4")
-                self.sim_ps.expect(".*VMForceOptimizationController>>.*",
-                                   timeout=1)
-                break
-            except pexpect.exceptions.TIMEOUT:
-                if self.verbose > 0:
-                    print "changeController command timed out; retrying!"
-                    if self.verbose > 1:
-                        print(str(self.sim_ps.before))
-                self.sim_ps.sendline("")
-                pass
+    def start_controller(self):
 
-        # Set Execute PLan flag ON
-        i = 0
-        while 1:
-            if i > 15:
-                return -1
-            try:
-                self.sim_ps.sendline("executePlan")
-                self.sim_ps.expect(".*Executing Plan On.*", timeout=1)
-                break
-            except pexpect.exceptions.TIMEOUT:
-                if self.verbose > 0:
-                    print "changeController command timed out; retrying!"
-                    if self.verbose > 1:
-                        print(str(self.sim_ps.before))
-                self.sim_ps.sendline("")
-                pass
+        self.sim_ps.expect("PrepController>>", timeout=25)
+        self.send_controller_cmd("trunkCont", "PrepController>>")
+        self.send_controller_cmd("changeController", "Indice")
 
-        self.printv("\n\n ===== Plan Controller is Set =====\n")
+        # Plan Controller
+        # self.send_controller_cmd("4", "VMForceOptimizationController>>")
+        # self.send_controller_cmd("executePlan", "Executing Plan On")
+        # self.send_controller_cmd("changePDgains", "P gain")
+        # self.send_controller_cmd("500", "D gain")
+        # self.send_controller_cmd("6", "VMForceOptimizationController>>")
+        # self.printv("\n\n ===== Plan Controller is Set =====\n")
+
+        # RCF Controller
+        self.send_controller_cmd("3", "Freeze Base off!", timeout=15)
+        self.send_controller_cmd("", "RCFController>>")
+        self.send_controller_cmd("kadj", "Kinematic adjustment ON!!!")
+        self.send_controller_cmd("prec", "Push Recovery ON!!!")
+        self.send_controller_cmd("narrowStance",
+                                 "Narrowing stance posture!!!")
+        self.send_controller_cmd("narrowStance",
+                                 "Narrowing stance posture!!!")
+
+        self.printv("\n ===== RCF Controller is Set =====\n")
+
+        self.controller_started = True
+
+    def start_rcf_trot(self):
+
+        if self.controller_started:
+            self.send_controller_cmd("stw", "WALKING TROT Started!!!")
+            self.send_controller_cmd("ctp", "Stance Hs")
+            self.send_controller_cmd("", "Comp. touch-down errors")
+            self.send_controller_cmd("", "Step Height ")
+            self.send_controller_cmd("", "Forward Velocity")
+            self.send_controller_cmd("0.25", "Step Frequency")
+            for i in range(8):
+                self.send_controller_cmd("", ":")
+            self.send_controller_cmd("", "RCFController>>")
+        else:
+            time.sleep(1)
+            self.start_rcf_trot()
 
     def get_sim_time(self):
 
@@ -264,9 +267,24 @@ class HyQSim(threading.Thread):
 
     def get_hyq_state(self):
 
-        if set(["base", "joint", "stance"]).issubset(self.hyq_state.keys()):
-            return np.mat(self.hyq_state["base"] + self.hyq_state["joint"] + \
-                   self.hyq_state["stance"])
+        self.process_state_flag.acquire()
+        try:
+            if set(["base", "joint", "stance"]).issubset(
+                                        self.hyq_state.keys()):
+                mat = np.mat(self.hyq_state["base"] + \
+                             self.hyq_state["joint"] + \
+                             self.hyq_state["stance"])
+            else:
+                mat = np.mat([])
+        finally:
+            self.process_state_flag.release()
+
+        return mat
+
+    def get_hyq_action(self):
+
+        if set(["pos", "vel"]).issubset(self.hyq_action.keys()):
+            return np.mat(self.hyq_action["pos"] + self.hyq_action["vel"])
         else:
             return np.mat([])
 
@@ -296,17 +314,6 @@ class HyQSim(threading.Thread):
             new_point = self.hyq_wbs
 
             # Add timestamp
-
-            # for c in new_point.contacts:
-            #     c.position = Vector3(x=0, y=0, z=0)
-            #     c.velocity = Vector3(x=0, y=0, z=0)
-            #     c.acceleration = Vector3(x=0, y=0, z=0)
-            #     c.wrench = Wrench(force=Vector3(x=0, y=0, z=0))
-
-            # for b in new_point.base:
-            #     b.position = 0.0
-            #     b.velocity = 0.0
-            #     b.acceleration = 0.0
 
             # Fill the new joint states with the vector in a given order
             for i, j in enumerate(new_point.joints):
@@ -357,20 +364,39 @@ class HyQSim(threading.Thread):
             self.hyq_init_wbs = copy.deepcopy(msg)
 
         self.hyq_wbs = copy.deepcopy(msg)
-        self.hyq_state["base"] = [b.velocity for b in msg.base]
-        self.hyq_state["joint"] = [b.position for b in msg.joints]
-        self.hyq_state["joint"] += [b.velocity for b in msg.joints]
-        self.hyq_state["joint"] += [b.effort for b in msg.joints]
+
+        self.process_state_flag.acquire()
+        try:
+            self.hyq_state["base"] = [b.velocity for b in msg.base]
+            self.hyq_state["joint"] = [b.position for b in msg.joints]
+            self.hyq_state["joint"] += [b.velocity for b in msg.joints]
+            self.hyq_state["joint"] += [b.effort for b in msg.joints]
+
+        finally:
+            self.process_state_flag.release()
 
         self.hyq_state_it += 1
+
+    def _reg_hyq_action(self, msg):
+
+        pos = []
+        for i in range(len(msg.position)):
+            pos.append(msg.position[i])
+        vel = []
+        for i in range(len(msg.velocity)):
+            vel.append(msg.velocity[i])
+
+        self.hyq_action["pos"] = pos
+        self.hyq_action["vel"] = vel
 
     def _reg_hyq_debug(self, msg):
 
         stance = []
         for i, m in enumerate(msg.name):
-            if m in ["des_stance_LF", "des_stance_LH",
-                     "des_stance_RF", "des_stance_RH"]:
+            if m in ["stanceLF", "stanceLH",
+                     "stanceRF", "stanceRH"]:
                 stance += [msg.data[i]]
+
         self.hyq_state["stance"] = stance
 
     def printv(self, txt):
@@ -382,7 +408,7 @@ class HyQSim(threading.Thread):
 if __name__ == '__main__':
 
     # Create and start simulation
-    p = HyQSim()
+    p = HyQSim(view=True)
     p.start()
     p.register_node()
 
@@ -396,6 +422,22 @@ if __name__ == '__main__':
                 p.set_hyq_action([0, 0, pos, 0, 0, pos, 0, 0, pos, 0, 0, pos,
                                   0, 0, vel, 0, 0, vel, 0, 0, vel, 0, 0, vel])
                 p.send_hyq_traj()
+
+        if sys.argv[1] == "rcf":
+            trot_flag = False
+            for i in range(120):
+                print("Time: " + str(i) + "s and Sim time: " + \
+                      str(p.get_sim_time()) + "s and state (len= " + \
+                      str(np.array(p.get_hyq_state()).shape) + "): " + \
+                      str(np.array(p.get_hyq_state())))
+                if trot_flag == False:
+                    if p.get_sim_time() > 1:
+                        p.start_rcf_trot()
+                        trot_flag = True
+                if ros.is_shutdown():
+                    p.stop()
+                    exit(-1)
+                time.sleep(1)
 
     else:
         for i in range(120):

@@ -27,8 +27,8 @@ plt.style.use('fivethirtyeight')
 plt.rc('font', family='Bitstream Vera Sans')
 plt.rc('axes', facecolor='white')
 plt.rc('figure', autolayout=True)
-plt.rc('xtick', color='white')
-plt.rc('ytick', color='white')
+plt.rc('xtick', color='black')
+plt.rc('ytick', color='black')
 
 
 RESULT_FOLDER = '/home/gurbain/hyq_ml/data/hypopt'
@@ -204,9 +204,9 @@ class VizWin(QtWidgets.QGridLayout):
         self.plot.axes.set_ylim([min(losses) - 0.0001, max(losses) + 0.0001])
         self.plot.axes.set_ylabel('Loss')
         self.plot.axes.set_xlabel(label)
-        self.plot.axes.xaxis.label.set_color('white')
-        self.plot.axes.yaxis.label.set_color('white')
-        self.plot.axes.title.set_color('white')
+        self.plot.axes.xaxis.label.set_color('black')
+        self.plot.axes.yaxis.label.set_color('black')
+        self.plot.axes.title.set_color('black')
 
     def plotHypOptEvo(self):
 

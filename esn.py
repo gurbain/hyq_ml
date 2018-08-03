@@ -21,10 +21,10 @@
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+import math
 import mdp
 from numpy import zeros, ones, concatenate, array, tanh, vstack, arange
 import numpy as np
-
 from random import random, randint
 import pickle
 import scipy.linalg as la
@@ -55,6 +55,222 @@ plt.rc('text', usetex=False)
 plt.rc('axes', facecolor='white')
 plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
+
+class HyQStateScaler(BaseEstimator, TransformerMixin):
+
+    def __init__(self):
+
+        self.names = ["Roll Vel",
+                      "Pitch Vel",
+                      "Yaw Vel",
+                      "X Vely",
+                      "Y Vel",
+                      "Z Vel",
+
+                      "LF HAA Pos",
+                      "LF HFE Pos",
+                      "LF KFE Pos",
+                      "RF HAA Pos",
+                      "RF HFE Pos",
+                      "RF KFE Pos",
+                      "LH HAA Pos",
+                      "LH HFE Pos",
+                      "LH KFE Pos",
+                      "RH HAA Pos",
+                      "RH HFE Pos",
+                      "RH KFE Pos",
+
+                      "LF HAA Vel",
+                      "LF HFE Vel",
+                      "LF KFE Vel",
+                      "RF HAA Vel",
+                      "RF HFE Vel",
+                      "RF KFE Vel",
+                      "LH HAA Vel",
+                      "LH HFE Vel",
+                      "LH KFE Vel",
+                      "RH HAA Vel",
+                      "RH HFE Vel",
+                      "RH KFE Vel",
+
+                      "LF HAA Eff",
+                      "LF HFE Eff",
+                      "LF KFE Eff",
+                      "RF HAA Eff",
+                      "RF HFE Eff",
+                      "RF KFE Eff",
+                      "LH HAA Eff",
+                      "LH HFE Eff",
+                      "LH KFE Eff",
+                      "RH HAA Eff",
+                      "RH HFE Eff",
+                      "RH KFE Eff",
+
+                      "LF Stance",
+                      "RF Stance",
+                      "LH Stance",
+                      "RH Stance",]
+
+    def _fit_transform(self, X):
+
+        self.mins = [-2, -2, -2, -0.5, -0.5, -0.5]
+        for i in range(2):
+            self.mins.append(math.radians(-90))
+            self.mins.append(math.radians(-50))
+            self.mins.append(math.radians(-140))
+        for i in range(2):
+            self.mins.append(math.radians(-90))
+            self.mins.append(math.radians(-70))
+            self.mins.append(math.radians(20))
+        for i in range(12):
+            self.mins.append(-10)
+        for i in range(12):
+            self.mins.append(-150)
+        for i in range(4):
+            self.mins.append(-1.2)
+        self.mins = np.array(self.mins)
+
+        self.maxs = [2, 2, 2, 0.5, 0.5, 0.5]
+        for i in range(2):
+            self.maxs.append(math.radians(30))
+            self.maxs.append(math.radians(70))
+            self.maxs.append(math.radians(-20))
+        for i in range(2):
+            self.maxs.append(math.radians(30))
+            self.maxs.append(math.radians(50))
+            self.maxs.append(math.radians(140))
+        for i in range(12):
+            self.maxs.append(10)
+        for i in range(12):
+            self.maxs.append(150)
+        for i in range(4):
+            self.maxs.append(1.2)
+        self.maxs = np.array(self.maxs)
+
+        assert self.mins.shape[0] == X.shape[1], \
+                    "Data shape (" + str(X.shape[1]) + \
+                    ") has not the correct value " + \
+                    str(self.mins.shape[0])
+        assert self.maxs.shape[0] == X.shape[1], \
+                    "Data shape (" + str(X.shape[1]) + \
+                    ") has not the correct value " + \
+                    str(self.maxs.shape[0])
+
+        X_std = (X - self.mins) / (self.maxs - self.mins)
+        self.X_scaled = X_std * 2 - np.ones(X_std.shape)
+        return self
+
+    def fit(self, X, y=None):
+
+        self = self._fit_transform(X)
+        return self
+
+    def fit_transform(self, X, y=None):
+
+        self = self._fit_transform(X)
+        return self.X_scaled
+
+    def transform(self, X):
+
+        X_std = (X - self.mins) / (self.maxs - self.mins)
+        self.X_scaled = X_std * 2 - np.ones(X_std.shape)
+
+        return self.X_scaled
+
+    def inverse_transform(self, X):
+
+        X_std = (X + np.ones(X_std.shape)) / 2
+        return X_std * (self.maxs- self.mins) + self.mins
+
+
+
+class HyQJointScaler(BaseEstimator, TransformerMixin):
+
+    def __init__(self):
+
+        self.names = ["LF HAA Pos",
+                      "LF HFE Pos",
+                      "LF KFE Pos",
+                      "RF HAA Pos",
+                      "RF HFE Pos",
+                      "RF KFE Pos",
+                      "LH HAA Pos",
+                      "LH HFE Pos",
+                      "LH KFE Pos",
+                      "RH HAA Pos",
+                      "RH HFE Pos",
+                      "RH KFE Pos",
+
+                      "LF HAA Vel",
+                      "LF HFE Vel",
+                      "LF KFE Vel",
+                      "RF HAA Vel",
+                      "RF HFE Vel",
+                      "RF KFE Vel",
+                      "LH HAA Vel",
+                      "LH HFE Vel",
+                      "LH KFE Vel",
+                      "RH HAA Vel",
+                      "RH HFE Vel",
+                      "RH KFE Vel"]
+
+    def _fit_transform(self, X):
+
+        self.mins = []
+        for i in range(2):
+            self.mins.append(math.radians(-90))
+            self.mins.append(math.radians(-50))
+            self.mins.append(math.radians(-140))
+        for i in range(2):
+            self.mins.append(math.radians(-90))
+            self.mins.append(math.radians(-70))
+            self.mins.append(math.radians(20))
+        for i in range(12):
+            self.mins.append(-10)
+        self.mins = np.array(self.mins)
+
+        self.maxs = []
+        for i in range(2):
+            self.maxs.append(math.radians(30))
+            self.maxs.append(math.radians(70))
+            self.maxs.append(math.radians(-20))
+        for i in range(2):
+            self.maxs.append(math.radians(30))
+            self.maxs.append(math.radians(50))
+            self.maxs.append(math.radians(140))
+        for i in range(12):
+            self.maxs.append(10)
+        self.maxs = np.array(self.maxs)
+
+        X_std = (X - self.mins) / (self.maxs - self.mins)
+        self.X_scaled = X_std * 2 - np.ones(X_std.shape)
+
+        return self
+
+    def fit(self, X, y=None):
+
+        self = self._fit_transform(X)
+        return self
+
+    def fit_transform(self, X, y=None):
+
+        self = self._fit_transform(X)
+
+        return self.X_scaled
+
+    def transform(self, X):
+
+        X_std = (X - self.mins) / (self.maxs - self.mins)
+        self.X_scaled = X_std * 2 - np.ones(X_std.shape)
+
+        return self.X_scaled
+
+    def inverse_transform(self, X):
+
+        X_std = (X + np.ones(X.shape)) / 2
+        X_unscaled = X_std * (self.maxs- self.mins) + self.mins
+
+        return X_unscaled
 
 
 class TimeDelay(BaseEstimator, TransformerMixin):
@@ -117,65 +333,7 @@ class GaussianNoise(BaseEstimator, TransformerMixin):
 
 
 class SimpleESN(BaseEstimator, TransformerMixin):
-    """Simple Echo State Network (ESN)
 
-    Neuron reservoir of sigmoid units, with recurrent connection and random
-    weights. Forget factor (or damping) ensure echoes in the network. No
-    learning takes place in the reservoir, readout is left at the user's
-    convience. The input processed by these ESN should be normalized in [-1, 1]
-
-    Parameters
-    ----------
-    n_readout : int
-        Number of readout neurons, chosen randomly in the reservoir. Determines
-        the dimension of the ESN output.
-
-    n_components : int, optional
-        Number of neurons in the reservoir, 100 by default.
-
-    damping : float, optional
-        Damping (forget) factor for echoes, strong impact on the dynamic of the
-        reservoir. Possible values between 0 and 1, default is 0.5
-
-    weight_scaling : float, optional
-        Spectral radius of the reservoir, i.e. maximum eigenvalue of the weight
-        matrix, also strong impact on the dynamical properties of the reservoir.
-        Classical regimes involve values around 1, default is 0.9
-
-    discard_steps : int, optional
-        Discard first steps of the timeserie, to allow initialisation of the
-        network dynamics.
-
-    random_state : integer or numpy.RandomState, optional
-        Random number generator instance. If integer, fixes the seed.
-
-    Attributes
-    ----------
-    input_weights_ : array_like, shape (n_features,)
-        Weight of the input units
-
-    weights_ : array_Like, shape (n_components, n_components)
-        Weight matrix for the reservoir
-
-    components_ : array_like, shape (n_samples, 1+n_features+n_components)
-        Activation of the n_components reservoir neurons, including the
-        n_features input neurons and the bias neuron, which has a constant
-        activation.
-
-    readout_idx_ : array_like, shape (n_readout,)
-        Index of the randomly selected readout neurons
-
-    Example
-    -------
-
-    >>> from simple_esn import SimpleESN
-    >>> import numpy as np
-    >>> n_samples, n_features = 10, 5
-    >>> np.random.seed(0)
-    >>> X = np.random.randn(n_samples, n_features)
-    >>> esn =SimpleESN(n_readout = 2)
-    >>> echoes = esn.fit_transform(X)
-    """
     def __init__(self, n_readout, n_components=500, damping=0.5,
                  weight_scaling=0.9, discard_steps=0, random_state=None):
         self.n_readout = n_readout

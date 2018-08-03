@@ -69,9 +69,9 @@ if __name__ == '__main__':
     # Create hyper parameter search space
     space = {
         #"s_lsm": hp.quniform('lsm_sr', 0, 1000, 50),
-        "lsm_sr": hp.uniform('lsm_sr', 0.1, 1.7),
-        # "n_l": hp.quniform('n_l', 1, 4, 1),
-        # "s_l": hp.quniform('s_l', 200, 3000, 200),
+        #"lsm_sr": hp.uniform('lsm_sr', 0.1, 1.7),
+        "n_l": hp.quniform('n_l', 1, 4, 1),
+        "s_l": hp.quniform('s_l', 200, 8000, 200),
         # "act": hp.choice('act', ['relu', 'tanh'])
     }
 
