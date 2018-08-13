@@ -4,6 +4,7 @@ import numpy as np
 import os
 import pexpect
 import psutil
+import random
 import rospy as ros
 import rosgraph
 import sys
@@ -11,12 +12,15 @@ import time
 import threading
 import traceback
 
+from gazebo_msgs.srv import ApplyBodyWrench
 from geometry_msgs.msg import Vector3, Wrench
 from rosgraph_msgs.msg import Clock
 from dls_msgs.msg import StringDoubleArray
 from dwl_msgs.msg import WholeBodyState, WholeBodyTrajectory, JointState, ContactState, BaseState
 from sensor_msgs.msg import JointState
+from std_msgs.msg import Float32, Header
 from std_srvs.srv import Empty
+
 
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
@@ -26,7 +30,7 @@ sys.stderr = stderr
 
 class HyQSim(threading.Thread):
 
-    def __init__(self, view=False, verbose=2):
+    def __init__(self, view=False, verbose=2, publish_error=False):
 
         threading.Thread.__init__(self)
 
@@ -36,7 +40,7 @@ class HyQSim(threading.Thread):
         self.sim_package = "dls_supervisor"
         self.sim_node = "hyq.launch"
         self.sim_to_kill = "ros"
-        self.sim_not_kill = "plotjuggler"
+        self.sim_not_kill = ""
         self.sim_params = "gazebo:=True state_est:=GroundTruth"
         if view == False:
             self.sim_params += " gui:=False"
@@ -52,14 +56,33 @@ class HyQSim(threading.Thread):
         # ROS Topics
         self.clock_sub_name = 'clock'
         self.hyq_state_sub_name = "/hyq/robot_states"
-        self.hyq_action_sub_name = "/hyq/des_joint_states"
+        self.hyq_action_sub_name = "/hyq/des_rcf_joint_states"
         self.hyq_debug_sub_name = "/hyq/debug"
         self.hyq_plan_pub_name = "/hyq/plan"
+        self.hyq_nn_pub_name = "/hyq/des_nn_joint_states"
+        self.hyq_nn_w_pub_name = "/hyq/nn_weight"
+        self.hyq_js_err_name = "/hyq/nn_rcf_js_error"
+        self.hyq_haa_err_name = "/hyq/nn_rcf_haa_pos_error"
+        self.hyq_hfe_err_name = "/hyq/nn_rcf_hfe_pos_error"
+        self.hyq_kfe_err_name = "/hyq/nn_rcf_kfe_pos_error"
+        self.hyq_haad_err_name = "/hyq/nn_rcf_haa_vel_error"
+        self.hyq_hfed_err_name = "/hyq/nn_rcf_hfe_vel_error"
+        self.hyq_kfed_err_name = "/hyq/nn_rcf_kfe_vel_error"
+        self.hyq_tot_err_name = "/hyq/nn_rcf_tot_error"
         self.sub_clock = None
         self.sub_state = None
         self.sub_action = None
         self.sub_debug = None
         self.pub_plan = None
+        self.pub_nn = None
+        self.pub_js_err = None
+        self.pub_haa_err = None
+        self.pub_hfe_err = None
+        self.pub_kfe_err = None
+        self.pub_haad_err = None
+        self.pub_hfed_err = None
+        self.pub_kfed_err = None
+        self.pub_tot_err = None
 
         # Simulation state
         self.sim_time = 0
@@ -74,6 +97,11 @@ class HyQSim(threading.Thread):
         self.process_action_flag = threading.Lock()
 
         # Class behaviour
+        self.publish_error = publish_error
+        self.error_it = 0
+        self.error_pos = np.array([])
+        self.error_vel = np.array([])
+        self.noise_it = 0
         self.verbose = verbose
         self.daemon = True
 
@@ -116,6 +144,40 @@ class HyQSim(threading.Thread):
             self.pub_plan = ros.Publisher(self.hyq_plan_pub_name,
                                           WholeBodyTrajectory,
                                           queue_size=1)
+            self.pub_nn = ros.Publisher(self.hyq_nn_pub_name,
+                                        JointState,
+                                        queue_size=1)
+            self.pub_nn_w = ros.Publisher(self.hyq_nn_w_pub_name,
+                                          Float32,
+                                          queue_size=1)
+
+            if self.publish_error:
+
+                self.pub_js_err = ros.Publisher(self.hyq_js_err_name,
+                                              JointState,
+                                              queue_size=1)
+                self.pub_tot_err = ros.Publisher(self.hyq_tot_err_name,
+                                              Float32,
+                                              queue_size=1)
+                self.pub_haa_err = ros.Publisher(self.hyq_haa_err_name,
+                                              Float32,
+                                              queue_size=1)
+                self.pub_hfe_err = ros.Publisher(self.hyq_hfe_err_name,
+                                              Float32,
+                                              queue_size=1)
+                self.pub_kfe_err = ros.Publisher(self.hyq_kfe_err_name,
+                                              Float32,
+                                              queue_size=1)
+                self.pub_haad_err = ros.Publisher(self.hyq_haad_err_name,
+                                              Float32,
+                                              queue_size=1)
+                self.pub_hfed_err = ros.Publisher(self.hyq_hfed_err_name,
+                                              Float32,
+                                              queue_size=1)
+                self.pub_kfed_err = ros.Publisher(self.hyq_kfed_err_name,
+                                              Float32,
+                                              queue_size=1)
+
 
         except Exception, e:
             if self.verbose > 0:
@@ -314,6 +376,8 @@ class HyQSim(threading.Thread):
             new_point = self.hyq_wbs
 
             # Add timestamp
+            new_point.header = Header()
+            new_point.header.stamp = ros.Time(self.get_sim_time())
 
             # Fill the new joint states with the vector in a given order
             for i, j in enumerate(new_point.joints):
@@ -334,6 +398,8 @@ class HyQSim(threading.Thread):
             traj = WholeBodyTrajectory()
 
             # Add timestamp
+            traj.header = Header()
+            traj.header.stamp = ros.Time(self.get_sim_time())
 
             # Write it in the actual value
             traj.actual = curr
@@ -347,6 +413,95 @@ class HyQSim(threading.Thread):
 
         # Flush the trajectory EVEN if not sent
         self.hyq_traj = []
+
+    def send_hyq_nn_pred(self, prediction, weight, error=None):
+
+        if type(prediction) is np.ndarray:
+            prediction = prediction.tolist()
+
+        if len(prediction) != 24:
+                ros.logerr("This method is designed to receive 12 joint" + \
+                          " position and velocity in a specific format!")
+                return
+
+        # Create and fill a JointState object
+        joints = JointState()
+        joints.header = Header()
+        joints.header.stamp = ros.Time(self.get_sim_time())
+        joints.position = prediction[0:12]
+        joints.velocity = prediction[12:24]
+        joints.effort = [0.0] * 12
+
+        # Publish
+        self.pub_nn.publish(joints)
+        self.pub_nn_w.publish(Float32(weight))
+
+
+        # Create and fill a JointState object for the errors
+        if self.publish_error and error is not None:
+            self.publish_errs(error)
+
+    def apply_noise(self):
+
+
+        if self.noise_it == 0:
+            self.srv_noise = ros.ServiceProxy("/gazebo/apply_body_wrench", ApplyBodyWrench)
+            self.next_noise_it = random.randint(5000, 15000)
+
+        if self.noise_it == self.next_noise_it :
+            noise = Wrench()
+            noise.force.x = random.uniform(-50, 50)
+            noise.force.y = random.uniform(-50, 50)
+            noise.force.z = random.uniform(-50, 50)
+
+            #print "Bim", noise, self.noise_it
+            try:
+                self.srv_noise("hyq::base_link", "", None, noise,
+                               ros.Time.now(), ros.Duration.from_sec(1.0))
+            except:
+                pass
+
+            self.next_noise_it += random.randint(2000, 15000)
+
+        self.noise_it += 1
+
+    def publish_errs(self, error):
+
+        error_pos = error[0:12]
+        error_vel = error[12:24]
+
+        # Always publish the joint error
+        joints_err = JointState()
+        joints_err.header = Header()
+        joints_err.header.stamp = ros.Time(self.get_sim_time())
+        joints_err.position = error_pos
+        joints_err.velocity = error_vel
+        joints_err.effort = [0.0] * 12
+        self.pub_js_err.publish(joints_err)
+
+        # Average and publish error summaries
+        if self.error_it % 50 == 49:
+            haa_err = np.average(error_pos[0::3])
+            hfe_err = np.average(error_pos[1::3])
+            kfe_err = np.average(error_pos[2::3])
+            haad_err = np.average(error_vel[0::3])
+            hfed_err = np.average(error_vel[1::3])
+            kfed_err = np.average(error_vel[2::3])
+            tot_err = np.average(error_pos) + np.average(error_vel)
+            self.pub_haa_err.publish(Float32(haa_err))
+            self.pub_hfe_err.publish(Float32(hfe_err))
+            self.pub_kfe_err.publish(Float32(kfe_err))
+            self.pub_haad_err.publish(Float32(haad_err))
+            self.pub_hfed_err.publish(Float32(hfed_err))
+            self.pub_kfed_err.publish(Float32(kfed_err))
+            self.pub_tot_err.publish(Float32(tot_err))
+            self.error_pos = error_pos
+            self.error_vel = error_vel
+        else:
+            self.error_pos = np.concatenate([self.error_pos, error_pos])
+            self.error_vel = np.concatenate([self.error_vel, error_vel])
+
+        self.error_it += 1
 
     def init_hyq_pose(self):
 

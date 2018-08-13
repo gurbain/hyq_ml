@@ -4,7 +4,7 @@ from keras.callbacks import EarlyStopping, ModelCheckpoint, History, TensorBoard
 from keras.losses import categorical_crossentropy, mean_absolute_error, mean_squared_error
 from keras.optimizers import Adadelta, Adam
 from keras.models import Sequential, Model,load_model
-from keras.layers import Dense, Activation, Flatten, Input, Concatenate, GaussianNoise
+from keras.layers import Dense, Activation, Flatten, Input, Concatenate, GaussianNoise, LSTM
 from keras.regularizers import l2
 from keras.wrappers.scikit_learn import KerasRegressor
 
@@ -46,12 +46,18 @@ plt.rc('figure', autolayout=True)
 
 nn = [
        #[('noise', 0.1)],
-       [('td', 6, 1)],#,
-       #[('esnsfa', 50, 0.9, 8, -3, 0)], #
+       #[('sdec',)],
+       #[('sdec',), ('td', 10, 2), ('esnsfa', 50, 0.9, 14, -3, 0)],
+       [('td', 10, 2)],#,
+       #[('esnsfa', 50, 0.9, 14, -3, 0)],
+       #[('fft', 12)],
+       #[('esnsfa', 80, 0.9, 15, -2, 0), ('td', 10, 2)], #
+       #[('lstm', 30)],
        #[('noise', 200, 0.01)],
-       [('relu', 4096)],
-       [('relu', 2048)],
-       [('relu', 512)],
+       #[('relu', 4)],
+       [('relu', 60)],
+       [('relu', 60)],
+       #[('relu', 20)],
      ]
 
 
@@ -59,8 +65,8 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, batch_size=2048, max_epochs=100, test_split=0.7,
-                 val_split=0.1, verbose=2, stop_pat=40,
+    def __init__(self, batch_size=2048, max_epochs=2500, test_split=0.7,
+                 val_split=0.1, verbose=1, stop_pat=150, checkpoint=True,
                  nn_layers=nn, stop_delta=0.0001, esn_n_read=10,
                  data_file="data/sims/simple_walk.bag",
                  regularization=0.001, save_folder="data/nn_learning/"):
@@ -79,14 +85,17 @@ class FeedForwardNN():
         self.verbose = verbose
         self.save_folder = save_folder
         self.regularization = regularization
+        self.checkpoint = checkpoint
 
-        self.history = None
+        self.history = {}
         self.nn = None
-        self.nn_pipe = None
+        self.predict_in_pipe = None
+        self.predict_out_pipe = None
         self.training_time = 0
-        self.train_it = 0
+        self.epoch = 0
         self.loss = 0
         self.acc = 0
+        self.save_index = 0
 
     ## DATA PROCESSING FUNCTIONS
 
@@ -264,6 +273,34 @@ class FeedForwardNN():
         self.x_test = x_test
         self.y_test = y_test
 
+    def get_data_to_save(self):
+
+        utils.make_keras_picklable()
+
+        f_in_folder = [f for f in os.listdir(self.save_folder)
+                       if os.path.isfile(os.path.join(self.save_folder, f))]
+
+        if not hasattr(self, 'save_index'):
+            if len([s for s in f_in_folder if "network" in s]) == 0:
+                self.save_index = 0
+            else:
+                self.save_index = max([int(utils.split(f, "_.")[-2]) for f in [s for s in f_in_folder if "network" in s]]) + 1
+        else:
+            self.save_index = 0
+
+        # Save training data
+        to_save = copy.copy(self.__dict__)
+        if 'nn' in to_save.keys():
+            del to_save["nn"]
+        if 'callbacks' in to_save.keys():
+            for c in to_save["callbacks"]:
+                if hasattr(c, 'model'):
+                    del c.model
+        if 'x_train' in to_save.keys():
+            del to_save["x_train"], to_save["y_train"]
+            del to_save["x_test"], to_save["y_test"]
+
+        return [self.save_folder, self.save_index, self.__dict__]
 
     ## ELEMENTARY PIPE FUNCTIONS
 
@@ -285,6 +322,38 @@ class FeedForwardNN():
         return esn.HyQJointScaler()
         # return MinMaxScaler((-1, 1))
 
+    def create_callbacks(self):
+
+        # Wrap in a regressor
+        if not hasattr(self, 'callbacks'):
+            self.callbacks = []
+
+        cb_names = [c.__class__.__name__ for c in self.callbacks]
+        if not "NetworkSave" in cb_names and self.checkpoint:
+            self.callbacks += [utils.NetworkSave(self.get_data_to_save(),
+                                     monitor='val_loss', verbose=self.verbose,
+                                     save_best_only=True, mode='min')]
+
+        if not "CustomHistory" in cb_names:
+            self.callbacks += [utils.CustomHistory()]
+
+        if not "TensorBoard" in cb_names:
+            self.callbacks += [TensorBoard()]
+
+        if not "EarlyStopping" in cb_names:
+            if self.stop_delta is not None:
+                self.callbacks += [EarlyStopping(monitor='val_loss',
+                                                 mode="min",
+                                                 verbose=self.verbose,
+                                                 patience=self.stop_pat,
+                                                 min_delta=self.stop_delta)]
+
+        verbose = self.verbose
+        if verbose > 1:
+            verbose = 1
+
+        return verbose
+
     def create_nn_fn(self):
 
         # Input Layer
@@ -299,6 +368,10 @@ class FeedForwardNN():
                 reg = l2(self.regularization)
                 x = Dense(l[0][1], kernel_regularizer=reg)(x)
                 x = Activation(l[0][0])(x)
+
+            # LSTM network whould be first
+            if l[0][0] == "lstm":
+                x = LSTM(l[0][1], activation='relu')(state_input)
 
         # Output Layer
         n_out = self.n_out
@@ -319,19 +392,7 @@ class FeedForwardNN():
 
         self.printv("\n\n ===== Creating Network =====")
 
-        # Wrap in a regressor
-        self.callbacks = [ModelCheckpoint(self.save_folder + "/best_model.h5",
-                                     monitor='val_loss', verbose=self.verbose,
-                                     save_best_only=True, mode='min'),
-                          utils.CustomHistory(), TensorBoard()]
-        if self.stop_delta is not None:
-            self.callbacks += [EarlyStopping(monitor='val_loss',  mode="min",
-                                       verbose=self.verbose,
-                                       patience=self.stop_pat,
-                                       min_delta=self.stop_delta)]
-        verbose = self.verbose
-        if verbose > 1:
-            verbose = 1
+        verbose = self.create_callbacks()
         return KerasRegressor(build_fn=self.create_nn_fn,
                               validation_split=self.val_split,
                               batch_size=self.batch_size,
@@ -354,8 +415,6 @@ class FeedForwardNN():
                                           n_components=k[1],
                                           weight_scaling=k[2])
                         step_name = 'esn' + str(i)
-                        tl += [(step_name, e)]
-                        tw[step_name] = 1
 
                     if k[0] == 'esnsfa':
                         e = esn.ESNSFA(n_readout=self.esn_n_read,
@@ -365,20 +424,25 @@ class FeedForwardNN():
                                        l_min=k[4],
                                        l_max=k[5])
                         step_name = 'esnsfa' + str(i)
-                        tl += [(step_name, e)]
-                        tw[step_name] = 1
 
                     if k[0] == 'td':
                         e = esn.TimeDelay(k[1], k[2])
                         step_name = 'td' + str(i)
-                        tl += [(step_name, e)]
-                        tw[step_name] = 1
+
+                    if k[0] == 'fft':
+                        e = esn.FFT(self.t[1] - self.t[0], k[1])
+                        step_name = 'fft' + str(i)
+
+                    if k[0] == 'sdec':
+                        e = esn.SeasonalDecomposition(self.t[1] - self.t[0])
+                        step_name = 'sdec' + str(i)
 
                     if k[0] == 'noise':
                         e = esn.GaussianNoise(stdev=k[1])
                         step_name = 'noise' + str(i)
-                        tl += [(step_name, e)]
-                        tw[step_name] = 1
+
+                    tl += [(step_name, e)]
+                    tw[step_name] = 1
                 pp_pipe += [('fu', FeatureUnion(transformer_list=tl,
                                                 transformer_weights=tw))]
             else:
@@ -396,6 +460,14 @@ class FeedForwardNN():
                                    l_min=l[0][4],
                                    l_max=l[0][5])
                     pp_pipe += [('esnsfa' + str(i), e)]
+
+                if l[0][0] == 'fft':
+                    e = esn.FFT(self.t[1] - self.t[0], l[0][1])
+                    pp_pipe += [('fft' + str(i), e)]
+
+                if l[0][0] == 'sdec':
+                    e = esn.SeasonalDecomposition(self.t[1] - self.t[0])
+                    pp_pipe += [('sdec' + str(i), e)]
 
                 if l[0][0] == 'td':
                     e = esn.TimeDelay(l[0][1], l[0][2])
@@ -429,19 +501,21 @@ class FeedForwardNN():
         # Save training data
         to_save = copy.copy(self.__dict__)
         del to_save["nn"], to_save["callbacks"][1].model,
-        del to_save["x_train"], to_save['nn_pipe']
-        del to_save["y_train"], to_save["x_test"], to_save["y_test"]
+        del to_save["x_train"], to_save["y_train"]
+        del to_save["x_test"], to_save["y_test"]
+        if 'nn_pipe' in to_save.keys():
+            del to_save['nn_pipe']
+            # Save pipe mode
+            if self.nn_pipe is not None:
+                pipe_to_save = copy.copy(self.nn_pipe)
+                del pipe_to_save.named_steps['nn'].model
+                del pipe_to_save.named_steps['nn'].build_fn
+                joblib.dump(pipe_to_save, self.save_folder + "/pipe_" + \
+                            str(index)+ ".pkl")
+
         pickle.dump(to_save, open(self.save_folder + "/network_" +
                                   str(index)+ ".pkl", "wb"), protocol=2)
         del to_save
-
-        # Save pipe mode
-        if self.nn_pipe is not None:
-            pipe_to_save = copy.copy(self.nn_pipe)
-            del pipe_to_save.named_steps['nn'].model
-            del pipe_to_save.named_steps['nn'].build_fn
-            joblib.dump(pipe_to_save, self.save_folder + "/pipe_" + \
-                        str(index)+ ".pkl")
 
         # Save nn model
         if self.nn is not None:
@@ -459,18 +533,15 @@ class FeedForwardNN():
         with open(folder + "/network_" + str(num) + ".pkl",'rb') as f:
             self.__dict__ = pickle.load(f)
             self.verbose = verbose_rem
-            self.reservoir = []
 
-        # Load pipe mode
-        pipe_file = folder + "/pipe_" + str(num) + ".pkl"
-        if os.path.isfile(pipe_file):
-            self.nn_pipe = joblib.load(pipe_file)
+        utils.history = self.history
 
         # Load network
         self.nn = load_model(folder + "/model_" + str(num) + ".h5")
-        if os.path.isfile(pipe_file):
-            self.nn_pipe.named_steps['nn'].model = \
-                load_model(folder + "/model_" + str(num) + ".h5")
+
+        if 'callbacks' in self.__dict__.keys():
+            for c in self.callbacks:
+                c.model = load_model(folder + "/model_" + str(num) + ".h5")
 
         # Load dataset
         self.load_data(load_all)
@@ -543,7 +614,7 @@ class FeedForwardNN():
         # Process NN
         score = self.nn.evaluate(x_ft, y_ft, verbose=2)
         y_pred_ft = self.nn.predict(x_ft, batch_size=self.batch_size,
-                               verbose=self.verbose)
+                               verbose=0)
         y_pred = self.out_pipe.inverse_transform(y_pred_ft)
 
         y_truth = self.y_test
@@ -591,7 +662,7 @@ class FeedForwardNN():
     def fit_transform_ft(self, x, y, show=True):
 
         # Create IN pipe and transform
-        self.printv("\n\n ===== Transform In Features =====\n")
+        self.printv("\n\n ===== Transform In Features =====")
 
         self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())] + \
                                  self.create_pp())
@@ -600,7 +671,7 @@ class FeedForwardNN():
         self.n_in = x_ft.shape[1]
         self.n_out = y.shape[1]
         self.printv("\nTotal input features size: " + str(x_ft.shape))
-        self.printv("\nTotal output features size: " + str(y.shape))
+        self.printv("Total output features size: " + str(y.shape))
 
         flatten_nn_struct =  utils.flatten(self.in_pipe.steps)
         if show:
@@ -615,79 +686,95 @@ class FeedForwardNN():
 
 
         # Create OUT pipe and transform
-        self.printv("\n ===== Transform Out Features =====")
+        self.printv("\n\n ===== Transform Out Features =====")
         raw_pipe = [('ysc', self.create_y_scaler())]
         self.out_pipe = Pipeline(raw_pipe)
         y_ft = self.out_pipe.fit_transform(y)
 
         return x_ft, y_ft
 
-    def fit(self, x, y):
-
-        self.nn = self.create_nn()
-
-        self.printv("\n\n ===== Training Network =====\n")
-        t_i = time.time()
-        self.nn.fit(x, y)
-        self.training_time = time.time() - t_i
-
-    def train(self, show=True):
-
-        # Get data
-        self.load_data()
-
-        # Get features and fit the network
-        x_ft, y_ft = self.fit_transform_ft(self.x_train, self.y_train)
-        self.fit(x_ft, y_ft)
-        self.history = utils.history
-
-        # Save Results
-        self.save()
-
-        # Show Evaluation
-        self.evaluate(show)
-
-        return self.test_loss, self.test_accuracy
-
-    def train_step(self, x, y, ):
-
-        if self.train_it == 0:
-
-            # Create the network
-            x_ft, y_ft = self.fit_transform_ft(x, y, show=False)
-            print x_ft.shape, y_ft.shape
-            self.fit(x_ft, y_ft)
-            self.history = utils.history
-
-            self.train_it += 1
-            return utils.history["loss"][-1], utils.history["acc"][-1]
-        else:
-            x_ft = self.in_pipe.fit_transform(x)
-            x_ft = np.expand_dims(x_ft, axis=2)
-            y_ft = self.out_pipe.fit_transform(y)
-            self.nn.fit(x_ft, y_ft)
-            self.history = utils.history
-
-            self.train_it += 1
-            return utils.history["loss"][-1], utils.history["acc"][-1]
-            # self.train_it += 1
-            # return history[0], history[1]
-
     def predict(self, state):
 
-        x_ft = self.in_pipe.transform(state)
+        # We create a second pipe for prediction to keep it thread-safe
+        # when we also train
+        if self.predict_in_pipe is None:
+            self.predict_in_pipe = \
+                    Pipeline([('xsc0', self.create_x_scaler())] + \
+                               self.create_pp())
+            self.predict_out_pipe = Pipeline([('ysc', \
+                                    self.create_y_scaler())])
+
+        x_ft = self.predict_in_pipe.transform(state)
         self.x_ft = x_ft
         x_ft = np.expand_dims(x_ft, axis=2)
 
         y_ft = self.nn.predict_on_batch(x_ft)
-        y = self.out_pipe.inverse_transform(y_ft)
+        y = self.predict_out_pipe.inverse_transform(y_ft)
         #print x_ft.shape, y_ft.shape, state.shape, y.shape
 
         return y[0,:].flatten()
 
+    def train(self, x=None, y=None, show=True, n_epochs=None, evaluate=True):
 
+        # Determine the number of training epochs
+        if n_epochs == None:
+            tot_epochs = self.max_epochs
+        else:
+            tot_epochs = self.epoch + n_epochs
+            if tot_epochs > self.max_epochs:
+                tot_epochs = self.max_epochs
+
+        # For the first iteration
+        if self.epoch == 0:
+            # If no x and y are specfied, use the whole training set
+            if x is None or y is None:
+                self.load_data()
+                x = self.x_train
+                y = self.y_train
+
+            # Create the network
+            self.nn = self.create_nn()
+            self.t_training_init = time.time()
+
+            # Get features and fit the estimators
+            x_ft, y_ft = self.fit_transform_ft(x, y, show)
+        else:
+            # If no x and y are specfied, use the whole training set
+            if x is None or y is None:
+                x = self.x_train
+                y = self.y_train
+
+            # Get features and fit the network
+            with threading.Lock():
+                x_ft = self.in_pipe.fit_transform(x)
+                x_ft = np.expand_dims(x_ft, axis=2)
+                y_ft = self.out_pipe.fit_transform(y)
+
+        # Fit the network
+        self.printv("\n\n ===== Training Network =====\n")
+        if self.epoch == 0:
+            self.nn.fit(x_ft, y_ft, epochs=tot_epochs)
+
+        else:
+            verbose = self.create_callbacks()
+            self.nn.fit(x_ft, y_ft, validation_split=self.val_split,
+                        epochs=tot_epochs, initial_epoch=self.epoch,
+                        callbacks=self.callbacks, batch_size=self.batch_size,
+                        verbose=verbose)
+
+        self.epoch += n_epochs
+        self.training_time = time.time() - self.t_training_init
+        self.history = utils.history
+
+        # Show Evaluation
+        if evaluate:
+            self.evaluate(show)
+            return self.test_loss, self.test_accuracy
+        else:
+            return self.history['val_loss'][-1], self.history['val_acc'][-1]
 
 if __name__ == '__main__':
+
 
     if len(sys.argv) > 1:
 
@@ -700,16 +787,22 @@ if __name__ == '__main__':
             nn.load(sys.argv[2])
             nn.evaluate(True)
 
+        if sys.argv[1] == "continue":
+            nn = FeedForwardNN()
+            nn.load(sys.argv[2])
+            nn.train(True)
+
         if sys.argv[1] == "fft":
             nn = FeedForwardNN()
             nn.load(sys.argv[2])
             nn.plot_fft()
 
         if sys.argv[1] == "train":
+
             folder = "data/nn_learning/"+ utils.timestamp()
             utils.mkdir(folder)
             nn = FeedForwardNN(data_file=sys.argv[2], save_folder=folder)
-            nn.train(False)
+            nn.train(show=False)
 
 
         if sys.argv[1] == "sim":

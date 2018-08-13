@@ -7,6 +7,7 @@ import os
 import pickle
 import psutil
 from sklearn.pipeline import FeatureUnion
+import signal
 import sys
 import tempfile
 import time
@@ -100,6 +101,7 @@ def save_on_top(newdata, filename):
 
     pickle.dump(final, open(filename, "wb"), protocol=2)
 
+
 def split(str, delim=" "):
     index = 0
     string = ""
@@ -117,6 +119,7 @@ def split(str, delim=" "):
 
 
 class RedirectStdStreams(object):
+
     def __init__(self, stdout=None, stderr=None):
         self._stdout = stdout or sys.stdout
         self._stderr = stderr or sys.stderr
@@ -153,6 +156,7 @@ def make_keras_picklable():
     cls.__getstate__ = __getstate__
     cls.__setstate__ = __setstate__
 
+
 class CustomHistory(keras.callbacks.Callback):
 
     def on_train_begin(self, logs=None):
@@ -167,10 +171,12 @@ class CustomHistory(keras.callbacks.Callback):
         for k, v in logs.items():
             history.setdefault(k, []).append(v)
 
+
 def flatten(lst):
     new_lst = []
     flatten_helper(lst, new_lst)
     return new_lst
+
 
 def flatten_helper(lst, new_lst):
     for element in lst:
@@ -183,12 +189,123 @@ def flatten_helper(lst, new_lst):
         else:
             new_lst.append(element)
 
+
 class Capturing(list):
+
     def __enter__(self):
         self._stdout = sys.stdout
         sys.stdout = self._stringio = StringIO()
         return self
+
     def __exit__(self, *args):
         self.extend(self._stringio.getvalue().splitlines())
         del self._stringio    # free up some memory
         sys.stdout = self._stdout
+
+
+class NetworkSave(keras.callbacks.Callback):
+
+    def __init__(self, data, monitor='val_loss', verbose=0,
+                 save_best_only=False, mode='auto', period=1):
+
+        super(NetworkSave, self).__init__()
+        self.monitor = monitor
+        self.verbose = verbose
+        [self.folder, self.index, self.class_to_save] = data
+        self.save_best_only = save_best_only
+        self.period = period
+        self.epochs_since_last_save = 0
+
+        if mode not in ['auto', 'min', 'max']:
+            warnings.warn('ModelCheckpoint mode %s is unknown, '
+                          'fallback to auto mode.' % (mode),
+                          RuntimeWarning)
+            mode = 'auto'
+
+        if mode == 'min':
+            self.monitor_op = np.less
+            self.best = np.Inf
+        elif mode == 'max':
+            self.monitor_op = np.greater
+            self.best = -np.Inf
+        else:
+            if 'acc' in self.monitor or self.monitor.startswith('fmeasure'):
+                self.monitor_op = np.greater
+                self.best = -np.Inf
+            else:
+                self.monitor_op = np.less
+                self.best = np.Inf
+
+    def to_save(self):
+
+        # Save training data
+        to_save = copy.copy(self.class_to_save)
+        if 'nn' in to_save.keys():
+            del to_save["nn"]
+        if 'callbacks' in to_save.keys():
+            new_cb = []
+            for i, c in enumerate(to_save["callbacks"]):
+                n = c.__class__.__name__
+                if n not in  ["NetworkSave", "TensorBoard"]:
+                    new_c = copy.copy(c)
+                    del new_c.model
+                    new_cb.append(new_c)
+            del to_save["callbacks"]
+            to_save["callbacks"] = new_cb
+
+        if 'x_train' in to_save.keys():
+            del to_save["x_train"], to_save["y_train"]
+            del to_save["x_test"], to_save["y_test"]
+
+        return to_save
+
+    def on_epoch_end(self, epoch, logs=None):
+
+        # Forbid to kill during the saving
+        s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        logs = logs or {}
+        self.epochs_since_last_save += 1
+        if self.epochs_since_last_save >= self.period:
+            self.epochs_since_last_save = 0
+            if self.save_best_only:
+                current = logs.get(self.monitor)
+                if current is None:
+                    warnings.warn('Can save best model only with %s available, skipping.' % (self.monitor), RuntimeWarning)
+                else:
+                    if self.monitor_op(current, self.best):
+                        if self.verbose > 0:
+                            print("\nEpoch {:03d}: ".format(epoch + 1) + \
+                                  self.monitor + " improved" + \
+                                  " from {:0.5f} ".format(self.best) + \
+                                  " to {:0.5f},".format(current) + \
+                                  " saving model to " + self.folder)
+                        self.best = current
+                        self.class_to_save["epoch"] = epoch + 1
+                        self.class_to_save["history"] = history
+                        with open(self.folder + "/network_" + \
+                                  str(self.index) + ".pkl", "wb") as f:
+                            pickle.dump(self.to_save(), f, protocol=2)
+
+                        self.model.save(self.folder + "/model_" + \
+                                        str(self.index)+ ".h5")
+                    else:
+                        if self.verbose > 0:
+                            print('\nEpoch %03d: %s did not improve from %0.5f' % (epoch + 1, self.monitor, self.best))
+
+            else:
+                if self.verbose > 0:
+                    print('\nEpoch %03d: saving model to %s' % (epoch + 1, self.folder))
+
+                self.class_to_save["epoch"] = epoch + 1
+                self.class_to_save["history"] = history
+
+                with open(self.folder + "/network_" + \
+                          str(self.index) + ".pkl", "wb") as f:
+                    pickle.dump(self.to_save(), f, protocol=2)
+
+                self.model.save(self.folder + "/model_" + \
+                                str(self.index)+ ".h5")
+
+        # Know we can interupt again
+        signal.signal(signal.SIGINT, s)

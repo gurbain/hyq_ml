@@ -1,26 +1,7 @@
-"""Simple Echo State Network
-"""
-
-# Copyright (C) 2015 Sylvain Chevallier <sylvain.chevallier@uvsq.fr>
-
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-# TODO: add n_readout = -1 for n_readout = n_components
-
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+import collections
 import math
 import mdp
 from numpy import zeros, ones, concatenate, array, tanh, vstack, arange
@@ -29,7 +10,9 @@ from random import random, randint
 import pickle
 import scipy.linalg as la
 from scipy import signal
+from statsmodels.tsa.seasonal import seasonal_decompose
 import sys
+import time
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from sklearn.base import TransformerMixin, BaseEstimator
@@ -56,6 +39,7 @@ plt.rc('axes', facecolor='white')
 plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
+
 class HyQStateScaler(BaseEstimator, TransformerMixin):
 
     def __init__(self):
@@ -63,7 +47,7 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
         self.names = ["Roll Vel",
                       "Pitch Vel",
                       "Yaw Vel",
-                      "X Vely",
+                      "X Vel",
                       "Y Vel",
                       "Z Vel",
 
@@ -111,50 +95,50 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
                       "LH Stance",
                       "RH Stance",]
 
+        mins = [-2, -2, -2, -0.5, -0.5, -0.5]
+        for i in range(2):
+            mins.append(math.radians(-90))
+            mins.append(math.radians(-50))
+            mins.append(math.radians(-140))
+        for i in range(2):
+            mins.append(math.radians(-90))
+            mins.append(math.radians(-70))
+            mins.append(math.radians(20))
+        for i in range(12):
+            mins.append(-10)
+        for i in range(12):
+            mins.append(-150)
+        for i in range(4):
+            mins.append(-1.2)
+        self.mins = np.array(mins)
+
+        maxs = [2, 2, 2, 0.5, 0.5, 0.5]
+        for i in range(2):
+            maxs.append(math.radians(30))
+            maxs.append(math.radians(70))
+            maxs.append(math.radians(-20))
+        for i in range(2):
+            maxs.append(math.radians(30))
+            maxs.append(math.radians(50))
+            maxs.append(math.radians(140))
+        for i in range(12):
+            maxs.append(10)
+        for i in range(12):
+            maxs.append(150)
+        for i in range(4):
+            maxs.append(1.2)
+        self.maxs = np.array(maxs)
+
     def _fit_transform(self, X):
-
-        self.mins = [-2, -2, -2, -0.5, -0.5, -0.5]
-        for i in range(2):
-            self.mins.append(math.radians(-90))
-            self.mins.append(math.radians(-50))
-            self.mins.append(math.radians(-140))
-        for i in range(2):
-            self.mins.append(math.radians(-90))
-            self.mins.append(math.radians(-70))
-            self.mins.append(math.radians(20))
-        for i in range(12):
-            self.mins.append(-10)
-        for i in range(12):
-            self.mins.append(-150)
-        for i in range(4):
-            self.mins.append(-1.2)
-        self.mins = np.array(self.mins)
-
-        self.maxs = [2, 2, 2, 0.5, 0.5, 0.5]
-        for i in range(2):
-            self.maxs.append(math.radians(30))
-            self.maxs.append(math.radians(70))
-            self.maxs.append(math.radians(-20))
-        for i in range(2):
-            self.maxs.append(math.radians(30))
-            self.maxs.append(math.radians(50))
-            self.maxs.append(math.radians(140))
-        for i in range(12):
-            self.maxs.append(10)
-        for i in range(12):
-            self.maxs.append(150)
-        for i in range(4):
-            self.maxs.append(1.2)
-        self.maxs = np.array(self.maxs)
 
         assert self.mins.shape[0] == X.shape[1], \
                     "Data shape (" + str(X.shape[1]) + \
                     ") has not the correct value " + \
-                    str(self.mins.shape[0])
+                    str(mins.shape[0])
         assert self.maxs.shape[0] == X.shape[1], \
                     "Data shape (" + str(X.shape[1]) + \
                     ") has not the correct value " + \
-                    str(self.maxs.shape[0])
+                    str(maxs.shape[0])
 
         X_std = (X - self.mins) / (self.maxs - self.mins)
         self.X_scaled = X_std * 2 - np.ones(X_std.shape)
@@ -181,7 +165,6 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
 
         X_std = (X + np.ones(X_std.shape)) / 2
         return X_std * (self.maxs- self.mins) + self.mins
-
 
 
 class HyQJointScaler(BaseEstimator, TransformerMixin):
@@ -214,33 +197,34 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
                       "RH HFE Vel",
                       "RH KFE Vel"]
 
+        mins = []
+        for i in range(2):
+            mins.append(math.radians(-90))
+            mins.append(math.radians(-50))
+            mins.append(math.radians(-140))
+        for i in range(2):
+            mins.append(math.radians(-90))
+            mins.append(math.radians(-70))
+            mins.append(math.radians(20))
+        for i in range(12):
+            mins.append(-10)
+        self.mins = np.array(mins)
+
+        maxs = []
+        for i in range(2):
+            maxs.append(math.radians(30))
+            maxs.append(math.radians(70))
+            maxs.append(math.radians(-20))
+        for i in range(2):
+            maxs.append(math.radians(30))
+            maxs.append(math.radians(50))
+            maxs.append(math.radians(140))
+        for i in range(12):
+            maxs.append(10)
+        self.maxs = np.array(maxs)
+
+
     def _fit_transform(self, X):
-
-        self.mins = []
-        for i in range(2):
-            self.mins.append(math.radians(-90))
-            self.mins.append(math.radians(-50))
-            self.mins.append(math.radians(-140))
-        for i in range(2):
-            self.mins.append(math.radians(-90))
-            self.mins.append(math.radians(-70))
-            self.mins.append(math.radians(20))
-        for i in range(12):
-            self.mins.append(-10)
-        self.mins = np.array(self.mins)
-
-        self.maxs = []
-        for i in range(2):
-            self.maxs.append(math.radians(30))
-            self.maxs.append(math.radians(70))
-            self.maxs.append(math.radians(-20))
-        for i in range(2):
-            self.maxs.append(math.radians(30))
-            self.maxs.append(math.radians(50))
-            self.maxs.append(math.radians(140))
-        for i in range(12):
-            self.maxs.append(10)
-        self.maxs = np.array(self.maxs)
 
         X_std = (X - self.mins) / (self.maxs - self.mins)
         self.X_scaled = X_std * 2 - np.ones(X_std.shape)
@@ -280,27 +264,124 @@ class TimeDelay(BaseEstimator, TransformerMixin):
         self.num = num
         self.step = step
 
-    def _fit_transform(self, X):
-
-        self.tf = mdp.nodes.TimeDelayNode(self.num, gap=self.step)
-        self.y = self.tf.execute(X)
-        return self
+        self.mem = self.num * self.step
+        self.init = False
 
     def fit(self, X, y=None):
 
-        self = self._fit_transform(X)
         return self
 
     def fit_transform(self, X, y=None):
 
-        self = self._fit_transform(X)
-        return self.y
+        y = self.transform(X)
+        return y
+
+    def create_buffer(self, dim):
+
+        init_buffer = [[0] * dim for i in range(self.mem)]
+        self.buff = collections.deque(init_buffer, self.mem)
+
+    def transform_it(self, x):
+
+        self.buff.append(x)
+        y = np.mat(list(self.buff))[-1::-self.step]
+        y = y.reshape(1, y.size)[0]
+
+        return y
 
     def transform(self, X):
 
-        self.y = self.tf.execute(X)
+        n = X.shape[0]
+        dim = X.shape[1]
+        y = np.zeros((n, dim * self.num))
 
-        return self.y
+        if not self.init:
+            self.create_buffer(dim)
+            self.init = True
+
+        for i in range(n):
+           x = X[i, :]
+           if len(x.shape) == 1:
+            x = x.tolist()
+           else:
+            x = x.tolist()[0]
+           y[i, :] = self.transform_it(x)
+
+        return y
+
+
+class FFT(BaseEstimator, TransformerMixin):
+
+    def __init__(self, ts=1, n_samples=12):
+
+        self.freqs = np.fft.rfftfreq(n_samples, d=1.0/ts)
+
+    def fit(self, X, y=None):
+
+        return self
+
+    def transform(self, X):
+        nsamples, nfeatures = X.shape
+        nfreqs = len(self.freqs)
+        """Given a list of original data, return a list of feature vectors."""
+        features1 = np.sin(2. * np.pi * self.freqs[None, None, :] * X[:, :,
+                           None]).reshape(nsamples, nfeatures * nfreqs)
+        features2 = np.cos(2. * np.pi * self.freqs[None, None, 1:] * X[:, :,
+                           None]).reshape(nsamples, nfeatures * (nfreqs-1))
+        features = np.concatenate([features1, features2], axis=1)
+        return features
+
+
+class SeasonalDecomposition(BaseEstimator, TransformerMixin):
+
+    def __init__(self, ts=1):
+
+        self.f = int(1.0/ts)
+        self.scaler = MinMaxScaler((-1, 1))
+
+    def fit(self, X, y=None):
+
+        return self
+
+    def plot(self, x, t, s, r):
+
+        plt.subplot(411)
+        plt.plot(x[:,0], label='Original')
+        plt.legend(loc='best')
+        plt.subplot(412)
+        plt.plot(t[:,0], label='Trend')
+        plt.legend(loc='best')
+        plt.subplot(413)
+        plt.plot(s[:,0],label='Seasonality')
+        plt.legend(loc='best')
+        plt.subplot(414)
+        plt.plot(r[:,0], label='Residuals')
+        plt.legend(loc='best')
+        plt.show()
+
+    def transform(self, X):
+
+        decomposition = seasonal_decompose(X, freq=self.f)
+        t = decomposition.trend
+        s = decomposition.seasonal
+        r = decomposition.resid
+
+        y = np.nan_to_num(np.hstack((t, s, r)))
+        y = self.scaler.transform(y)
+
+        return y
+
+    def fit_transform(self, X, y=None):
+
+        decomposition = seasonal_decompose(X, freq=self.f)
+        t = decomposition.trend
+        s = decomposition.seasonal
+        r = decomposition.resid
+
+        y = np.nan_to_num(np.hstack((t, s, r)))
+        y = self.scaler.fit_transform(y)
+
+        return y
 
 
 class GaussianNoise(BaseEstimator, TransformerMixin):
@@ -345,6 +426,9 @@ class SimpleESN(BaseEstimator, TransformerMixin):
         self.input_weights_ = None
         self.readout_idx_ = None
         self.weights_ = None
+
+        # Keep the states in memory if the transform method is called several times successively
+        self.curr_ = None
 
     def _fit_transform(self, X):
         n_samples, n_features = X.shape
@@ -432,13 +516,14 @@ class SimpleESN(BaseEstimator, TransformerMixin):
         self.components_ = zeros(shape=(1+n_features+self.n_components,
                                         n_samples))
 
-        curr_ = zeros(shape=(self.n_components, 1))
+        if self.curr_ is None:
+            self.curr_ = zeros(shape=(self.n_components, 1))
         U = concatenate((ones(shape=(n_samples, 1)), X), axis=1)
         for t in range(n_samples):
             u = array(U[t,:], ndmin=2).T
-            curr_ = (1-self.damping)*curr_ + self.damping*tanh(
-                self.input_weights_.dot(u) + self.weights_.dot(curr_))
-            self.components_[:,t] = vstack((u, curr_))[:,0]
+            self.curr_ = (1-self.damping)*self.curr_ + self.damping*tanh(
+                self.input_weights_.dot(u) + self.weights_.dot(self.curr_))
+            self.components_[:,t] = vstack((u, self.curr_))[:,0]
 
         return self.components_[self.readout_idx_, self.discard_steps:].T
 
@@ -831,12 +916,51 @@ if __name__ == "__main__":
             inputs[2300:2350, :] = 2.0
             print(inputs)
 
-            # Create and run reservoir
-            e = SimpleESN(n_readout=1, n_components=100, damping=0.9,
-                 weight_scaling=1.3)
-            y = e.transform(inputs)
+            # Create a random reservoir
+            e = SimpleESN(n_readout=1, n_components=100, damping=0.05,
+                 weight_scaling=0.98)
+
+            # Run iteratively
+            t_i = time.time()
+            y = []
+            for i in range(inputs.shape[0]):
+                y.append(e.transform(inputs[i, :].reshape(1, 25))[0, 0])
+            t_f1 = time.time()
+
+            # Run in one block and compare
+            e.curr_ = None
+            y2 = e.transform(inputs)
+            t_f = time.time()
+            print "Running time: Iteratively: {0:.4f}".format(t_f1 - t_i) + \
+                  "s \tBlock: {0:.4f}".format(t_f - t_f1) + "s"
             plt.plot(y)
+            plt.plot(y2)
             plt.show()
+
+        if sys.argv[1] == "td":
+
+            # Create an impulse array
+            inputs = np.arange(40000*4).reshape(40000, 4)
+
+            # Create the time delay object
+            e = TimeDelay(num=4, step=2)
+
+            # Run iteratively
+            t_i = time.time()
+            y = []
+            for i in range(inputs.shape[0]):
+                y.append(e.transform(inputs[i, :].reshape(1, 4))[0])
+            y = np.mat(y)
+            t_f1 = time.time()
+
+            # Run in one block and compare
+            e.init = False
+            y2 = e.transform(inputs)
+            t_f = time.time()
+            print "First cells of Y iteratively: " + str(y[0:5, :])
+            print "First cells of Y in block: " + str(y2[0:5, :])
+            print "Running time: Iteratively: {0:.4f}".format(t_f1 - t_i) + \
+                  "s \tBlock: {0:.4f}".format(t_f - t_f1) + "s"
 
         if sys.argv[1] == "lambda":
             # Create an impulse array
