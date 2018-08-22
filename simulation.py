@@ -19,8 +19,6 @@ import network
 import utils
 
 
-
-
 graph = tf.get_default_graph()
 
 class Simulation(object):

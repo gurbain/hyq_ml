@@ -11,6 +11,7 @@ import signal
 import sys
 import tempfile
 import time
+import warnings
 
 history = {}
 epoch = []

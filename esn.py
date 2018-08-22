@@ -23,7 +23,7 @@ from sklearn.preprocessing import MinMaxScaler
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from keras.callbacks import ModelCheckpoint
 from keras.datasets import boston_housing
-from keras.optimizers import Adadelta
+from keras.optimizers import Adam
 from keras.models import Model
 from keras.layers import Dense, Activation, Flatten, Input
 
@@ -134,11 +134,11 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
         assert self.mins.shape[0] == X.shape[1], \
                     "Data shape (" + str(X.shape[1]) + \
                     ") has not the correct value " + \
-                    str(mins.shape[0])
+                    str(self.mins.shape[0])
         assert self.maxs.shape[0] == X.shape[1], \
                     "Data shape (" + str(X.shape[1]) + \
                     ") has not the correct value " + \
-                    str(maxs.shape[0])
+                    str(self.maxs.shape[0])
 
         X_std = (X - self.mins) / (self.maxs - self.mins)
         self.X_scaled = X_std * 2 - np.ones(X_std.shape)
@@ -222,7 +222,6 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
         for i in range(12):
             maxs.append(10)
         self.maxs = np.array(maxs)
-
 
     def _fit_transform(self, X):
 
@@ -415,9 +414,12 @@ class GaussianNoise(BaseEstimator, TransformerMixin):
 
 class SimpleESN(BaseEstimator, TransformerMixin):
 
-    def __init__(self, n_readout, n_components=500, damping=0.5,
-                 weight_scaling=0.9, discard_steps=0, random_state=None):
+    def __init__(self, n_readout, n_components=500, damping=0.5, n_bias=10,
+                 bias_val=0.1, weight_scaling=0.9, discard_steps=0,
+                 random_state=None):
         self.n_readout = n_readout
+        self.n_bias = n_bias
+        self.bias_val = bias_val
         self.n_components = n_components
         self.damping = damping
         self.weight_scaling = weight_scaling
@@ -425,6 +427,7 @@ class SimpleESN(BaseEstimator, TransformerMixin):
         self.random_state = check_random_state(random_state)
         self.input_weights_ = None
         self.readout_idx_ = None
+        self.bias_ = None
         self.weights_ = None
 
         # Keep the states in memory if the transform method is called several times successively
@@ -440,6 +443,9 @@ class SimpleESN(BaseEstimator, TransformerMixin):
                                                          1+n_features)-0.5
         self.readout_idx_ = self.random_state.permutation(arange(1+n_features,
                                     1+n_features+self.n_components))[:self.n_readout]
+        bias_idx_ = self.random_state.permutation(arange(0,self.n_components))[:self.n_bias]
+        self.bias_ = zeros(shape=(self.n_components, 1))
+        self.bias_[bias_idx_] = self.bias_val
         self.components_ = zeros(shape=(1+n_features+self.n_components,
                                         n_samples))
 
@@ -447,8 +453,9 @@ class SimpleESN(BaseEstimator, TransformerMixin):
         U = concatenate((ones(shape=(n_samples, 1)), X), axis=1)
         for t in range(n_samples):
             u = array(U[t,:], ndmin=2).T
-            curr_ = (1-self.damping)*curr_ + self.damping*tanh(
-                self.input_weights_.dot(u) + self.weights_.dot(curr_))
+            curr_ = (1-self.damping)*curr_ + \
+                    self.damping*tanh(self.input_weights_.dot(u) + self.weights_.dot(curr_)) + \
+                    self.bias_
             self.components_[:,t] = vstack((u, curr_))[:,0]
         return self
 
@@ -511,8 +518,12 @@ class SimpleESN(BaseEstimator, TransformerMixin):
             self.input_weights_ = self.random_state.rand(self.n_components,
                                                          1+n_features)-0.5
         if self.readout_idx_ is None:
-            self.readout_idx_ = self.random_state.permutation(arange(1+n_features,
-                                    1+n_features+self.n_components))[:self.n_readout]
+            self.readout_idx_ = self.random_state.permutation(arange(1+n_features, 1+n_features+self.n_components))[:self.n_readout]
+        if self.bias_ is None:
+            bias_idx_ = self.random_state.permutation(arange(0, self.n_components))[:self.n_bias]
+            self.bias_ = zeros(shape=(self.n_components, 1))
+            self.bias_[bias_idx_] = self.bias_val
+
         self.components_ = zeros(shape=(1+n_features+self.n_components,
                                         n_samples))
 
@@ -521,8 +532,9 @@ class SimpleESN(BaseEstimator, TransformerMixin):
         U = concatenate((ones(shape=(n_samples, 1)), X), axis=1)
         for t in range(n_samples):
             u = array(U[t,:], ndmin=2).T
-            self.curr_ = (1-self.damping)*self.curr_ + self.damping*tanh(
-                self.input_weights_.dot(u) + self.weights_.dot(self.curr_))
+            self.curr_ = (1-self.damping)*self.curr_ + \
+                         self.damping*tanh(self.input_weights_.dot(u) + self.weights_.dot(self.curr_)) + \
+                         self.bias_
             self.components_[:,t] = vstack((u, self.curr_))[:,0]
 
         return self.components_[self.readout_idx_, self.discard_steps:].T
@@ -688,7 +700,7 @@ class ESNSFA(BaseEstimator, TransformerMixin):
         plt.show()
 
 
-class TestESNSFA():
+class TestESNSFA(object):
 
     def __init__(self):
 
@@ -904,6 +916,46 @@ class TestESNSFA():
 
         return y, y_pred, score
 
+class TestESN(TestESNSFA):
+
+    def __init__(self):
+
+        self.n_res = 200
+
+        self.n_readout = 5
+        self.n_feedback = 1
+
+        self.n_bias = 5
+        self.bias_val = 0.1
+
+        self.spec_rad = 0.9
+        self.damping = 0.5
+
+        super(TestESN, self).__init__()
+
+
+    def create_nn(self):
+
+        self.esn = SimpleESN(self.n_readout, self.n_res, self.damping,
+                             self.n_bias, self.bias_val, self.spec_rad)
+
+        n_in = self.n_feedback
+        inp = Input(shape=(n_in, 1, ),
+                            name='in')
+        # Network
+        x = Flatten()(inp)
+        x = Dense(2048)(x)
+        x = Activation('tanh')(x)
+        x = Dense(self.out_dim)(x)
+        x = Activation('tanh')(x)
+
+        # Compile and print network
+        self.nn = Model(inputs=[inp], outputs=x)
+        self.nn.compile(loss='mse',
+                   optimizer=Adam(),
+                   metrics=['accuracy', 'mse', 'mae'])
+        self.nn.summary()
+
 
 if __name__ == "__main__":
 
@@ -993,12 +1045,33 @@ if __name__ == "__main__":
             S_slow = sfa.compute()
             sfa.plot()
 
-
         if sys.argv[1] == "esnsfa":
 
             t = TestESNSFA()
-            #t.plot_in()
-            #t.plot_out()
+            t.plot_in()
+            t.plot_out()
             t.plot_sfa()
+            t.fit()
+            t.evaluate(True)
+
+        if sys.argv[1] == "bias":
+
+            # Create an impulse array
+            inputs = np.zeros((4000, 25))
+
+            # Create a random reservoir with bias
+            e = SimpleESN(n_readout=1, n_components=100, damping=0.05,
+                 weight_scaling=0.98, bias_val=0.1, n_bias=10)
+
+            # Run and show
+            y = e.transform(inputs)
+            plt.plot(y)
+            plt.show()
+
+        if sys.argv[1] == "test":
+
+            t = TestESN()
+            t.plot_in()
+            t.plot_out()
             t.fit()
             t.evaluate(True)

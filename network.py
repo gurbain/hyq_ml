@@ -47,16 +47,17 @@ plt.rc('figure', autolayout=True)
 nn = [
        #[('noise', 0.1)],
        #[('sdec',)],
+       #[('esn', 100, 0.9)],
        #[('sdec',), ('td', 10, 2), ('esnsfa', 50, 0.9, 14, -3, 0)],
-       [('td', 10, 2)],#,
+       #[('td', 6, 2)],#,
        #[('esnsfa', 50, 0.9, 14, -3, 0)],
        #[('fft', 12)],
        #[('esnsfa', 80, 0.9, 15, -2, 0), ('td', 10, 2)], #
        #[('lstm', 30)],
        #[('noise', 200, 0.01)],
-       #[('relu', 4)],
-       [('relu', 60)],
-       [('relu', 60)],
+       [('relu', 40)],
+       [('relu', 40)],
+       [('relu', 40)],
        #[('relu', 20)],
      ]
 
@@ -65,9 +66,9 @@ class FeedForwardNN():
 
     ## ALGORITHM METAPARAMETERS
 
-    def __init__(self, batch_size=2048, max_epochs=2500, test_split=0.7,
+    def __init__(self, batch_size=2048, max_epochs=1000, test_split=0.7,
                  val_split=0.1, verbose=1, stop_pat=150, checkpoint=True,
-                 nn_layers=nn, stop_delta=0.0001, esn_n_read=10,
+                 nn_layers=nn, stop_delta=0.0001, esn_n_read=24,
                  data_file="data/sims/simple_walk.bag",
                  regularization=0.001, save_folder="data/nn_learning/"):
 
@@ -664,10 +665,21 @@ class FeedForwardNN():
         # Create IN pipe and transform
         self.printv("\n\n ===== Transform In Features =====")
 
-        self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())] + \
-                                 self.create_pp())
+        pp_pipe = self.create_pp()
+        if len(pp_pipe) > 0:
+            if "esn" in pp_pipe[0][0]:
+                print "WARNING: when using a ESN, the input is the prediction output and not the observed state! Training can only be done step by step!!"
+                self.in_pipe = Pipeline([('xsc0', self.create_y_scaler())] + \
+                                        pp_pipe)
+            else:
+                self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())] + \
+                                        pp_pipe)
+        else:
+            self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())])
         x_ft = self.in_pipe.fit_transform(x)
+        self.x_ft = x_ft
         x_ft = np.expand_dims(x_ft, axis=2)
+
         self.n_in = x_ft.shape[1]
         self.n_out = y.shape[1]
         self.printv("\nTotal input features size: " + str(x_ft.shape))
@@ -704,13 +716,18 @@ class FeedForwardNN():
             self.predict_out_pipe = Pipeline([('ysc', \
                                     self.create_y_scaler())])
 
-        x_ft = self.predict_in_pipe.transform(state)
-        self.x_ft = x_ft
-        x_ft = np.expand_dims(x_ft, axis=2)
+        if "esn" in self.predict_in_pipe.steps[1][0]:
+            x_ft = state
+            x_ft = np.expand_dims(x_ft, axis=2)
+            y_ft = self.nn.predict_on_batch(x_ft)
+            y = y_ft
+        else:
+            x_ft = self.predict_in_pipe.transform(state)
+            self.x_ft = x_ft
+            x_ft = np.expand_dims(x_ft, axis=2)
+            y_ft = self.nn.predict_on_batch(x_ft)
+            y = self.predict_out_pipe.inverse_transform(y_ft)
 
-        y_ft = self.nn.predict_on_batch(x_ft)
-        y = self.predict_out_pipe.inverse_transform(y_ft)
-        #print x_ft.shape, y_ft.shape, state.shape, y.shape
 
         return y[0,:].flatten()
 
@@ -726,11 +743,12 @@ class FeedForwardNN():
 
         # For the first iteration
         if self.epoch == 0:
-            # If no x and y are specfied, use the whole training set
-            if x is None or y is None:
+            # If no x and y are specfied, use the loaded training set
+            if x is None:
                 self.load_data()
-                x = self.x_train
-                y = self.y_train
+                x = self.x_train#[self.epoch:tot_epochs]
+            if y is None:
+                y = self.y_train#[self.epoch:tot_epochs]
 
             # Create the network
             self.nn = self.create_nn()
@@ -739,16 +757,17 @@ class FeedForwardNN():
             # Get features and fit the estimators
             x_ft, y_ft = self.fit_transform_ft(x, y, show)
         else:
-            # If no x and y are specfied, use the whole training set
-            if x is None or y is None:
-                x = self.x_train
-                y = self.y_train
+            # If no x and y are specfied, use the loaded training set
+            if x is None:
+                x = self.x_train#[self.epoch:tot_epochs]
+            if y is None:
+                y = self.y_train#[self.epoch:tot_epochs]
 
             # Get features and fit the network
             with threading.Lock():
-                x_ft = self.in_pipe.fit_transform(x)
+                x_ft = self.in_pipe.transform(x)
                 x_ft = np.expand_dims(x_ft, axis=2)
-                y_ft = self.out_pipe.fit_transform(y)
+                y_ft = self.out_pipe.transform(y)
 
         # Fit the network
         self.printv("\n\n ===== Training Network =====\n")
@@ -756,13 +775,17 @@ class FeedForwardNN():
             self.nn.fit(x_ft, y_ft, epochs=tot_epochs)
 
         else:
-            verbose = self.create_callbacks()
-            self.nn.fit(x_ft, y_ft, validation_split=self.val_split,
+            if n_epochs != 1:
+                verbose = self.create_callbacks()
+                self.nn.fit(x_ft, y_ft, validation_split=self.val_split,
                         epochs=tot_epochs, initial_epoch=self.epoch,
                         callbacks=self.callbacks, batch_size=self.batch_size,
                         verbose=verbose)
+            else:
+                verbose = self.create_callbacks()
+                self.nn.train_on_batch(x_ft, y_ft)
 
-        self.epoch += n_epochs
+        self.epoch = tot_epochs
         self.training_time = time.time() - self.t_training_init
         self.history = utils.history
 
@@ -771,7 +794,11 @@ class FeedForwardNN():
             self.evaluate(show)
             return self.test_loss, self.test_accuracy
         else:
-            return self.history['val_loss'][-1], self.history['val_acc'][-1]
+            if set(["val_loss", "val_acc"]) in set(self.history):
+                return self.history['val_loss'][-1], \
+                       self.history['val_acc'][-1]
+            else:
+                return 1, 0
 
 if __name__ == '__main__':
 
@@ -825,3 +852,27 @@ if __name__ == '__main__':
                     p.send_hyq_traj()
 
             p.stop()
+
+        if sys.argv[1] == "train_esn_fb":
+
+            folder = "data/nn_learning/"+ utils.timestamp()
+            utils.mkdir(folder)
+            nn = FeedForwardNN(data_file=sys.argv[2], save_folder=folder,
+                               val_split=0, max_epochs=40000)
+            nn.load_data()
+            n_samples = nn.y_train.shape[0]
+            y_dim = nn.y_train.shape[1]
+            y = np.random.uniform(-1, 1, (1, y_dim))
+            y_plot = []
+
+            while nn.epoch < n_samples :
+
+                print "Iteration " + str(nn.epoch) + "/" + str(n_samples)
+                nn.train(show=False, n_epochs=1, x=y, evaluate=False)
+                #print y
+                y = nn.predict(y).reshape(1, y_dim)
+                #print y
+                y_plot.append(y[0])
+                if len(y_plot) % 8000 == 0:
+                    plt.plot(y_plot)
+                    plt.show()
