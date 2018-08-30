@@ -12,3 +12,6 @@ logs/*
 
 # Miscelaneous
 misc/*
+
+# Jupyter notebook
+.ipynb_checkpoints/

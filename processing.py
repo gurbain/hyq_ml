@@ -700,6 +700,37 @@ class ESNSFA(BaseEstimator, TransformerMixin):
         plt.show()
 
 
+class Oscillator(BaseEstimator, TransformerMixin):
+
+    def __init__(self, t, r, f=1.692):
+
+        self.f = f
+        self.t = t
+        self.r = r
+        self.k = int(self.r * self.t.shape[0])
+
+    def fit(X, y=None):
+
+        return self
+
+    def fit_transform(self, X, y=None):
+
+        y = np.sin(2*np.pi*self.f*self.t[0:self.k]) - 0.5
+
+        return y.reshape(-1,1)
+
+    def transform(self, X):
+
+        n = X.shape[0]
+        y = np.sin(2*np.pi*self.f*self.t[self.k:self.k+n]) - 0.5
+
+        # plt.plot(self.t[self.k:self.k+n], y)
+        # plt.plot(self.t[self.k:self.k+n], X[:, 0])
+        # plt.show()
+
+        return y.reshape(-1,1)
+
+
 class TestESNSFA(object):
 
     def __init__(self):
@@ -915,6 +946,7 @@ class TestESNSFA(object):
             plt.show()
 
         return y, y_pred, score
+
 
 class TestESN(TestESNSFA):
 

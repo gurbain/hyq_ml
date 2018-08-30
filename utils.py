@@ -2,6 +2,7 @@ from contextlib import contextmanager
 import copy
 from cStringIO import StringIO
 import keras
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
@@ -11,7 +12,9 @@ import signal
 import sys
 import tempfile
 import time
+from tqdm import tqdm_notebook
 import warnings
+
 
 history = {}
 epoch = []
@@ -207,15 +210,21 @@ class Capturing(list):
 class NetworkSave(keras.callbacks.Callback):
 
     def __init__(self, data, monitor='val_loss', verbose=0,
-                 save_best_only=False, mode='auto', period=1):
+                 save_best_only=False, mode='auto', period=1,
+                 max_epochs=100):
 
         super(NetworkSave, self).__init__()
         self.monitor = monitor
         self.verbose = verbose
+        self.max_epochs = max_epochs
         [self.folder, self.index, self.class_to_save] = data
         self.save_best_only = save_best_only
         self.period = period
         self.epochs_since_last_save = 0
+
+        if self.verbose == -1:
+            self.t = tqdm_notebook(total=self.max_epochs)
+
 
         if mode not in ['auto', 'min', 'max']:
             warnings.warn('ModelCheckpoint mode %s is unknown, '
@@ -247,7 +256,7 @@ class NetworkSave(keras.callbacks.Callback):
             new_cb = []
             for i, c in enumerate(to_save["callbacks"]):
                 n = c.__class__.__name__
-                if n not in  ["NetworkSave", "TensorBoard"]:
+                if n not in  ["NetworkSave", "TensorBoard", "PlotJupyter"]:
                     new_c = copy.copy(c)
                     del new_c.model
                     new_cb.append(new_c)
@@ -264,6 +273,11 @@ class NetworkSave(keras.callbacks.Callback):
 
         # Forbid to kill during the saving
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+        # If verbose mode is bar progress (-1), update it
+        if self.verbose == -1:
+            self.t.set_postfix(best_val_loss="{:.4f}".format(self.best))
+            self.t.update()
 
         logs = logs or {}
         self.epochs_since_last_save += 1
@@ -310,3 +324,58 @@ class NetworkSave(keras.callbacks.Callback):
 
         # Know we can interupt again
         signal.signal(signal.SIGINT, s)
+
+
+class PlotJupyter(keras.callbacks.Callback):
+
+    def __init__(self, x, y, network):
+
+        self.x = x
+        self.y_tgt = y
+        self.nn = network
+
+    def on_train_begin(self, logs={}):
+        self.i = 0
+        self.it = []
+        self.losses = []
+        self.val_losses = []
+        self.y_pred = np.zeros(self.y_tgt.shape)
+
+        self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(12, 5), dpi=50)
+        plt.plot()
+
+    def on_epoch_end(self, epoch, logs={}):
+
+        self.it.append(self.i)
+        self.losses.append(logs.get('loss'))
+        self.val_losses.append(logs.get('val_loss'))
+        self.i += 1
+
+        self.ax1.clear()
+        self.ax1.plot(self.it, self.losses, label='Training')
+        self.ax1.plot(self.it, self.val_losses, label='Validation')
+        self.ax1.set_ylabel('Loss [MAE]')
+        self.ax1.set_xlabel('Epoch [#]')
+        self.ax1.legend(loc="upper right")
+
+        if epoch%5 == 0:
+
+            if epoch == 0:
+                self.y_pred = self.nn.predict(self.x)
+            else:
+                x_ft = self.nn.predict_in_pipe.transform(self.x)
+                x_ft = np.expand_dims(x_ft, axis=2)
+                y_ft = self.model.predict_on_batch(x_ft)
+                self.y_pred = self.nn.predict_out_pipe.inverse_transform(y_ft)
+
+            self.ax2.clear()
+            self.ax2.plot(self.y_pred[:, 0], label='Test Prediction')
+            self.ax2.plot(self.y_tgt[:, 0], label='Test Target')
+            self.ax2.set_ylabel('HAA Position [rad]')
+            self.ax2.set_xlabel('Time [s]')
+            self.ax2.legend(loc="upper center")
+
+        self.fig.canvas.draw()
+
+
+

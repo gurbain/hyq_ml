@@ -1,5 +1,6 @@
 ## IMPORTS
 
+import keras
 from keras.callbacks import EarlyStopping, ModelCheckpoint, History, TensorBoard
 from keras.losses import categorical_crossentropy, mean_absolute_error, mean_squared_error
 from keras.optimizers import Adadelta, Adam
@@ -27,7 +28,7 @@ import threading
 import time
 from tqdm import tqdm
 
-import esn
+import processing
 import physics
 import utils
 
@@ -55,8 +56,9 @@ nn = [
        #[('esnsfa', 80, 0.9, 15, -2, 0), ('td', 10, 2)], #
        #[('lstm', 30)],
        #[('noise', 200, 0.01)],
-       [('relu', 40)],
-       [('relu', 40)],
+       # [('relu', 40)],
+       # [('relu', 40)],
+       [('osc',)],
        [('relu', 40)],
        #[('relu', 20)],
      ]
@@ -68,8 +70,8 @@ class FeedForwardNN():
 
     def __init__(self, batch_size=2048, max_epochs=1000, test_split=0.7,
                  val_split=0.1, verbose=1, stop_pat=150, checkpoint=True,
-                 nn_layers=nn, stop_delta=0.0001, esn_n_read=24,
-                 data_file="data/sims/simple_walk.bag",
+                 nn_layers=nn, stop_delta=0.0001, esn_n_read=24, optim='adam',
+                 metric='mae', data_file="data/sims/simple_walk.bag",
                  regularization=0.001, save_folder="data/nn_learning/"):
 
         ## ALGORITHM METAPARAMETERS
@@ -77,6 +79,8 @@ class FeedForwardNN():
         self.save_folder = save_folder
         self.batch_size = batch_size
         self.max_epochs = max_epochs
+        self.optim = optim
+        self.metric = metric
         self.test_split = test_split
         self.val_split = val_split
         self.network_layers = nn_layers
@@ -146,32 +150,19 @@ class FeedForwardNN():
 
         # Retrieve the data from the bag file
         bag = rosbag.Bag(self.data_file, 'r')
+        print self.data_file
         t_init = bag.get_start_time()
         for topic, msg, t in tqdm(bag.read_messages()):
             if topic == "/hyq/robot_states":
                 r = dict()
                 r["t"] = t.to_time()
                 r["base"] = []
-                for i in range(len(msg.base)):
-                    r["base"].append(msg.base[i].velocity)
                 r["joint"] = []
-                for i in range(len(msg.joints)):
-                    r["base"].append(msg.joints[i].position)
-                for i in range(len(msg.joints)):
-                    r["base"].append(msg.joints[i].velocity)
-                for i in range(len(msg.joints)):
-                    r["base"].append(msg.joints[i].effort)
                 x.append(r)
             if topic == "/hyq/debug":
                 r = dict()
                 r["t"] = t.to_time()
                 stance = []
-                for i in range(len(msg.name)):
-                    if msg.name[i] in ["stanceLF",
-                                       "stanceLH",
-                                       "stanceRF",
-                                       "stanceRH"]:
-                        stance += [msg.data[i]]
                 r["stance"] = stance
                 x2.append(r)
             if topic == "/hyq/des_joint_states":
@@ -315,12 +306,12 @@ class FeedForwardNN():
 
     def create_x_scaler(self):
 
-        return esn.HyQStateScaler()
+        return processing.HyQStateScaler()
         #return MinMaxScaler((-1, 1))
 
     def create_y_scaler(self):
 
-        return esn.HyQJointScaler()
+        return processing.HyQJointScaler()
         # return MinMaxScaler((-1, 1))
 
     def create_callbacks(self):
@@ -333,7 +324,8 @@ class FeedForwardNN():
         if not "NetworkSave" in cb_names and self.checkpoint:
             self.callbacks += [utils.NetworkSave(self.get_data_to_save(),
                                      monitor='val_loss', verbose=self.verbose,
-                                     save_best_only=True, mode='min')]
+                                     save_best_only=True, mode='min',
+                                     max_epochs=self.max_epochs)]
 
         if not "CustomHistory" in cb_names:
             self.callbacks += [utils.CustomHistory()]
@@ -348,6 +340,9 @@ class FeedForwardNN():
                                                  verbose=self.verbose,
                                                  patience=self.stop_pat,
                                                  min_delta=self.stop_delta)]
+
+        if not "PlotJupyter" in cb_names and self.verbose == -1:
+            self.callbacks += [utils.PlotJupyter(self.x_test[:400, :], self.y_test[:400, :], self)]
 
         verbose = self.verbose
         if verbose > 1:
@@ -381,10 +376,11 @@ class FeedForwardNN():
 
         # Compile and print network
         self.nn = Model(inputs=[state_input], outputs=x)
-        self.nn.compile(loss='mae',
-                   optimizer=Adam(),
+        keras.losses.custom_loss = self.metric
+        self.nn.compile(loss=keras.losses.custom_loss,
+                   optimizer=self.optim,
                    metrics=['accuracy', 'mse', 'mae', 'mape', 'cosine'])
-        if self.verbose > 1:
+        if self.verbose > 1 or self.verbose == -1:
             self.nn.summary()
 
         return self.nn
@@ -399,7 +395,7 @@ class FeedForwardNN():
                               batch_size=self.batch_size,
                               epochs=self.max_epochs,
                               callbacks=self.callbacks,
-                              verbose=verbose)
+                              verbose=max(verbose, 0))
 
     def create_pp(self):
 
@@ -412,13 +408,13 @@ class FeedForwardNN():
                 tw = {}
                 for k in l:
                     if k[0] == 'esn':
-                        e = esn.SimpleESN(n_readout=self.esn_n_read,
+                        e = processing.SimpleESN(n_readout=self.esn_n_read,
                                           n_components=k[1],
                                           weight_scaling=k[2])
                         step_name = 'esn' + str(i)
 
                     if k[0] == 'esnsfa':
-                        e = esn.ESNSFA(n_readout=self.esn_n_read,
+                        e = processing.ESNSFA(n_readout=self.esn_n_read,
                                        n_components=k[1],
                                        weight_scaling=k[2],
                                        n_res=k[3],
@@ -427,19 +423,23 @@ class FeedForwardNN():
                         step_name = 'esnsfa' + str(i)
 
                     if k[0] == 'td':
-                        e = esn.TimeDelay(k[1], k[2])
+                        e = processing.TimeDelay(k[1], k[2])
                         step_name = 'td' + str(i)
 
+                    if k[0] == 'osc':
+                        e = processing.Oscillator(t=self.t, r=self.test_split)
+                        step_name = 'osc' + str(i)
+
                     if k[0] == 'fft':
-                        e = esn.FFT(self.t[1] - self.t[0], k[1])
+                        e = processing.FFT(self.t[1] - self.t[0], k[1])
                         step_name = 'fft' + str(i)
 
                     if k[0] == 'sdec':
-                        e = esn.SeasonalDecomposition(self.t[1] - self.t[0])
+                        e = processing.SeasonalDecomposition(self.t[1] - self.t[0])
                         step_name = 'sdec' + str(i)
 
                     if k[0] == 'noise':
-                        e = esn.GaussianNoise(stdev=k[1])
+                        e = processing.GaussianNoise(stdev=k[1])
                         step_name = 'noise' + str(i)
 
                     tl += [(step_name, e)]
@@ -448,13 +448,13 @@ class FeedForwardNN():
                                                 transformer_weights=tw))]
             else:
                 if l[0][0] == 'esn':
-                    e = esn.SimpleESN(n_readout=self.esn_n_read,
+                    e = processing.SimpleESN(n_readout=self.esn_n_read,
                                       n_components=l[0][1],
                                       weight_scaling=l[0][2])
                     pp_pipe += [('esn' + str(i), e)]
 
                 if l[0][0] == 'esnsfa':
-                    e = esn.ESNSFA(n_readout=self.esn_n_read,
+                    e = processing.ESNSFA(n_readout=self.esn_n_read,
                                    n_components=l[0][1],
                                    weight_scaling=l[0][2],
                                    n_res=l[0][3],
@@ -463,19 +463,23 @@ class FeedForwardNN():
                     pp_pipe += [('esnsfa' + str(i), e)]
 
                 if l[0][0] == 'fft':
-                    e = esn.FFT(self.t[1] - self.t[0], l[0][1])
+                    e = processing.FFT(self.t[1] - self.t[0], l[0][1])
                     pp_pipe += [('fft' + str(i), e)]
 
                 if l[0][0] == 'sdec':
-                    e = esn.SeasonalDecomposition(self.t[1] - self.t[0])
+                    e = processing.SeasonalDecomposition(self.t[1] - self.t[0])
                     pp_pipe += [('sdec' + str(i), e)]
 
                 if l[0][0] == 'td':
-                    e = esn.TimeDelay(l[0][1], l[0][2])
+                    e = processing.TimeDelay(l[0][1], l[0][2])
                     pp_pipe += [('td' + str(i), e)]
 
+                if l[0][0] == 'osc':
+                    e = processing.Oscillator(t=self.t, r=self.test_split)
+                    pp_pipe += [('osc' + str(i), e)]
+
                 if l[0][0] == 'noise':
-                    e = esn.GaussianNoise(stdev=l[0][1])
+                    e = processing.GaussianNoise(stdev=l[0][1])
                     pp_pipe += [('noise' + str(i), e)]
 
             i += 1
@@ -556,6 +560,7 @@ class FeedForwardNN():
 
         n, bins, p = plt.hist(x.flatten(), 50, facecolor='g', alpha=0.75)
 
+        plt.figure()
         plt.xlabel('Input values')
         plt.ylabel('Distribution')
         plt.grid(True)
@@ -600,7 +605,7 @@ class FeedForwardNN():
         plt.legend()
         plt.show()
 
-    def evaluate(self, show):
+    def evaluate(self, show=True):
 
         self.printv("\n\n ===== Evaluating Test Dataset =====\n")
 
@@ -627,33 +632,38 @@ class FeedForwardNN():
         if show:
             # Summarize history for loss
             h = self.history
-            plt.plot(h['loss'])
-            plt.plot(h['val_loss'])
+            plt.figure()
+            plt.plot(h['loss'][:self.max_epochs])
+            plt.plot(h['val_loss'][:self.max_epochs])
             plt.title('Model Loss')
-            plt.ylabel('Loss')
-            plt.xlabel('Epoch')
+            plt.ylabel('Loss [MAE]')
+            plt.xlabel('Epoch [#]')
             plt.legend(['Training', 'Validation'], loc='upper left')
             plt.show()
 
             # Plot test and predicted values
+            plt.figure()
             plt.plot(y_truth[:, 0], y_pred[:, 0],
                      marker='o', linestyle='None')
-            plt.xlabel("Actual value")
-            plt.ylabel("Predicted value")
+            plt.xlabel("FL HAA Actual Position [rad]")
+            plt.ylabel("FL HAA Predicted Position [rad]")
             plt.show()
+            plt.figure()
             t = self.t[0:y_truth.shape[0]]
-            plt.plot(t, y_truth[:, 0], label="real")
-            plt.plot(t, y_pred[:, 0], label="predicted")
+            plt.plot(t, y_truth[:, 0], label="Real")
+            plt.plot(t, y_pred[:, 0], label="Predicted")
             plt.plot(t, np.abs(y_truth - y_pred)[:, 0],
                      label="MAE error")
+            plt.xlabel("Time [s]")
+            plt.ylabel("FL HAA Position [rad]")
             plt.legend()
             plt.show()
 
-            ts = [0]
-            for i in range(len(self.t) - 1):
-                ts.append(self.t[i+1] - self.t[i])
-            plt.plot(self.t, ts)
-            plt.show()
+            # ts = [0]
+            # for i in range(len(self.t) - 1):
+            #     ts.append(self.t[i+1] - self.t[i])
+            # plt.plot(self.t, ts)
+            # plt.show()
 
         return y_truth, y_pred, score
 
@@ -668,7 +678,7 @@ class FeedForwardNN():
         pp_pipe = self.create_pp()
         if len(pp_pipe) > 0:
             if "esn" in pp_pipe[0][0]:
-                print "WARNING: when using a ESN, the input is the prediction output and not the observed state! Training can only be done step by step!!"
+                print("WARNING: when using a ESN, the input is the prediction output and not the observed state! Training can only be done step by step!!")
                 self.in_pipe = Pipeline([('xsc0', self.create_y_scaler())] + \
                                         pp_pipe)
             else:
@@ -692,7 +702,7 @@ class FeedForwardNN():
                     if 'esnsfa' in e[0]:
                         ts = self.t[1] - self.t[0]
                         t_max = e[1].y.shape[0] * ts
-                        print ts, t_max
+                        print(ts, t_max)
                         t = np.arange(0, t_max, ts)
                         e[1].plot_sfa(t)
 
@@ -716,20 +726,22 @@ class FeedForwardNN():
             self.predict_out_pipe = Pipeline([('ysc', \
                                     self.create_y_scaler())])
 
-        if "esn" in self.predict_in_pipe.steps[1][0]:
-            x_ft = state
-            x_ft = np.expand_dims(x_ft, axis=2)
-            y_ft = self.nn.predict_on_batch(x_ft)
-            y = y_ft
-        else:
-            x_ft = self.predict_in_pipe.transform(state)
-            self.x_ft = x_ft
-            x_ft = np.expand_dims(x_ft, axis=2)
-            y_ft = self.nn.predict_on_batch(x_ft)
-            y = self.predict_out_pipe.inverse_transform(y_ft)
 
+        if len(self.predict_in_pipe.steps) > 1:
+            if "esn" in self.predict_in_pipe.steps[1][0]:
+                x_ft = state
+                x_ft = np.expand_dims(x_ft, axis=2)
+                y_ft = self.nn.predict_on_batch(x_ft)
+                y = y_ft
+                return y
 
-        return y[0,:].flatten()
+        x_ft = self.predict_in_pipe.transform(state)
+        self.x_ft = x_ft
+        x_ft = np.expand_dims(x_ft, axis=2)
+        y_ft = self.nn.predict_on_batch(x_ft)
+        y = self.predict_out_pipe.inverse_transform(y_ft)
+        # return y[0,:].flatten()
+        return y
 
     def train(self, x=None, y=None, show=True, n_epochs=None, evaluate=True):
 
@@ -867,7 +879,7 @@ if __name__ == '__main__':
 
             while nn.epoch < n_samples :
 
-                print "Iteration " + str(nn.epoch) + "/" + str(n_samples)
+                print("Iteration " + str(nn.epoch) + "/" + str(n_samples))
                 nn.train(show=False, n_epochs=1, x=y, evaluate=False)
                 #print y
                 y = nn.predict(y).reshape(1, y_dim)
