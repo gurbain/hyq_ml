@@ -1,26 +1,21 @@
-## IMPORTS
+# IMPORTS
 
 import keras
-from keras.callbacks import EarlyStopping, ModelCheckpoint, History, TensorBoard
-from keras.losses import categorical_crossentropy, mean_absolute_error, mean_squared_error
-from keras.optimizers import Adadelta, Adam
-from keras.models import Sequential, Model,load_model
-from keras.layers import Dense, Activation, Flatten, Input, Concatenate, GaussianNoise, LSTM
+from keras.callbacks import EarlyStopping, TensorBoard
+from keras.models import Model, load_model
+from keras.layers import Dense, Activation, Flatten, Input, LSTM
 from keras.regularizers import l2
 from keras.wrappers.scikit_learn import KerasRegressor
 
 from sklearn.externals import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline, FeatureUnion
-from sklearn.preprocessing import MinMaxScaler
 
 import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
-import re
-import rospy as ros
 import rosbag
 from scipy.interpolate import interp1d
 import sys
@@ -28,45 +23,46 @@ import threading
 import time
 from tqdm import tqdm
 
+import esn
 import processing
-import physics
+import sfa
 import utils
 
-## FORCE CPU
+# FORCE CPU #
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
-## MATPLOTLIB STYLE
+# MATPLOTLIB STYLE #
 plt.style.use('fivethirtyeight')
-plt.rc('lines', linewidth= 1)
+plt.rc('lines', linewidth=1)
 plt.rc('text', usetex=False)
 plt.rc('axes', facecolor='white')
 plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 nn = [
-       #[('noise', 0.1)],
-       #[('sdec',)],
-       #[('esn', 100, 0.9)],
-       #[('sdec',), ('td', 10, 2), ('esnsfa', 50, 0.9, 14, -3, 0)],
-       #[('td', 6, 2)],#,
-       #[('esnsfa', 50, 0.9, 14, -3, 0)],
-       #[('fft', 12)],
-       #[('esnsfa', 80, 0.9, 15, -2, 0), ('td', 10, 2)], #
-       #[('lstm', 30)],
-       #[('noise', 200, 0.01)],
+       # [('noise', 0.1)],
+       # [('sdec',)],
+       # [('esn', 100, 0.9)],
+       # [('sdec',), ('td', 10, 2), ('esnsfa', 50, 0.9, 14, -3, 0)],
+       # [('td', 6, 2)],#,
+       # [('esnsfa', 50, 0.9, 14, -3, 0)],
+       # [('fft', 12)],
+       # [('esnsfa', 80, 0.9, 15, -2, 0), ('td', 10, 2)], #
+       # [('lstm', 30)],
+       # [('noise', 200, 0.01)],
        # [('relu', 40)],
        # [('relu', 40)],
        [('osc',)],
-       [('relu', 40)],
-       #[('relu', 20)],
+       [('relu', 40)]
+       # [('relu', 20)],
      ]
 
 
-class FeedForwardNN():
+class NN(object):
 
-    ## ALGORITHM METAPARAMETERS
+    # ALGORITHM METAPARAMETERS #
 
     def __init__(self, batch_size=2048, max_epochs=1000, test_split=0.7,
                  val_split=0.1, verbose=1, stop_pat=150, checkpoint=True,
@@ -74,7 +70,7 @@ class FeedForwardNN():
                  metric='mae', data_file="data/sims/simple_walk.bag",
                  regularization=0.001, save_folder="data/nn_learning/"):
 
-        ## ALGORITHM METAPARAMETERS
+        # ALGORITHM METAPARAMETERS
         self.data_file = data_file
         self.save_folder = save_folder
         self.batch_size = batch_size
@@ -94,17 +90,42 @@ class FeedForwardNN():
 
         self.history = {}
         self.nn = None
+        self.in_pipe = None
+        self.out_pipe = None
         self.predict_in_pipe = None
         self.predict_out_pipe = None
         self.training_time = 0
         self.epoch = 0
         self.loss = 0
         self.acc = 0
+        self.test_loss = 0
+        self.test_accuracy = 0
         self.save_index = 0
+        self.callbacks = []
 
-    ## DATA PROCESSING FUNCTIONS
+        self.x_t = None
+        self.x2_t = None
+        self.y_t = None
+        self.x_val = None
+        self.x2_val = None
+        self.y_val = None
+        self.data_n = None
+        self.t = None
+        self.x_train = None
+        self.y_train = None
+        self.x_test = None
+        self.y_test = None
+        self.n_in = 0
+        self.n_out = 0
+        self.x_ft = None
+        self.t_training_init = None
+
+    # DATA PROCESSING FUNCTIONS #
 
     def load_data(self, load_all=False):
+
+        x_new = None
+        y_new = None
 
         if ".bag" in self.data_file:
             # Load the bag file
@@ -114,16 +135,12 @@ class FeedForwardNN():
             x_new, y_new = self.format_data(x, x2, y)
 
             # Save data in numpy array
-            with open(self.data_file.replace("bag", "pkl") , "wb") as f:
+            with open(self.data_file.replace("bag", "pkl"), "wb") as f:
                 pickle.dump([x_new, y_new, self.t], f, protocol=2)
 
-            # Save Interpolation functins in numpy array
-            with open(self.data_file.replace(".bag",
-                "_interpol_fct.pkl") , "wb") as f:
-                    pickle.dump([self.x_t, self.x2_t, self.y_t,
-                                 self.x_val, self.x2_val, self.y_val],
-                                 f, protocol=2)
-
+            # Save Interpolation functions in numpy array
+            with open(self.data_file.replace(".bag", "_interpol_fct.pkl"), "wb") as f:
+                    pickle.dump([self.x_t, self.x2_t, self.y_t, self.x_val, self.x2_val, self.y_val], f, protocol=2)
 
         if ".pkl" in self.data_file:
             x_new, y_new = self.load_pkl()
@@ -131,8 +148,8 @@ class FeedForwardNN():
         # Retrieve all the non-formatted data if load_all flag is enabled
         if load_all:
             names = self.data_file.split(".")
-            file = names[0] + "_interpol_fct.pkl"
-            with open(file,'rb') as f:
+            filename = names[0] + "_interpol_fct.pkl"
+            with open(filename, 'rb') as f:
                 [self.x_t, self.x2_t, self.y_t,
                  self.x_val, self.x2_val, self.y_val] = pickle.load(f)
 
@@ -146,34 +163,58 @@ class FeedForwardNN():
         x = []
         x2 = []
         y = []
-        fd = []
+
+        kadj = "kadj" in self.data_file
+        tc = "tc" in self.data_file
+        adapt = "adapt" in self.data_file
+        prec = "prec" in self.data_file
 
         # Retrieve the data from the bag file
         bag = rosbag.Bag(self.data_file, 'r')
-        print self.data_file
-        t_init = bag.get_start_time()
         for topic, msg, t in tqdm(bag.read_messages()):
             if topic == "/hyq/robot_states":
                 r = dict()
                 r["t"] = t.to_time()
                 r["base"] = []
                 r["joint"] = []
+                if kadj:
+                    r["base"].append(msg.base[0].position)
+                    r["base"].append(msg.base[1].position)
+                    r["base"].append(msg.base[0].velocity)
+                    r["base"].append(msg.base[1].velocity)
+                if prec:
+                    r["base"].append(msg.base[2].velocity)
+                    r["base"].append(msg.base[3].velocity)
+                    r["base"].append(msg.base[4].velocity)
                 x.append(r)
             if topic == "/hyq/debug":
                 r = dict()
                 r["t"] = t.to_time()
                 stance = []
+                vel = []
+                if adapt or tc:
+                    st = 0
+                    for i in range(len(msg.name)):
+                        if tc and msg.name[i] in ["forwVel"]:
+                            vel = [msg.data[i]]
+                        if adapt and st < 4 and msg.name[i] in ["stanceStatusLF", "stanceStatusLH",
+                                                                "stanceStatusRF", "stanceStatusRH"]:
+                            stance += [msg.data[i]]
+                            st += 1
+
                 r["stance"] = stance
+                r["vel"] = vel
                 x2.append(r)
             if topic == "/hyq/des_joint_states":
                 r = dict()
                 r["t"] = t.to_time()
                 r["pos"] = []
-                for i in range(len(msg.position)):
-                    r["pos"].append(msg.position[i])
                 r["vel"] = []
-                for i in range(len(msg.velocity)):
-                    r["vel"].append(msg.velocity[i])
+                if tc:
+                    for i in range(len(msg.position)):
+                        r["pos"].append(msg.position[i])
+                    for i in range(len(msg.velocity)):
+                        r["vel"].append(msg.velocity[i])
                 y.append(r)
 
         return x, x2, y
@@ -182,8 +223,12 @@ class FeedForwardNN():
 
         self.printv("\n\n ===== Collecting Data pkl =====\n")
 
-        with open(self.data_file , "rb") as f:
+        with open(self.data_file, "rb") as f:
             [x, y, self.t] = pickle.load(f)
+
+        plt.plot(x)
+        plt.legend()
+        plt.show()
 
         return x, y
 
@@ -205,37 +250,30 @@ class FeedForwardNN():
 
         # Get values
         self.x_t = np.array([r["t"] for r in x]) - x[0]["t"]
-        self.x2_t = np.array([r["t"] for r in x2])
-        if self.x2_t.shape[0] is not 0:
-            self.x2_t -= x2[0]["t"]
+        self.x2_t = np.array([r["t"] for r in x2]) - x2[0]["t"]
         self.y_t = np.array([r["t"] for r in y]) - y[0]["t"]
         self.x_val = np.array([r["joint"] + r["base"] for r in x])
-        self.x2_val = np.array([r["stance"] for r in x2])
+        self.x2_val = np.array([r["stance"] + r["vel"] for r in x2])
         self.y_val = np.array([r["pos"] + r["vel"] for r in y])
 
         # Get new interpolation range
         self.data_n = max(len(x), len(x2), len(y))
 
         # Interpolate in new range
-        t_min = min(np.min(self.x_t), np.min(self.y_t))
-        t_max = max(np.max(self.x_t), np.max(self.y_t))
+        t_min = max(np.min(self.x_t), np.min(self.x2_t), np.min(self.y_t))
+        t_max = min(np.max(self.x_t), np.max(self.x2_t), np.max(self.y_t))
+        self.t = np.linspace(t_min, t_max, self.data_n)
 
         x_fct = self.get_fct(self.x_t, self.x_val)
-        if self.x2_t.shape[0] is not 0:
-            x2_fct = self.get_fct(self.x2_t, self.x2_val)
+        x2_fct = self.get_fct(self.x2_t, self.x2_val)
         y_fct = self.get_fct(self.y_t, self.y_val)
 
-        self.t = np.linspace(max(np.min(self.x_t), np.min(self.y_t)),
-                             min(np.max(self.x_t), np.max(self.y_t)),
-                             self.data_n)
         x_new = self.interpolate(x_fct, self.t)
-        if self.x2_t.shape[0] is not 0:
-            x2_new = self.interpolate(x2_fct, self.t)
+        x2_new = self.interpolate(x2_fct, self.t)
         y_new = self.interpolate(y_fct, self.t)
 
         # Concatenate all input data
-        if self.x2_t.shape[0] is not 0:
-            x_new = np.hstack((x_new, x2_new))
+        x_new = np.hstack((x_new, x2_new))
 
         return x_new, y_new
 
@@ -244,11 +282,10 @@ class FeedForwardNN():
         self.printv("\n ===== Splitting Data =====\n")
 
         # Divide into training and testing dataset
-        x_train, x_test, y_train, y_test = \
-                    train_test_split(x, y, shuffle=False,
-                                     test_size=(1-self.test_split))
+        x_train, x_test, y_train, y_test = train_test_split(x, y, shuffle=False, test_size=(1-self.test_split))
+
         # Print dimensions in a table
-        lin = ["HyQ Body State (in)", "Hyq joint command (out)"]
+        lin = ["NN Controller Inputs", "NN Controller Outputs"]
         col = ["Training", "Validation", "Testing"]
         dat = [[(int(x_train.shape[0]*(1-self.val_split)), x_train.shape[1]),
                 (int(y_train.shape[0]*(1-self.val_split)), y_train.shape[1])],
@@ -276,7 +313,8 @@ class FeedForwardNN():
             if len([s for s in f_in_folder if "network" in s]) == 0:
                 self.save_index = 0
             else:
-                self.save_index = max([int(utils.split(f, "_.")[-2]) for f in [s for s in f_in_folder if "network" in s]]) + 1
+                self.save_index = max([int(utils.split(f, "_.")[-2])
+                                       for f in [s for s in f_in_folder if "network" in s]]) + 1
         else:
             self.save_index = 0
 
@@ -294,7 +332,7 @@ class FeedForwardNN():
 
         return [self.save_folder, self.save_index, self.__dict__]
 
-    ## ELEMENTARY PIPE FUNCTIONS
+    # ELEMENTARY PIPE FUNCTIONS #
 
     def get_in_dim(self):
 
@@ -306,8 +344,8 @@ class FeedForwardNN():
 
     def create_x_scaler(self):
 
-        return processing.HyQStateScaler()
-        #return MinMaxScaler((-1, 1))
+        return processing.HyQStateScaler(n_in=self.x_train.shape[1])
+        # return MinMaxScaler((-1, 1))
 
     def create_y_scaler(self):
 
@@ -321,19 +359,19 @@ class FeedForwardNN():
             self.callbacks = []
 
         cb_names = [c.__class__.__name__ for c in self.callbacks]
-        if not "NetworkSave" in cb_names and self.checkpoint:
+        if "NetworkSave" not in cb_names and self.checkpoint:
             self.callbacks += [utils.NetworkSave(self.get_data_to_save(),
-                                     monitor='val_loss', verbose=self.verbose,
-                                     save_best_only=True, mode='min',
-                                     max_epochs=self.max_epochs)]
+                                                 monitor='val_loss', verbose=self.verbose,
+                                                 save_best_only=True, mode='min',
+                                                 max_epochs=self.max_epochs)]
 
-        if not "CustomHistory" in cb_names:
+        if "CustomHistory" not in cb_names:
             self.callbacks += [utils.CustomHistory()]
 
-        if not "TensorBoard" in cb_names:
+        if "TensorBoard" not in cb_names:
             self.callbacks += [TensorBoard()]
 
-        if not "EarlyStopping" in cb_names:
+        if "EarlyStopping" not in cb_names:
             if self.stop_delta is not None:
                 self.callbacks += [EarlyStopping(monitor='val_loss',
                                                  mode="min",
@@ -341,7 +379,7 @@ class FeedForwardNN():
                                                  patience=self.stop_pat,
                                                  min_delta=self.stop_delta)]
 
-        if not "PlotJupyter" in cb_names and self.verbose == -1:
+        if "PlotJupyter" not in cb_names and self.verbose == -1:
             self.callbacks += [utils.PlotJupyter(self.x_test[:400, :], self.y_test[:400, :], self)]
 
         verbose = self.verbose
@@ -372,18 +410,18 @@ class FeedForwardNN():
         # Output Layer
         n_out = self.n_out
         x = Dense(n_out, kernel_regularizer=l2(self.regularization))(x)
-        #x = Activation('tanh')(x)
+        # x = Activation('tanh')(x)
 
         # Compile and print network
-        self.nn = Model(inputs=[state_input], outputs=x)
+        nn_fn = Model(inputs=[state_input], outputs=x)
         keras.losses.custom_loss = self.metric
-        self.nn.compile(loss=keras.losses.custom_loss,
-                   optimizer=self.optim,
-                   metrics=['accuracy', 'mse', 'mae', 'mape', 'cosine'])
+        nn_fn.compile(loss=keras.losses.custom_loss,
+                      optimizer=self.optim,
+                      metrics=['accuracy', 'mse', 'mae', 'mape', 'cosine'])
         if self.verbose > 1 or self.verbose == -1:
-            self.nn.summary()
+            nn_fn.summary()
 
-        return self.nn
+        return nn_fn
 
     def create_nn(self):
 
@@ -407,19 +445,15 @@ class FeedForwardNN():
                 tl = []
                 tw = {}
                 for k in l:
+                    step_name = None
+                    e = None
                     if k[0] == 'esn':
-                        e = processing.SimpleESN(n_readout=self.esn_n_read,
-                                          n_components=k[1],
-                                          weight_scaling=k[2])
+                        e = esn.ForwardESN(n_readout=self.esn_n_read, n_components=k[1], weight_scaling=k[2])
                         step_name = 'esn' + str(i)
 
                     if k[0] == 'esnsfa':
-                        e = processing.ESNSFA(n_readout=self.esn_n_read,
-                                       n_components=k[1],
-                                       weight_scaling=k[2],
-                                       n_res=k[3],
-                                       l_min=k[4],
-                                       l_max=k[5])
+                        e = sfa.ESNSFA(n_readout=self.esn_n_read, n_components=k[1], weight_scaling=k[2],
+                                       n_res=k[3], l_min=k[4], l_max=k[5])
                         step_name = 'esnsfa' + str(i)
 
                     if k[0] == 'td':
@@ -442,24 +476,19 @@ class FeedForwardNN():
                         e = processing.GaussianNoise(stdev=k[1])
                         step_name = 'noise' + str(i)
 
-                    tl += [(step_name, e)]
-                    tw[step_name] = 1
+                    if step_name is not None and e is not None:
+                        tl += [(step_name, e)]
+                        tw[step_name] = 1
                 pp_pipe += [('fu', FeatureUnion(transformer_list=tl,
                                                 transformer_weights=tw))]
             else:
                 if l[0][0] == 'esn':
-                    e = processing.SimpleESN(n_readout=self.esn_n_read,
-                                      n_components=l[0][1],
-                                      weight_scaling=l[0][2])
+                    e = esn.ForwardESN(n_readout=self.esn_n_read, n_components=l[0][1], weight_scaling=l[0][2])
                     pp_pipe += [('esn' + str(i), e)]
 
                 if l[0][0] == 'esnsfa':
-                    e = processing.ESNSFA(n_readout=self.esn_n_read,
-                                   n_components=l[0][1],
-                                   weight_scaling=l[0][2],
-                                   n_res=l[0][3],
-                                   l_min=l[0][4],
-                                   l_max=l[0][5])
+                    e = sfa.ESNSFA(n_readout=self.esn_n_read,  n_components=l[0][1], weight_scaling=l[0][2],
+                                   n_res=l[0][3], l_min=l[0][4], l_max=l[0][5])
                     pp_pipe += [('esnsfa' + str(i), e)]
 
                 if l[0][0] == 'fft':
@@ -486,8 +515,7 @@ class FeedForwardNN():
 
         return pp_pipe
 
-
-    ## PLOT AND EVALUATION FUNCTIONS
+    # PLOT AND EVALUATION FUNCTIONS #
 
     def save(self):
 
@@ -508,45 +536,32 @@ class FeedForwardNN():
         del to_save["nn"], to_save["callbacks"][1].model,
         del to_save["x_train"], to_save["y_train"]
         del to_save["x_test"], to_save["y_test"]
-        if 'nn_pipe' in to_save.keys():
-            del to_save['nn_pipe']
-            # Save pipe mode
-            if self.nn_pipe is not None:
-                pipe_to_save = copy.copy(self.nn_pipe)
-                del pipe_to_save.named_steps['nn'].model
-                del pipe_to_save.named_steps['nn'].build_fn
-                joblib.dump(pipe_to_save, self.save_folder + "/pipe_" + \
-                            str(index)+ ".pkl")
-
-        pickle.dump(to_save, open(self.save_folder + "/network_" +
-                                  str(index)+ ".pkl", "wb"), protocol=2)
+        pickle.dump(to_save, open(self.save_folder + "/network_" + str(index) + ".pkl", "wb"), protocol=2)
         del to_save
 
         # Save nn model
         if self.nn is not None:
-            self.nn.save(self.save_folder + "/model_" + str(index)+ ".h5")
+            self.nn.save(self.save_folder + "/model_" + str(index) + ".h5")
 
+        self.printv("Files saved: " + self.save_folder + "/model_" + str(index) + ".h5, pipe_" + str(index) +
+                    ".pkl, network_" + str(index) + ".pkl")
 
-        self.printv("Files saved: " + self.save_folder + "/model_" + \
-                    str(index) + ".h5, pipe_" + str(index ) + \
-                     ".pkl, network_" + str(index ) + ".pkl")
-
-    def load(self, folder, num=0, load_all=False):
+    def load(self, foldername, num=0, load_all=False):
 
         # Load this class
         verbose_rem = self.verbose
-        with open(folder + "/network_" + str(num) + ".pkl",'rb') as f:
+        with open(foldername + "/network_" + str(num) + ".pkl", 'rb') as f:
             self.__dict__ = pickle.load(f)
             self.verbose = verbose_rem
 
         utils.history = self.history
 
         # Load network
-        self.nn = load_model(folder + "/model_" + str(num) + ".h5")
+        self.nn = load_model(foldername + "/model_" + str(num) + ".h5")
 
         if 'callbacks' in self.__dict__.keys():
             for c in self.callbacks:
-                c.model = load_model(folder + "/model_" + str(num) + ".h5")
+                c.model = load_model(foldername + "/model_" + str(num) + ".h5")
 
         # Load dataset
         self.load_data(load_all)
@@ -558,7 +573,7 @@ class FeedForwardNN():
 
     def plot_histogram(self, x):
 
-        n, bins, p = plt.hist(x.flatten(), 50, facecolor='g', alpha=0.75)
+        plt.hist(x.flatten(), 50, facecolor='g', alpha=0.75)
 
         plt.figure()
         plt.xlabel('Input values')
@@ -573,12 +588,11 @@ class FeedForwardNN():
         # Process features
         x_ft = self.in_pipe.transform(self.x_test)
         x_ft = np.expand_dims(x_ft, axis=2)
-        y_ft = self.out_pipe.transform(self.y_test)
+        self.out_pipe.transform(self.y_test)
 
         # Process NN
-        y_pred = self.out_pipe.inverse_transform(self.nn.predict(x_ft,
-                    batch_size=self.batch_size,
-                    verbose=self.verbose))
+        y_pred = self.out_pipe.inverse_transform(self.nn.predict(x_ft, batch_size=self.batch_size,
+                                                                 verbose=self.verbose))
 
         y_truth = self.y_test
 
@@ -587,8 +601,8 @@ class FeedForwardNN():
 
         n = y_truth.shape[0]
         k = np.arange(n)
-        T = n / fs
-        frq = k / T
+        period = n / fs
+        frq = k / period
         frq = frq[range(n/2)]
 
         y_pred_fft = np.fft.fft(y_pred[:, 0]) / n
@@ -619,8 +633,7 @@ class FeedForwardNN():
 
         # Process NN
         score = self.nn.evaluate(x_ft, y_ft, verbose=2)
-        y_pred_ft = self.nn.predict(x_ft, batch_size=self.batch_size,
-                               verbose=0)
+        y_pred_ft = self.nn.predict(x_ft, batch_size=self.batch_size, verbose=0)
         y_pred = self.out_pipe.inverse_transform(y_pred_ft)
 
         y_truth = self.y_test
@@ -667,8 +680,7 @@ class FeedForwardNN():
 
         return y_truth, y_pred, score
 
-
-    ## MAIN FUNCTIONS
+    # MAIN FUNCTIONS #
 
     def fit_transform_ft(self, x, y, show=True):
 
@@ -678,12 +690,11 @@ class FeedForwardNN():
         pp_pipe = self.create_pp()
         if len(pp_pipe) > 0:
             if "esn" in pp_pipe[0][0]:
-                print("WARNING: when using a ESN, the input is the prediction output and not the observed state! Training can only be done step by step!!")
-                self.in_pipe = Pipeline([('xsc0', self.create_y_scaler())] + \
-                                        pp_pipe)
+                print("WARNING: when using a ESN, the input is the prediction output and not the observed state!" +
+                      " Training can only be done step by step!!")
+                self.in_pipe = Pipeline([('xsc0', self.create_y_scaler())] + pp_pipe)
             else:
-                self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())] + \
-                                        pp_pipe)
+                self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())] + pp_pipe)
         else:
             self.in_pipe = Pipeline([('xsc0', self.create_x_scaler())])
         x_ft = self.in_pipe.fit_transform(x)
@@ -695,17 +706,16 @@ class FeedForwardNN():
         self.printv("\nTotal input features size: " + str(x_ft.shape))
         self.printv("Total output features size: " + str(y.shape))
 
-        flatten_nn_struct =  utils.flatten(self.in_pipe.steps)
+        flatten_nn_struct = utils.flatten(self.in_pipe.steps)
         if show:
             for e in flatten_nn_struct:
-                 if isinstance(e, tuple):
+                if isinstance(e, tuple):
                     if 'esnsfa' in e[0]:
                         ts = self.t[1] - self.t[0]
                         t_max = e[1].y.shape[0] * ts
                         print(ts, t_max)
                         t = np.arange(0, t_max, ts)
                         e[1].plot_sfa(t)
-
 
         # Create OUT pipe and transform
         self.printv("\n\n ===== Transform Out Features =====")
@@ -721,11 +731,8 @@ class FeedForwardNN():
         # when we also train
         if self.predict_in_pipe is None:
             self.predict_in_pipe = \
-                    Pipeline([('xsc0', self.create_x_scaler())] + \
-                               self.create_pp())
-            self.predict_out_pipe = Pipeline([('ysc', \
-                                    self.create_y_scaler())])
-
+                    Pipeline([('xsc0', self.create_x_scaler())] + self.create_pp())
+            self.predict_out_pipe = Pipeline([('ysc', self.create_y_scaler())])
 
         if len(self.predict_in_pipe.steps) > 1:
             if "esn" in self.predict_in_pipe.steps[1][0]:
@@ -746,7 +753,7 @@ class FeedForwardNN():
     def train(self, x=None, y=None, show=True, n_epochs=None, evaluate=True):
 
         # Determine the number of training epochs
-        if n_epochs == None:
+        if n_epochs is None:
             tot_epochs = self.max_epochs
         else:
             tot_epochs = self.epoch + n_epochs
@@ -758,9 +765,9 @@ class FeedForwardNN():
             # If no x and y are specfied, use the loaded training set
             if x is None:
                 self.load_data()
-                x = self.x_train#[self.epoch:tot_epochs]
+                x = self.x_train  # [self.epoch:tot_epochs]
             if y is None:
-                y = self.y_train#[self.epoch:tot_epochs]
+                y = self.y_train  # [self.epoch:tot_epochs]
 
             # Create the network
             self.nn = self.create_nn()
@@ -771,9 +778,9 @@ class FeedForwardNN():
         else:
             # If no x and y are specfied, use the loaded training set
             if x is None:
-                x = self.x_train#[self.epoch:tot_epochs]
+                x = self.x_train  # [self.epoch:tot_epochs]
             if y is None:
-                y = self.y_train#[self.epoch:tot_epochs]
+                y = self.y_train  # [self.epoch:tot_epochs]
 
             # Get features and fit the network
             with threading.Lock():
@@ -789,12 +796,10 @@ class FeedForwardNN():
         else:
             if n_epochs != 1:
                 verbose = self.create_callbacks()
-                self.nn.fit(x_ft, y_ft, validation_split=self.val_split,
-                        epochs=tot_epochs, initial_epoch=self.epoch,
-                        callbacks=self.callbacks, batch_size=self.batch_size,
-                        verbose=verbose)
+                self.nn.fit(x_ft, y_ft, validation_split=self.val_split, epochs=tot_epochs, initial_epoch=self.epoch,
+                            callbacks=self.callbacks, batch_size=self.batch_size, verbose=verbose)
             else:
-                verbose = self.create_callbacks()
+                self.create_callbacks()
                 self.nn.train_on_batch(x_ft, y_ft)
 
         self.epoch = tot_epochs
@@ -806,85 +811,39 @@ class FeedForwardNN():
             self.evaluate(show)
             return self.test_loss, self.test_accuracy
         else:
-            if set(["val_loss", "val_acc"]) in set(self.history):
+            if {"val_loss", "val_acc"} in set(self.history):
                 return self.history['val_loss'][-1], \
                        self.history['val_acc'][-1]
             else:
                 return 1, 0
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
 
     if len(sys.argv) > 1:
 
         if sys.argv[1] == "process":
-            nn = FeedForwardNN(data_file=sys.argv[2])
+            nn = NN(data_file=sys.argv[2])
             nn.load_data()
 
         if sys.argv[1] == "test":
-            nn = FeedForwardNN()
+            nn = NN()
             nn.load(sys.argv[2])
             nn.evaluate(True)
 
         if sys.argv[1] == "continue":
-            nn = FeedForwardNN()
+            nn = NN()
             nn.load(sys.argv[2])
             nn.train(True)
 
         if sys.argv[1] == "fft":
-            nn = FeedForwardNN()
+            nn = NN()
             nn.load(sys.argv[2])
             nn.plot_fft()
 
         if sys.argv[1] == "train":
 
-            folder = "data/nn_learning/"+ utils.timestamp()
+            folder = "data/nn_learning/" + utils.timestamp()
             utils.mkdir(folder)
-            nn = FeedForwardNN(data_file=sys.argv[2], save_folder=folder)
+            nn = NN(data_file=sys.argv[2], save_folder=folder)
             nn.train(show=False)
-
-
-        if sys.argv[1] == "sim":
-            p = physics.HyQSim(view=True)
-            p.start()
-            p.register_node()
-            nn = FeedForwardNN()
-            nn.load(sys.argv[2])
-
-            while not ros.is_shutdown():
-                # Get last state
-                state = p.get_hyq_state()
-
-                # Predict next action
-                if state.shape[1] == 46:
-                    action = nn.predict(state)
-
-                    # Send action
-                    p.set_hyq_action(action)
-                    p.send_hyq_traj()
-
-            p.stop()
-
-        if sys.argv[1] == "train_esn_fb":
-
-            folder = "data/nn_learning/"+ utils.timestamp()
-            utils.mkdir(folder)
-            nn = FeedForwardNN(data_file=sys.argv[2], save_folder=folder,
-                               val_split=0, max_epochs=40000)
-            nn.load_data()
-            n_samples = nn.y_train.shape[0]
-            y_dim = nn.y_train.shape[1]
-            y = np.random.uniform(-1, 1, (1, y_dim))
-            y_plot = []
-
-            while nn.epoch < n_samples :
-
-                print("Iteration " + str(nn.epoch) + "/" + str(n_samples))
-                nn.train(show=False, n_epochs=1, x=y, evaluate=False)
-                #print y
-                y = nn.predict(y).reshape(1, y_dim)
-                #print y
-                y_plot.append(y[0])
-                if len(y_plot) % 8000 == 0:
-                    plt.plot(y_plot)
-                    plt.show()

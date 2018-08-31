@@ -182,6 +182,11 @@ def flatten(lst):
     return new_lst
 
 
+def identity(x):
+
+    return x
+
+
 def flatten_helper(lst, new_lst):
     for element in lst:
         if isinstance(element, list):
