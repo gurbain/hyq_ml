@@ -293,7 +293,7 @@ class IteListWin(QtWidgets.QGridLayout):
 
         if "data" in dir(item):
             self.win.sel_ite = item.data(QtCore.Qt.UserRole)
-        if self.win.last_action != None:
+        if self.win.last_action is not None:
             self.win.exp_butt_lay.dispatchAction(self.win.last_action)
 
 
@@ -604,7 +604,7 @@ def gui():
     win = AppWin(RESULT_FOLDER)
 
     # Dark style
-    app.setStyleSheet(qdarkstyle.load_stylesheet_pyqt5())
+    app.setStyleSheet(qdarkstyle.load_stylesheet())
 
     sys.exit(app.exec_())
 

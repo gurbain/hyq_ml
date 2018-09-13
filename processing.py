@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 # MATPLOTLIB STYLE
 plt.style.use('fivethirtyeight')
-plt.rc('lines', linewidth= 1)
+plt.rc('lines', linewidth=1)
 plt.rc('text', usetex=False)
 plt.rc('axes', facecolor='white')
 plt.rc('savefig', facecolor='white')
@@ -24,16 +24,25 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
         entirely hardcoded!
     """
 
-    def __init__(self, n_in):
+    def __init__(self):
 
-        self.n_in = n_in
+        self.n_in = 0
+        self.x_scaled = None
+        self.maxs = None
+        self.mins = None
+        self.names = None
 
-        if n_in == 1:
+    def _fill_mins_maxs(self):
+
+        mins = []
+        maxs = []
+
+        if self.n_in == 1:
             self.names = ["Forward Velocity"]
             mins = [0]
             maxs = [1]
 
-        if n_in > 1 and n_in > 46:
+        if self.n_in > 1 and self.n_in < 46:
 
             self.names = ["Roll Angle",
                           "Pitch Angle",
@@ -45,7 +54,7 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
             maxs = [math.radians(90), math.radians(90),
                     math.radians(90), math.radians(90), 1]
 
-            if n_in == 8 or n_in == 12:
+            if self.n_in == 8 or self.n_in == 12:
 
                 self.names[4] = ["X Vel"]
                 mins[4] = [-1.5]
@@ -56,7 +65,7 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
                 mins += [-1.5, math.radians(-90), 0]
                 maxs += [1.5, math.radians(90), 1]
 
-            if n_in == 9 or n_in == 12:
+            if self.n_in == 9 or self.n_in == 12:
 
                 self.names += ["LF Stance Status",
                                "RF Stance Status",
@@ -65,7 +74,7 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
                 mins += [-0.2, -0.2, -0.2, -0.2]
                 maxs += [1.2, 1.2, 1.2, 1.2]
 
-        if n_in == 46:
+        if self.n_in == 46:
             self.names = ["Roll Vel",
                           "Pitch Vel",
                           "Yaw Vel",
@@ -153,41 +162,39 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
         self.maxs = np.array(maxs)
         self.x_scaled = None
 
-    def _fit_transform(self, X):
+    def _fit_transform(self, x):
 
-        assert X.shape[1] == self.n_in, "Please init the HyQ Input " + \
-                                        "Scaler with the right number" + \
-                                        "of inputs"
+        self.n_in = x.shape[1]
+        self._fill_mins_maxs()
 
-        x_std = (X - self.mins) / (self.maxs - self.mins)
+        x_std = (x - self.mins) / (self.maxs - self.mins)
         self.x_scaled = x_std * 2 - np.ones(x_std.shape)
 
         return self
 
-    def fit(self, X, y=None):
+    def fit(self, x):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
         return self
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None, **kwargs):
 
-        self = self._fit_transform(X)
+        print
+        self = self._fit_transform(x)
         return self.x_scaled
 
-    def transform(self, X):
+    def transform(self, x):
 
-        assert X.shape[1] == self.n_in, "Please init the HyQ Input " + \
-                                        "Scaler with the right number" + \
-                                        "of inputs"
-
-        x_std = (X - self.mins) / (self.maxs - self.mins)
+        self.n_in = x.shape[1]
+        self._fill_mins_maxs()
+        x_std = (x - self.mins) / (self.maxs - self.mins)
         self.x_scaled = x_std * 2 - np.ones(x_std.shape)
 
         return self.x_scaled
 
-    def inverse_transform(self, X):
+    def inverse_transform(self, x):
 
-        x_std = (X + np.ones(X.shape)) / 2
+        x_std = (x + np.ones(x.shape)) / 2
         return x_std * (self.maxs - self.mins) + self.mins
 
 
@@ -249,34 +256,34 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
         self.maxs = np.array(maxs)
         self.x_scaled = None
 
-    def _fit_transform(self, X):
+    def _fit_transform(self, x):
 
-        x_std = (X - self.mins) / (self.maxs - self.mins)
+        x_std = (x - self.mins) / (self.maxs - self.mins)
         self.x_scaled = x_std * 2 - np.ones(x_std.shape)
 
         return self
 
-    def fit(self, X, y=None):
+    def fit(self, x):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
         return self
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None, **kwargs):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
 
         return self.x_scaled
 
-    def transform(self, X):
+    def transform(self, x):
 
-        x_std = (X - self.mins) / (self.maxs - self.mins)
+        x_std = (x - self.mins) / (self.maxs - self.mins)
         self.x_scaled = x_std * 2 - np.ones(x_std.shape)
 
         return self.x_scaled
 
-    def inverse_transform(self, X):
+    def inverse_transform(self, x):
 
-        x_std = (X + np.ones(X.shape)) / 2
+        x_std = (x + np.ones(x.shape)) / 2
         x_unscaled = x_std * (self.maxs - self.mins) + self.mins
 
         return x_unscaled
@@ -294,13 +301,13 @@ class TimeDelay(BaseEstimator, TransformerMixin):
 
         self.buff = None
 
-    def fit(self, X, y=None):
+    def fit(self):
 
         return self
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None, **kwargs):
 
-        y = self.transform(X)
+        y = self.transform(x)
         return y
 
     def create_buffer(self, dim):
@@ -316,10 +323,10 @@ class TimeDelay(BaseEstimator, TransformerMixin):
 
         return y
 
-    def transform(self, X):
+    def transform(self, x):
 
-        n = X.shape[0]
-        dim = X.shape[1]
+        n = x.shape[0]
+        dim = x.shape[1]
         y = np.zeros((n, dim * self.num))
 
         if not self.init:
@@ -327,12 +334,12 @@ class TimeDelay(BaseEstimator, TransformerMixin):
             self.init = True
 
         for i in range(n):
-            x = X[i, :]
+            x_row = x[i, :]
             if len(x.shape) == 1:
-                x = x.tolist()
+                x_row = x_row.tolist()
             else:
-                x = x.tolist()[0]
-            y[i, :] = self.transform_it(x)
+                x_row = x_row.tolist()[0]
+            y[i, :] = self.transform_it(x_row)
 
         return y
 
@@ -343,17 +350,17 @@ class FFT(BaseEstimator, TransformerMixin):
 
         self.freqs = np.fft.rfftfreq(n_samples, d=1.0/ts)
 
-    def fit(self, X, y=None):
+    def fit(self):
 
         return self
 
-    def transform(self, X):
-        nsamples, nfeatures = X.shape
+    def transform(self, x):
+        nsamples, nfeatures = x.shape
         nfreqs = len(self.freqs)
         """Given a list of original data, return a list of feature vectors."""
-        features1 = np.sin(2. * np.pi * self.freqs[None, None, :] * X[:, :,
+        features1 = np.sin(2. * np.pi * self.freqs[None, None, :] * x[:, :,
                            None]).reshape(nsamples, nfeatures * nfreqs)
-        features2 = np.cos(2. * np.pi * self.freqs[None, None, 1:] * X[:, :,
+        features2 = np.cos(2. * np.pi * self.freqs[None, None, 1:] * x[:, :,
                            None]).reshape(nsamples, nfeatures * (nfreqs-1))
         features = np.concatenate([features1, features2], axis=1)
         return features
@@ -366,7 +373,7 @@ class SeasonalDecomposition(BaseEstimator, TransformerMixin):
         self.f = int(1.0/ts)
         self.scaler = MinMaxScaler((-1, 1))
 
-    def fit(self, X, y=None):
+    def fit(self):
 
         return self
 
@@ -379,16 +386,16 @@ class SeasonalDecomposition(BaseEstimator, TransformerMixin):
         plt.plot(t[:, 0], label='Trend')
         plt.legend(loc='best')
         plt.subplot(413)
-        plt.plot(s[:, 0],label='Seasonality')
+        plt.plot(s[:, 0], label='Seasonality')
         plt.legend(loc='best')
         plt.subplot(414)
         plt.plot(r[:, 0], label='Residuals')
         plt.legend(loc='best')
         plt.show()
 
-    def transform(self, X):
+    def transform(self, x):
 
-        decomposition = seasonal_decompose(X, freq=self.f)
+        decomposition = seasonal_decompose(x, freq=self.f)
         t = decomposition.trend
         s = decomposition.seasonal
         r = decomposition.resid
@@ -398,9 +405,9 @@ class SeasonalDecomposition(BaseEstimator, TransformerMixin):
 
         return y
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None, **kwargs):
 
-        decomposition = seasonal_decompose(X, freq=self.f)
+        decomposition = seasonal_decompose(x, freq=self.f)
         t = decomposition.trend
         s = decomposition.seasonal
         r = decomposition.resid
@@ -416,27 +423,28 @@ class GaussianNoise(BaseEstimator, TransformerMixin):
     def __init__(self, stdev=0.1):
 
         self.stdev = stdev
+        self.y = None
 
-    def _fit_transform(self, X):
+    def _fit_transform(self, x):
 
-        noise = np.random.normal(0, self.stdev, X.shape)
-        self.y = X + noise
+        noise = np.random.normal(0, self.stdev, x.shape)
+        self.y = x + noise
         return self
 
-    def fit(self, X, y=None):
+    def fit(self, x):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
         return self
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None, **kwargs):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
         return self.y
 
-    def transform(self, X):
+    def transform(self, x):
 
-        # noise = np.random.normal(0, self.stdev, X.shape)
-        self.y = X  # + noise
+        # noise = np.random.normal(0, self.stdev, x.shape)
+        self.y = x  # + noise
         return self.y
 
 
@@ -449,26 +457,25 @@ class Oscillator(BaseEstimator, TransformerMixin):
         self.r = r
         self.i = int(self.r * self.t.shape[0])
 
-    def fit(X, y=None):
+    def fit(self):
 
         return self
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None, **kwargs):
 
-        y = np.sin(2 * np.pi * self.f * self.t[0:self.i]) - 0.5
+        y = 0.5 * np.sin(2 * np.pi * self.f * self.t[0:self.i])
+        
+        return np.hstack((x, y.reshape(-1, 1)))
 
-        return y.reshape(-1, 1)
+    def transform(self, x):
 
-    def transform(self, X):
-
-        n = X.shape[0]
-        y = np.sin(2 * np.pi * self.f * self.t[self.i:self.i+n]) - 0.5
-
+        n = x.shape[0]
+        y = 0.5 * np.sin(2 * np.pi * self.f * self.t[self.i:self.i+n])
         # plt.plot(self.t[self.i:self.i+n], y)
-        # plt.plot(self.t[self.i:self.i+n], X[:, 0])
+        # plt.plot(self.t[self.i:self.i+n], x[:, 0])
         # plt.show()
 
-        return y.reshape(-1,1)
+        return np.hstack((x, y.reshape(-1, 1)))
 
 
 if __name__ == "__main__":
@@ -495,7 +502,7 @@ if __name__ == "__main__":
             e.init = False
             y2 = e.transform(inputs)
             t_f = time.time()
-            print "First cells of Y iteratively: " + str(y[0:5, :])
-            print "First cells of Y in block: " + str(y2[0:5, :])
-            print "Running time: Iteratively: {0:.4f}".format(t_f1 - t_i) + \
-                  "s \tBlock: {0:.4f}".format(t_f - t_f1) + "s"
+            print("First cells of Y iteratively: " + str(y[0:5, :]))
+            print("First cells of Y in block: " + str(y2[0:5, :]))
+            print("Running time: Iteratively: {0:.4f}".format(t_f1 - t_i) + \
+                  "s \tBlock: {0:.4f}".format(t_f - t_f1) + "s")

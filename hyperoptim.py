@@ -41,9 +41,9 @@ def run_hyperoptim(space, folder):
     try:
         trials = pickle.load(open(folder + "/hyperopt.pkl", "rb"))
         curr_max = len(trials.trials) + trials_step
-        print("\n ===== Experiment "+ str(len(trials.trials)) + "/" +
+        print("\n ===== Experiment " + str(len(trials.trials)) + "/" +
               str(MAX_EVALS) + " ===== \n")
-    except:
+    except Exception:
         print("\n ===== Experiment 0/" + str(MAX_EVALS) + " ===== \n")
         trials = Trials()
 
@@ -56,7 +56,6 @@ def run_hyperoptim(space, folder):
           str(min([r["loss"] for r in trials.results]))
     print "Current best params: " + str(best)
 
-
     # save the trials object
     with open(folder + "/hyperopt.pkl", "wb") as f:
         pickle.dump(trials, f)
@@ -68,8 +67,8 @@ if __name__ == '__main__':
 
     # Create hyper parameter search space
     space = {
-        #"s_lsm": hp.quniform('lsm_sr', 0, 1000, 50),
-        #"lsm_sr": hp.uniform('lsm_sr', 0.1, 1.7),
+        # "s_lsm": hp.quniform('lsm_sr', 0, 1000, 50),
+        # "lsm_sr": hp.uniform('lsm_sr', 0.1, 1.7),
         "n_l": hp.quniform('n_l', 1, 4, 1),
         "s_l": hp.quniform('s_l', 200, 8000, 200),
         # "act": hp.choice('act', ['relu', 'tanh'])

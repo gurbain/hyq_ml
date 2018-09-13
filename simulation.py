@@ -18,18 +18,18 @@ import physics
 import network
 import utils
 
-
 graph = tf.get_default_graph()
+
 
 class Simulation(object):
 
     def __init__(self, nn_folder=None, sim_file=None, verbose=2, t_train=0,
-                 pub_actions=True, pub_states=True, t_sim=180, t_start_cl=15,
+                 pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15,
                  t_stop_cl=160, save_folder=None, ol=False, view=False,
                  pub_loss=True, epoch_num=100, plot=False, pub_error=True,
                  train_buff_size=6000):
 
-        self.t_sim  = t_sim
+        self.t_sim = t_sim
         self.t_train = t_train
         self.t_start_cl = t_start_cl
         self.t_stop_cl = t_stop_cl
@@ -41,7 +41,7 @@ class Simulation(object):
         self.verbose = verbose
         self.nn_folder = nn_folder
         self.publish_actions = pub_actions
-        self.publish_states = pub_states
+        self.publish_states = publish_states
         self.publish_loss = pub_loss
         self.publish_error = pub_error
         self.save_folder = save_folder
@@ -49,6 +49,14 @@ class Simulation(object):
         self.ol = ol
         self.epoch_num = epoch_num
         self.train_buff_size = train_buff_size
+        self.play_from_sim = False
+
+        # Class uninitialized objects
+        self.physics = None
+        self.network = None
+        self.target_fct = None
+        self.state_1_fct = None
+        self.state_2_fct = None
 
         # Execution variables
         self.t = 0
@@ -102,42 +110,42 @@ class Simulation(object):
         # If sim folder is specified create a NOT-trained network
         if self.sim_file is not None:
             self.play_from_sim = True
-            self.network = network.FeedForwardNN(
-                                       data_file=self.sim_file,
-                                       save_folder=self.save_folder,
-                                       batch_size=256,
-                                       val_split=0.01,
-                                       verbose=0)
+            self.network = network.NN(data_file=self.sim_file,
+                                      save_folder=self.save_folder,
+                                      batch_size=256,
+                                      val_split=0.01,
+                                      verbose=0)
             self.network.load_data(True)
 
         # Else, load the trained network
         elif self.nn_folder is not None:
             self.play_from_sim = False
-            self.network = network.FeedForwardNN(max_epochs=100000,
-                                                 checkpoint=False,
-                                                 verbose=0)
+            self.network = network.NN(max_epochs=100000,
+                                      checkpoint=False,
+                                      verbose=0)
             self.network.load(self.nn_folder, load_all=True)
 
         else:
             self.play_from_sim = False
-            self.network = network.FeedForwardNN(max_epochs=100000,
-                                                 checkpoint=False,
-                                                 verbose=0,
-                                                 save_folder=self.save_folder)
+            self.network = network.NN(max_epochs=100000,
+                                      checkpoint=False,
+                                      verbose=0,
+                                      save_folder=self.save_folder)
 
         # Retrieve interpolation functions for the target and del the rest
         if self.play_from_sim:
             self.target_fct = self.network.get_fct(self.network.y_t,
                                                    self.network.y_val)
             self.state_1_fct = self.network.get_fct(self.network.x_t,
-                                                   self.network.x_val)
+                                                    self.network.x_val)
             if self.network.x2_t.shape[0] is not 0:
                 self.state_2_fct = self.network.get_fct(self.network.x2_t,
                                                         self.network.x2_val)
 
             if max(self.network.y_t) - 1 < self.t_sim:
-                self.printv("\nThe nn data recorded file is too short. Lowering the simulation time from {:.2f}s to ".format(self.t_sim) + \
-                    "{:.2f}s".format(max(self.network.y_t) - 1))
+                self.printv("\nThe nn data recorded file is too short. "
+                            "Lowering the simulation time from {:.2f}s".format(self.t_sim) +
+                            " to {:.2f}s".format(max(self.network.y_t) - 1))
                 self.t_sim = max(self.network.y_t) - 1
             del self.network.y_t, self.network.y_val, \
                 self.network.x_t, self.network.x_val, \
@@ -146,11 +154,11 @@ class Simulation(object):
         # Create the ROS topics to debug simulation
         if self.publish_states:
             self.pub_curr_state = ros.Publisher(self.curr_state_pub_name,
-                                           Float64MultiArray,
-                                           queue_size=1)
+                                                Float64MultiArray,
+                                                queue_size=1)
             self.pub_rec_state = ros.Publisher(self.rec_state_pub_name,
-                                           Float64MultiArray,
-                                           queue_size=1)
+                                               Float64MultiArray,
+                                               queue_size=1)
         if self.publish_actions:
             self.pub_pred = ros.Publisher(self.pred_pub_name,
                                           Float64MultiArray,
@@ -163,8 +171,8 @@ class Simulation(object):
                                          queue_size=1)
         if self.publish_loss:
             self.pub_loss = ros.Publisher(self.loss_pub_name,
-                                         Float64,
-                                         queue_size=1)
+                                          Float64,
+                                          queue_size=1)
             self.pub_acc = ros.Publisher(self.acc_pub_name,
                                          Float64,
                                          queue_size=1)
@@ -187,7 +195,7 @@ class Simulation(object):
                 #     predicted = []
                 # else:
                 predicted = self.network.predict(np.mat(state)).tolist()
-                #self.state.popleft()
+                # self.state.popleft()
             else:
                 predicted = []
 
@@ -215,27 +223,21 @@ class Simulation(object):
 
     def _training_thread(self, x, y):
 
-
         with graph.as_default():
-            self.loss, self.accuracy = self.network.train(x, y,
-                            show=False, n_epochs=self.epoch_num,
-                            evaluate=False)
+            self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num, evaluate=False)
 
         if self.verbose > 1:
-                print " [Training] Finished with Loss: " + \
-                      "{:.5f}".format(self.loss)
+                print " [Training] Finished with Loss: {:.5f}".format(self.loss)
 
     def train_step(self):
 
         # Get state and target action
         curr_state, rec_state = self.get_states()
-        pred_action, tgt_action = self.get_actions(curr_state,
-                        pred=(self.train_it > 0))
+        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
 
-        ## TRAINING
-
+        # TRAINING
         # Always continue filling the buffer
-        if len(curr_state) != 0 and len(tgt_action) !=0:
+        if len(curr_state) != 0 and len(tgt_action) != 0:
             self.x_train_step.append(curr_state)
             self.y_train_step.append(tgt_action)
 
@@ -265,8 +267,7 @@ class Simulation(object):
                     self.y_train_step = []
                     self.train_it += 1
 
-        ## EXECUTION
-
+        # EXECUTION
         # Define the weight between NN prediction and RCF Controller
         mix_action = tgt_action
         self.nn_weight = 0
@@ -285,10 +286,8 @@ class Simulation(object):
 
         # Send the NN prediction to the RCF controller
         if len(pred_action) == 24:
-            self.physics.send_hyq_nn_pred(pred_action,
-                                          self.nn_weight,
-                                          np.array(tgt_action) - \
-                                          np.array(pred_action))
+            self.physics.send_hyq_nn_pred(pred_action, self.nn_weight,
+                                          np.array(tgt_action) - np.array(pred_action))
 
         # Publish data on ROS topic to debug
         self._publish_states(curr_state, rec_state)
@@ -304,8 +303,7 @@ class Simulation(object):
 
         # Get state and target action
         curr_state, rec_state = self.get_states()
-        pred_action, tgt_action = self.get_actions(curr_state,
-                        pred=(self.train_it > 0))
+        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
 
         # Define the weight between NN prediction and RCF Controller
         mix_action = tgt_action
@@ -320,7 +318,7 @@ class Simulation(object):
         if len(pred_action) == 24:
             self.physics.send_hyq_nn_pred(pred_action,
                                           self.nn_weight,
-                                          np.array(tgt_action) - \
+                                          np.array(tgt_action) -
                                           np.array(pred_action))
 
         # Publish data on ROS topic to debug
@@ -346,7 +344,7 @@ class Simulation(object):
 
             self.t = self.physics.get_sim_time()
 
-            if  self.t > 1:
+            if self.t > 1:
 
                 # Plot the curves if necessary
                 if self.train_it == 1:
@@ -354,7 +352,7 @@ class Simulation(object):
                         self._start_plotter()
 
                 # Start trotting when everythin initialized
-                if trot_flag == False:
+                if trot_flag is False:
                     self.physics.start_rcf_trot()
                     trot_flag = True
 
@@ -368,17 +366,17 @@ class Simulation(object):
                 if self.t < self.t_train:
                     self.train_step()
                 else:
-                   self.step()
+                    self.step()
 
                 # Display simulation progress
                 if self.it % 1000 == 0 and self.verbose > 1:
                     tp = (self.t - last_t)
-                    if tp !=0 :
+                    if tp != 0:
                         f = (self.it - last_it) / tp
-                        print(" [Execution] Iteration: " + str(self.it) + \
-                             "\tSim Time: " + "{:.2f}".format(self.t) +" s"+\
-                             "\tNN Freq: " + "{:.2f}".format(f) + " Hz" +
-                             "\tNN Weight: "+"{:.2f}".format(self.nn_weight))
+                        print(" [Execution] Iteration: " + str(self.it) +
+                              "\tSim Time: " + "{:.2f}".format(self.t) + " s" +
+                              "\tNN Freq: " + "{:.2f}".format(f) + " Hz" +
+                              "\tNN Weight: "+"{:.2f}".format(self.nn_weight))
                         last_it = self.it
                         last_t = self.t
 
@@ -391,10 +389,8 @@ class Simulation(object):
         # Save new simulation in OL
         if self.save_folder is not None:
             with open(self.save_folder + "/state_action.pkl", "wb") as f:
-                pickle.dump([np.mat(self.state_history),
-                             np.mat(self.action_history),
-                             np.array(self.t_hist)],
-                             f, protocol=2)
+                pickle.dump([np.mat(self.state_history), np.mat(self.action_history), np.array(self.t_hist)],
+                            f, protocol=2)
             if self.sim_file is not None and not self.ol:
                 self.network.save()
 
@@ -411,7 +407,7 @@ class Simulation(object):
                 return
 
         # Create plotjuggler process
-        proc ="rosrun plotjuggler PlotJuggler -n --buffer_size 9 -l plot.xml "
+        proc = "rosrun plotjuggler PlotJuggler -n --buffer_size 9 -l plot.xml"
 
         self.printv("\n ===== Starting PlotJuggler =====\n")
 
@@ -469,25 +465,21 @@ class CPGSimulation(Simulation):
 
     def __init__(self):
 
-        super(CPGSimulation, self).__init__(nn_folder=None, view=True,
-                                            ol=True, pub_actions=True,
-                                            pub_states=True)
-        self.cpg_config = {"params":
-            [
-                {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                 'phase_offset': 0, 'o': 0, 'r': 1,
-                 'coupling': [0, -1, -1, 1]},
-                {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                 'phase_offset': 1, 'o': 0, 'r': 1,
-                 'coupling': [-1, 0, 1, -1]},
-                {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                 'phase_offset': 3, 'o': 0, 'r': 1,
-                 'coupling': [-1, 1, 0, -1]},
-                {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                 'phase_offset': 0, 'o': 0, 'r': 1,
-                 'coupling': [1, -1, -1, 0]},
-            ],
-                        "integ_time": 0.001}
+        super(CPGSimulation, self).__init__(nn_folder=None, view=True, ol=True, pub_actions=True)
+        self.cpg_config = {"params": [{'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
+                                       'phase_offset': 0, 'o': 0, 'r': 1,
+                                       'coupling': [0, -1, -1, 1]},
+                                      {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
+                                       'phase_offset': 1, 'o': 0, 'r': 1,
+                                       'coupling': [-1, 0, 1, -1]},
+                                      {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
+                                       'phase_offset': 3, 'o': 0, 'r': 1,
+                                       'coupling': [-1, 1, 0, -1]},
+                                      {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
+                                       'phase_offset': 0, 'o': 0, 'r': 1,
+                                       'coupling': [1, -1, -1, 0]}],
+                           "integ_time": 0.001}
+        self.cpg = None
 
     def start(self):
 
@@ -500,10 +492,6 @@ class CPGSimulation(Simulation):
         self.cpg = control.CPG(self.cpg_config)
 
         # Create the ROS topics to debug simulation
-        if self.publish_states:
-            self.pub_state = ros.Publisher(self.state_pub_name,
-                                           Float64MultiArray,
-                                           queue_size=50)
         if self.publish_actions:
             self.pub_pred = ros.Publisher(self.pred_pub_name,
                                           Float64MultiArray,
@@ -548,7 +536,7 @@ class CPGSimulation(Simulation):
             self.physics.send_hyq_traj()
 
             # Publish data on ROS topic to debug
-            self._publish_states(state)
+            self._publish_states(state, state)
             self._publish_actions(predicted, target, action)
 
             # Save states and actions
@@ -565,8 +553,7 @@ if __name__ == '__main__':
             folder = "data/nn_sim_learning/" + utils.timestamp()
             utils.mkdir(folder)
             s = Simulation(sim_file=sys.argv[2], view=True, ol=True,
-                           pub_actions=True, pub_states=True,
-                           save_folder=folder)
+                           pub_actions=True, save_folder=folder)
             s.run()
 
         if sys.argv[1] == "cl":

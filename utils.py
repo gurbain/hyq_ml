@@ -1,6 +1,9 @@
 from contextlib import contextmanager
 import copy
-from cStringIO import StringIO
+try:
+    from cStringIO import StringIO
+except ImportError:
+    from io import StringIO
 import keras
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,8 +14,9 @@ from sklearn.pipeline import FeatureUnion
 import signal
 import sys
 import tempfile
+from tensorflow.python.client import device_lib
 import time
-from tqdm import tqdm_notebook
+from tqdm import tqdm_notebook, tqdm
 import warnings
 
 
@@ -68,7 +72,6 @@ def cartesian(arrays, out=None):
         for j in xrange(1, arrays[0].size):
             out[j*m:(j+1)*m,1:] = out[0:m,1:]
     return out
-
 
 def timestamp():
     """ Return a string stamp with current date and time """
@@ -227,10 +230,6 @@ class NetworkSave(keras.callbacks.Callback):
         self.period = period
         self.epochs_since_last_save = 0
 
-        if self.verbose == -1:
-            self.t = tqdm_notebook(total=self.max_epochs)
-
-
         if mode not in ['auto', 'min', 'max']:
             warnings.warn('ModelCheckpoint mode %s is unknown, '
                           'fallback to auto mode.' % (mode),
@@ -253,10 +252,18 @@ class NetworkSave(keras.callbacks.Callback):
 
     def to_save(self):
 
+        # Get ESN data
+        to_save2 = {}
+        if 'esn' in self.class_to_save.keys():
+            to_save2 = copy.copy(self.class_to_save['esn'].__dict__)
+            del to_save2["keras_model"]
+
         # Save training data
         to_save = copy.copy(self.class_to_save)
-        if 'nn' in to_save.keys():
-            del to_save["nn"]
+        if 'esn' in to_save.keys():
+            del to_save["esn"]
+        if 'readout' in to_save.keys():
+            del to_save["readout"]
         if 'callbacks' in to_save.keys():
             new_cb = []
             for i, c in enumerate(to_save["callbacks"]):
@@ -272,17 +279,12 @@ class NetworkSave(keras.callbacks.Callback):
             del to_save["x_train"], to_save["y_train"]
             del to_save["x_test"], to_save["y_test"]
 
-        return to_save
+        return to_save, to_save2
 
     def on_epoch_end(self, epoch, logs=None):
 
         # Forbid to kill during the saving
         s = signal.signal(signal.SIGINT, signal.SIG_IGN)
-
-        # If verbose mode is bar progress (-1), update it
-        if self.verbose == -1:
-            self.t.set_postfix(best_val_loss="{:.4f}".format(self.best))
-            self.t.update()
 
         logs = logs or {}
         self.epochs_since_last_save += 1
@@ -303,12 +305,15 @@ class NetworkSave(keras.callbacks.Callback):
                         self.best = current
                         self.class_to_save["epoch"] = epoch + 1
                         self.class_to_save["history"] = history
-                        with open(self.folder + "/network_" + \
-                                  str(self.index) + ".pkl", "wb") as f:
-                            pickle.dump(self.to_save(), f, protocol=2)
 
-                        self.model.save(self.folder + "/model_" + \
-                                        str(self.index)+ ".h5")
+                        nn, esn = self.to_save()
+                        with open(self.folder + "/esn_" + str(self.index) + ".pkl", "wb") as f:
+                            pickle.dump(esn, f, protocol=2)
+                        with open(self.folder + "/nn_" + str(self.index) + ".pkl", "wb") as f:
+                            pickle.dump(nn, f, protocol=2)
+                        self.model.save(self.folder + "/readout_" + str(self.index)+ ".h5")
+                        del nn, esn
+
                     else:
                         if self.verbose > 0:
                             print('\nEpoch %03d: %s did not improve from %0.5f' % (epoch + 1, self.monitor, self.best))
@@ -320,12 +325,13 @@ class NetworkSave(keras.callbacks.Callback):
                 self.class_to_save["epoch"] = epoch + 1
                 self.class_to_save["history"] = history
 
-                with open(self.folder + "/network_" + \
-                          str(self.index) + ".pkl", "wb") as f:
-                    pickle.dump(self.to_save(), f, protocol=2)
-
-                self.model.save(self.folder + "/model_" + \
-                                str(self.index)+ ".h5")
+                nn, esn = self.to_save()
+                with open(self.folder + "/esn_" + str(self.index) + ".pkl", "wb") as f:
+                    pickle.dump(esn, f, protocol=2)
+                with open(self.folder + "/nn_" + str(self.index) + ".pkl", "wb") as f:
+                    pickle.dump(nn, f, protocol=2)
+                self.model.save(self.folder + "/readout_" + str(self.index) + ".h5")
+                del nn, esn
 
         # Know we can interupt again
         signal.signal(signal.SIGINT, s)
@@ -333,54 +339,80 @@ class NetworkSave(keras.callbacks.Callback):
 
 class PlotJupyter(keras.callbacks.Callback):
 
-    def __init__(self, x, y, network):
+    def __init__(self, x, y, network=None, plot=False, max_epochs=100, verbose=-1):
 
         self.x = x
         self.y_tgt = y
         self.nn = network
+        self.plot = plot
+        self.max_epochs = max_epochs
+        self.verbose = verbose
+        if self.verbose == -1 or self.verbose == -2:
+            self.t = tqdm_notebook(total=self.max_epochs)
+        else:
+            self.t = tqdm(total=self.max_epochs)
+
+        self.i = 0
+        self.it = None
+        self.losses = None
+        self.val_losses = None
+        self.y_pred = None
+        self.fig = None
+        self.ax1 = None
+        self.ax2 = None
 
     def on_train_begin(self, logs={}):
+
         self.i = 0
         self.it = []
         self.losses = []
         self.val_losses = []
         self.y_pred = np.zeros(self.y_tgt.shape)
 
-        self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(12, 5), dpi=50)
-        plt.plot()
+        #self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(12, 5), dpi=50)
 
     def on_epoch_end(self, epoch, logs={}):
 
+        if self.verbose > -3:
+            self.t.set_postfix(best_val_loss="{:.4f}".format(logs.get("val_loss")))
+
+        self.t.update()
         self.it.append(self.i)
         self.losses.append(logs.get('loss'))
         self.val_losses.append(logs.get('val_loss'))
         self.i += 1
 
-        self.ax1.clear()
-        self.ax1.plot(self.it, self.losses, label='Training')
-        self.ax1.plot(self.it, self.val_losses, label='Validation')
-        self.ax1.set_ylabel('Loss [MAE]')
-        self.ax1.set_xlabel('Epoch [#]')
-        self.ax1.legend(loc="upper right")
-
-        if epoch%5 == 0:
+        if self.plot:
 
             if epoch == 0:
-                self.y_pred = self.nn.predict(self.x)
-            else:
-                x_ft = self.nn.predict_in_pipe.transform(self.x)
-                x_ft = np.expand_dims(x_ft, axis=2)
-                y_ft = self.model.predict_on_batch(x_ft)
-                self.y_pred = self.nn.predict_out_pipe.inverse_transform(y_ft)
+                if self.verbose == -3:
+                    plt.ion()
+                    self.fig = plt.figure(figsize=(12, 5), dpi=100)
+                else:
+                    self.fig = plt.figure(figsize=(12, 5), dpi=50)
+                self.ax1 = self.fig.add_subplot(121)
+                self.ax2 = self.fig.add_subplot(122)
+                plt.show()
 
-            self.ax2.clear()
-            self.ax2.plot(self.y_pred[:, 0], label='Test Prediction')
-            self.ax2.plot(self.y_tgt[:, 0], label='Test Target')
-            self.ax2.set_ylabel('HAA Position [rad]')
-            self.ax2.set_xlabel('Time [s]')
-            self.ax2.legend(loc="upper center")
+            if epoch % 5 == 0:
 
-        self.fig.canvas.draw()
+                new_esn = copy.copy(self.nn.esn)
+                new_esn.keras_model = self.model
 
+                self.y_pred = new_esn.predict(self.x)
+                self.ax2.clear()
+                self.ax2.plot(self.y_pred[:, 1], label='Test Prediction')
+                self.ax2.plot(self.y_tgt[:, 1], label='Test Target')
+                self.ax2.set_ylabel('HAA Position [rad]')
+                self.ax2.set_xlabel('Time [s]')
+                self.ax2.legend(loc="upper center")
 
+                self.ax1.clear()
+                self.ax1.plot(self.it, self.losses, label='Training')
+                self.ax1.plot(self.it, self.val_losses, label='Validation')
+                self.ax1.set_ylabel('Loss [MAE]')
+                self.ax1.set_xlabel('Epoch [#]')
+                self.ax1.legend(loc="upper right")
 
+                plt.pause(0.001)
+                plt.show()

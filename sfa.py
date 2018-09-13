@@ -121,13 +121,13 @@ class ESNSFA(BaseEstimator, TransformerMixin):
 
         return
 
-    def _fit_transform(self, X):
+    def _fit_transform(self, x):
 
-        y = np.zeros((X.shape[0], int(self.n_out_single)))
+        y = np.zeros((x.shape[0], int(self.n_out_single)))
 
         # Next ones are with ESN
         for i in range(self.n_res):
-            x = self.esn[i].fit_transform(X)
+            x = self.esn[i].fit_transform(x, )
             self.sfa[i].set_input(x)
             y_c = self.sfa[i].compute
             # print "Filling SFA from: " + str(i*self.n_readout) + \
@@ -139,23 +139,23 @@ class ESNSFA(BaseEstimator, TransformerMixin):
         self.y = y
         return self
 
-    def fit(self, X, y=None):
+    def fit(self, x):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
         return self
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, x, y=None):
 
-        self = self._fit_transform(X)
+        self = self._fit_transform(x)
         return self.y
 
-    def transform(self, X):
+    def transform(self, x):
 
-        y = np.zeros((X.shape[0], int(self.n_out_single)))
+        y = np.zeros((x.shape[0], int(self.n_out_single)))
 
         # Next ones are with ESN
         for i in range(self.n_res):
-            x = self.esn[i].transform(X)
+            x = self.esn[i].transform(x)
             self.sfa[i].set_input(x)
             y_c = self.sfa[i].compute
             # print "Filling SFA from: " + str(i*self.n_readout) + \
@@ -338,7 +338,7 @@ class TestESNSFA(object):
 
         if p_type == "train":
             x = self.x_train
-            x_esnsfa = self.esnsfa.fit_transform(x)
+            x_esnsfa = self.esnsfa.fit_transform(x, )
             y = self.y_train
         else:
             x = self.x_test
