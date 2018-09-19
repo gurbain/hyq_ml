@@ -57,8 +57,8 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
             if self.n_in == 8 or self.n_in == 12:
 
                 self.names[4] = ["X Vel"]
-                mins[4] = [-1.5]
-                maxs[4] = [1.5]
+                mins[4] = -1.5
+                maxs[4] = 1.5
                 self.names += ["Y Vel",
                                "Yaw Vel",
                                "Forward Velocity"]
@@ -284,7 +284,9 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
     def inverse_transform(self, x):
 
         x_std = (x + np.ones(x.shape)) / 2
-        x_unscaled = x_std * (self.maxs - self.mins) + self.mins
+        n_sample = x.shape[0]
+        x_unscaled = x_std * (self.maxs.reshape(-1, n_sample) - self.mins.reshape(-1, n_sample)) + \
+                     self.mins.reshape(-1, n_sample)
 
         return x_unscaled
 
@@ -450,7 +452,7 @@ class GaussianNoise(BaseEstimator, TransformerMixin):
 
 class Oscillator(BaseEstimator, TransformerMixin):
 
-    def __init__(self, t, r, f=1.692):
+    def __init__(self, t, r, f=1.6915):
 
         self.f = f
         self.t = t

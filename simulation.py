@@ -27,7 +27,7 @@ class Simulation(object):
                  pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15,
                  t_stop_cl=160, save_folder=None, ol=False, view=False,
                  pub_loss=True, epoch_num=100, plot=False, pub_error=True,
-                 train_buff_size=6000):
+                 train_buff_size=6000, real_physics=False):
 
         self.t_sim = t_sim
         self.t_train = t_train
@@ -49,7 +49,8 @@ class Simulation(object):
         self.ol = ol
         self.epoch_num = epoch_num
         self.train_buff_size = train_buff_size
-        self.play_from_sim = False
+        self.real_physics = real_physics
+        self.play_from_file = False
 
         # Class uninitialized objects
         self.physics = None
@@ -98,18 +99,20 @@ class Simulation(object):
 
     def start(self):
 
-        # Create history arrays
-
         # Create and start the handle thread to the physics simulation
         self.physics = physics.HyQSim(view=self.view,
+                                      remote=self.real_physics,
                                       verbose=self.verbose,
+                                      kadj=True,
+                                      prec=False,
+                                      adapt=False,
                                       publish_error=self.publish_error)
         self.physics.start()
         self.physics.register_node()
 
-        # If sim folder is specified create a NOT-trained network
+        # If sim folder is specified create a untrained network and use IN/OUTS from the file
         if self.sim_file is not None:
-            self.play_from_sim = True
+            self.play_from_file = True
             self.network = network.NN(data_file=self.sim_file,
                                       save_folder=self.save_folder,
                                       batch_size=256,
@@ -119,21 +122,25 @@ class Simulation(object):
 
         # Else, load the trained network
         elif self.nn_folder is not None:
-            self.play_from_sim = False
+            self.play_from_file = False
             self.network = network.NN(max_epochs=100000,
                                       checkpoint=False,
+                                      esn_in_mask=[True, False, False, False, False],
+                                      esn_out_mask=[True] * 24,
                                       verbose=0)
             self.network.load(self.nn_folder, load_all=True)
 
         else:
-            self.play_from_sim = False
+            self.play_from_file = False
             self.network = network.NN(max_epochs=100000,
                                       checkpoint=False,
+                                      esn_in_mask=[True, False, False, False, False],
+                                      esn_out_mask=[True] * 24,
                                       verbose=0,
                                       save_folder=self.save_folder)
 
         # Retrieve interpolation functions for the target and del the rest
-        if self.play_from_sim:
+        if self.play_from_file:
             self.target_fct = self.network.get_fct(self.network.y_t,
                                                    self.network.y_val)
             self.state_1_fct = self.network.get_fct(self.network.x_t,
@@ -180,16 +187,15 @@ class Simulation(object):
     def get_actions(self, state, pred=True):
 
         # Load target action
-        if self.play_from_sim:
+        if self.play_from_file:
             target = self.network.interpolate(self.target_fct, self.t).tolist()[0]
         else:
             target = self.physics.get_hyq_action().tolist()[0]
 
         # If we need the prediction
         if pred:
-
             # Predict network action
-            if len(state) == 46:
+            if len(state) == 5:
                 # self.state.append(state)
                 # if len(self.state) < 10:
                 #     predicted = []
@@ -208,7 +214,7 @@ class Simulation(object):
 
         curr_state = self.physics.get_hyq_state().tolist()[0]
 
-        if self.play_from_sim:
+        if self.play_from_file:
             rec_state_1 = self.network.interpolate(self.state_1_fct, self.t)
 
             if hasattr(self, 'state_2_fct'):
@@ -243,7 +249,6 @@ class Simulation(object):
 
         # When no training yet done
         if self.training_thread is None:
-
             # When buffer is full, train
             if len(self.x_train_step) == self.train_buff_size:
                 x = np.mat(self.x_train_step)
@@ -351,15 +356,15 @@ class Simulation(object):
                     if self.plot:
                         self._start_plotter()
 
-                # Start trotting when everythin initialized
-                if trot_flag is False:
+                # Start trotting when everything initialized
+                if not self.real_physics and not trot_flag:
                     self.physics.start_rcf_trot()
                     trot_flag = True
 
                 self.t_hist.append(self.t)
 
                 # Apply noise on the robot
-                if trot_flag:
+                if not self.real_physics and trot_flag:
                     self.physics.apply_noise()
 
                 # Choose between execution step or execution+training step
@@ -574,4 +579,12 @@ if __name__ == '__main__':
 
         if sys.argv[1] == "cpg":
             s = CPGSimulation()
+            s.run()
+
+        if sys.argv[1] == "hyq":
+            folder = "data/nn_sim_learning/" + utils.timestamp()
+            utils.mkdir(folder)
+            s = Simulation(save_folder=folder, view=False, plot=True,
+                           t_sim=10000, t_train=10000, t_start_cl=40,
+                           t_stop_cl=800, real_physics=True)
             s.run()

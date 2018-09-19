@@ -30,11 +30,12 @@ sys.stderr = stderr
 
 class HyQSim(threading.Thread):
 
-    def __init__(self, view=False, kadj=False, prec=False, adapt=False, verbose=2, publish_error=False):
+    def __init__(self, view=False, kadj=False, prec=False, adapt=False, remote=False, verbose=2, publish_error=False):
 
         threading.Thread.__init__(self)
 
         # Process information
+        self.remote = remote
         self.sim_ps = None
         self.sim_ps_name = "roslaunch"
         self.sim_package = "dls_supervisor"
@@ -111,14 +112,19 @@ class HyQSim(threading.Thread):
         self.verbose = verbose
         self.daemon = True
 
-    def run(self):
+    def run(self, remote=False):
 
         try:
-            # Start the roslaunch file
-            self.start_sim()
+            # If the physics should not on this computer, just do not do anything
+            if self.remote:
+                self.printv("\n ===== Physics should run on remote computer =====\n")
 
-            # Wait and start the controller
-            self.start_controller()
+            # Else, start the simulator process
+            else:
+                self.start_sim()
+
+                # Wait and start the controller
+                self.start_controller()
 
             # Get ROS services
             self.reset_sim_proxy = ros.ServiceProxy(self.reset_sim_service, Empty)
@@ -214,15 +220,15 @@ class HyQSim(threading.Thread):
 
     def stop_sim(self):
 
-        self.printv("\n\n ===== Stopping Physics =====\n")
+        if not self.remote:
+            self.printv("\n\n ===== Stopping Physics =====\n")
+            self.sim_ps.sendcontrol('c')
 
-        self.sim_ps.sendcontrol('c')
-
-        # Kill all other ros processes
-        for proc in psutil.process_iter():
-            name = " ".join(proc.cmdline())
-            if self.sim_to_kill in name and self.sim_not_kill not in name:
-                proc.kill()
+            # Kill all other ros processes
+            for proc in psutil.process_iter():
+                name = " ".join(proc.cmdline())
+                if self.sim_to_kill in name and self.sim_not_kill not in name:
+                    proc.kill()
 
     def register_node(self):
 
@@ -342,13 +348,13 @@ class HyQSim(threading.Thread):
 
         self.process_state_flag.acquire()
         try:
-            inputs = self.hyq_state["vel"]
+            inputs = []
             if self.kadj:
                 inputs += self.hyq_state["kadj"]
             if self.prec:
                 inputs += self.hyq_state["prec"]
+            inputs += self.hyq_state["vel"]
             if self.adapt:
-                print self.hyq_state["adapt"]
                 inputs += self.hyq_state["adapt"]
         finally:
             self.process_state_flag.release()
@@ -389,6 +395,7 @@ class HyQSim(threading.Thread):
         joints.effort = [0.0] * 12
 
         # Publish
+        print prediction, joints
         self.pub_nn.publish(joints)
         self.pub_nn_w.publish(Float32(weight))
 
@@ -472,18 +479,19 @@ class HyQSim(threading.Thread):
 
         self.hyq_wbs = copy.deepcopy(msg)
 
+        kadj = [msg.base[0].position]
+        kadj += [msg.base[1].position]
+        kadj += [msg.base[0].velocity]
+        kadj += [msg.base[1].velocity]
+
+        prec = [msg.base[2].velocity]
+        prec += [msg.base[3].velocity]
+        prec += [msg.base[4].velocity]
+
         self.process_state_flag.acquire()
         try:
-            print [msg.base[0].position]
-            self.hyq_state["kadj"] = [msg.base[0].position]
-            self.hyq_state["kadj"] += [msg.base[1].position]
-            self.hyq_state["kadj"] += [msg.base[0].velocity]
-            self.hyq_state["kadj"] += [msg.base[1].velocity]
-
-            self.hyq_state["prec"] = [msg.base[2].velocity]
-            self.hyq_state["prec"] += [msg.base[3].velocity]
-            self.hyq_state["prec"] += [msg.base[4].velocity]
-
+            self.hyq_state["kadj"] = kadj
+            self.hyq_state["prec"] = prec
         finally:
             self.process_state_flag.release()
 
@@ -504,7 +512,7 @@ class HyQSim(threading.Thread):
     def _reg_hyq_debug(self, msg):
 
         stance = []
-        vel = 0
+        vel = []
         st = 0
         for i in range(len(msg.name)):
             if msg.name[i] in ["forwVel"]:

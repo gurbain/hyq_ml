@@ -65,9 +65,9 @@ class NN(object):
     # ALGORITHM METAPARAMETERS #
 
     def __init__(self, nn_layers=nn, test_split=0.7, val_split=0.1, stop_delta=0.0001, stop_pat=150,
-                 optim='adam', metric='mae', batch_size=2048, max_epochs=150, regularization=0.001,
-                 esn_n_res=150, esn_n_read=150, esn_in_mask=None, esn_out_mask=None,
-                 esn_spec_rad=0.98, esn_damping=0.1, esn_sparsity=0.05, esn_noise=0.0,
+                 optim='adam', metric='mae', batch_size=2048, max_epochs=150, regularization=0.0,
+                 esn_n_res=100, esn_n_read=80, esn_in_mask=None, esn_out_mask=None, esn_real_fb=False,
+                 esn_spec_rad=0.3, esn_damping=0.1, esn_sparsity=0.4, esn_noise=0.001,
                  data_file="data/sims/tc.pkl", save_folder="data/nn_learning/", checkpoint=False,
                  verbose=2, random_state=12):
 
@@ -82,6 +82,7 @@ class NN(object):
         self.val_split = val_split
         self.network_layers = nn_layers
         self.esn_n_read = esn_n_read
+        self.esn_real_fb = esn_real_fb
         self.stop_delta = stop_delta
         self.stop_pat = stop_pat
         self.verbose = verbose
@@ -471,22 +472,27 @@ class NN(object):
         self.create_callbacks()
 
         # Create the Keras model
-        if self.max_epochs != 0:
-            self.readout = KerasRegressor(build_fn=self.create_readout_fn,
-                                          validation_split=self.val_split,
-                                          batch_size=self.batch_size,
-                                          epochs=self.max_epochs,
-                                          callbacks=self.callbacks,
-                                          verbose=max(self.verbose, 0))
+        if self.esn_real_fb:
+            # We are not using the fit function, only train_on_batch
+            self.readout = self.create_readout_fn()
         else:
-            self.readout = None
+            if self.max_epochs != 0:
+                self.readout = KerasRegressor(build_fn=self.create_readout_fn,
+                                              validation_split=self.val_split,
+                                              batch_size=self.batch_size,
+                                              epochs=self.max_epochs,
+                                              callbacks=self.callbacks,
+                                              verbose=max(self.verbose, 0))
+
+            else:
+                self.readout = None
 
         # Create a random reservoir with bias
         self.esn = esn.FeedbackESN(n_inputs=self.n_in, n_outputs=self.n_out, n_read=self.esn_n_read,
                                    in_esn_mask=self.esn_in_mask, out_esn_mask=self.esn_out_mask,
                                    n_reservoir=self.esn_n_res, spectral_radius=self.esn_spec_rad,
                                    damping=self.esn_damping, sparsity=self.esn_sparsity, noise=self.esn_noise,
-                                   fb_scaling=1, fb_shift=0, keras_model=self.readout,
+                                   fb_scaling=1, fb_shift=0, keras_model=self.readout, real_fb=self.esn_real_fb,
                                    random_state=self.random_state, verbose=self.verbose)
 
         return self.esn
@@ -728,7 +734,7 @@ class NN(object):
             self.plot_hist()
         if plot_test:
             t = self.t[0:win]
-            self.plot_pred(t, y_pred[:win, 1], y_truth[:win, 1], plot_relation=plot_relation)
+            self.plot_pred(t, y_pred[:win, 0:2], y_truth[:win, 0:2], plot_relation=plot_relation)
 
         return y_truth, y_pred, score
 
@@ -755,9 +761,9 @@ class NN(object):
 
         # Create ESN masks
         if self.esn_in_mask is None:
-            self.esn_in_mask = [True for _ in range(self.n_in)]
+            self.esn_in_mask = [False for _ in range(self.n_in)]
         if self.esn_out_mask is None:
-            self.esn_out_mask = [False for _ in range(self.n_out)]
+            self.esn_out_mask = [True for _ in range(self.n_out)]
 
         return self.x_ft, self.y_ft
 
@@ -794,7 +800,7 @@ class NN(object):
         y = self.inverse_transform_y_ft(y_ft)
 
         # return y[0,:].flatten()
-        return y_ft
+        return y
 
     def train(self, x=None, y=None, n_epochs=None, evaluate=True, plot_test_states=False, plot_train_states=False,
               plot_data=False, plot_fft=False, plot_hist=False, plot_train=False, plot_test=False,
@@ -832,7 +838,9 @@ class NN(object):
                 y = self.y_train
 
             # Get features and fit the network
+            print x.shape, y.shape
             x_ft, y_ft = self.fit_transform_ft(x, y)
+            print x_ft.shape, y_ft.shape
 
         # Fit the network
         self.printv("\n\n ===== Training Network =====\n")
@@ -842,7 +850,7 @@ class NN(object):
         else:
             if n_epochs != 1:
                 verbose = self.create_callbacks()
-                y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, state_update=False,
+                y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, state_update=True,
                                             epochs=tot_epochs, validation_split=self.val_split,
                                             callbacks=self.callbacks, initial_epoch=self.epoch,
                                             batch_size=self.batch_size, verbose=verbose)

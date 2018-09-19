@@ -127,7 +127,7 @@ class FeedbackESN(BaseEstimator):
 
     def __init__(self, n_inputs, n_outputs, in_esn_mask, out_esn_mask,
                  n_reservoir=200, n_read=100, spectral_radius=0.95, damping=0.1, sparsity=0.0, noise=0.001,
-                 fb_scaling=None, fb_shift=None, keras_model=None, out_activation=utils.identity,
+                 fb_scaling=None, fb_shift=None, keras_model=None, real_fb=False, out_activation=utils.identity,
                  inverse_out_activation=utils.identity, random_state=None, verbose=1):
         """
         Args:
@@ -172,6 +172,7 @@ class FeedbackESN(BaseEstimator):
         self.damping = damping
         self.sparsity = sparsity
         self.noise = noise
+        self.real_fb = real_fb
 
         # Readout parameters
         self.fb_scaling = fb_scaling
@@ -272,8 +273,10 @@ class FeedbackESN(BaseEstimator):
                         np.dot(self.W_in, input_pattern) + \
                         np.dot(self.W_fb, output_pattern)
 
-        return (np.tanh(preactivation) # ADD DAMPING
+        arg = (np.tanh(preactivation) # ADD DAMPING
                 + self.noise * (self.random_state_.rand(self.n_reservoir) - 0.5))
+
+        return arg
 
     def fit(self, x, y, inspect=False, state_update=True, win=1000, **kwargs):
         """
@@ -294,45 +297,98 @@ class FeedbackESN(BaseEstimator):
             x = np.reshape(x, (len(x), -1))
         if y.ndim < 2:
             y = np.reshape(y, (len(y), -1))
+        print x.shape, y.shape
         # Transform input and feedback signal:
         y_esn = self._scale_out(y)[:, self.out_esn_mask]
         x_esn = x[:, self.in_esn_mask]
+        n_samples = x_esn.shape[0]
 
-        # STATES UPDATE
-        if state_update:
+        if not self.real_fb or self.keras_model is None:
+            # STATES UPDATE
+            if state_update:
+                if self.verbose > 0:
+                    print("\n\n ===== Harvesting States =====\n")
+                self.states_t = np.zeros((n_samples, self.n_reservoir))
+                for n in range(1, n_samples):
+                    self.states_t[n, :] = self._update(self.states_t[n - 1], 
+                                                       np.ravel(x_esn[n, :]), np.ravel(y_esn[n - 1, :]))
+
+            # READOUT LEARNING
             if self.verbose > 0:
-                print("\n\n ===== Harvesting States =====\n")
-            self.states_t = np.zeros((x_esn.shape[0], self.n_reservoir))
-            for n in range(1, x_esn.shape[0]):
-                self.states_t[n, :] = self._update(self.states_t[n - 1], x_esn[n, :], y_esn[n - 1, :])
+                print("\n\n ===== Fitting Readout =====\n")
+            # Disregard the first transient states
+            transient = min(int(x_esn.shape[1] / 10), 100)
+            # Include the inputs that shall skip the ESN
+            states_ext = np.hstack((self.states_t[:, self.rd_id], x[:, self.skip_esn_id]))
+            # Use scipy linear regression or keras back-propagation
+            if self.keras_model is None:
+                # Solve for W_out:
+                self.W_out = np.dot(np.linalg.pinv(states_ext[transient:, :]),
+                                    self.inverse_out_activation(y[transient:, :])).T
+                # Apply learned weights to the collected states:
+                pred_train = self._unscale_out(self.out_activation(np.dot(states_ext, self.W_out.T)))
+                pred_train[1:] = self.out_activation(pred_train[1:])
+            else:
+                states_ext_exp = np.expand_dims(states_ext, axis=2)
+                # Train
+                self.keras_model.fit(states_ext_exp[transient:, :], y[transient:, :], **kwargs)
+                # Predict
+                pred_train = self._unscale_out(self.keras_model.predict(states_ext_exp))
+
+        # Learn the readout with every sample sequentially and use the real feedback
+        else:
+            if self.verbose > 0:
+                print("\n\n ===== Updating ESN + Readout Sequentially =====\n")
+
+            for i in range(1):
+                self.states_t = np.zeros((n_samples, self.n_reservoir))
+                pred_train = copy.copy(y)
+                # mult = float(i) / 50
+                batch_size = 2000
+                for n in range(1, n_samples):
+                    # Predict NN fb and mix with real
+                    states_ext_exp_n = np.expand_dims(np.hstack([self.states_t[n-1, self.rd_id].reshape(1, -1),
+                                                                      x[n, self.skip_esn_id].reshape(1, -1)]), axis=2)
+                    pred_train[n-1, :] = self.keras_model.predict_on_batch(states_ext_exp_n)
+                    mult = min(float(n) / (n_samples * 2), 1)
+                    y_mix = mult * self._scale_out(pred_train[n-1, self.out_esn_mask]) + (1-mult) * y_esn[n-1, :]
+                    y_noise = y_mix + 0.01 * np.random.normal(size=y_esn[n-1, :].shape)
+
+                    # Update ESN
+                    self.states_t[n, :] = self._update(self.states_t[n-1, :],
+                                                       np.ravel(x_esn[n, :]), np.ravel(y_noise))
+
+                    # When end of batch size:
+                    if n % batch_size == 0 and n > (batch_size - 1):
+
+                        if n % batch_size == 0:
+                            # callbacks
+                            pass
+
+                        # Train on batch
+                        states_ext = np.hstack([self.states_t[n+1-batch_size:n+1, self.rd_id],
+                                                     x[n+1-batch_size:n+1, self.skip_esn_id]])
+                        #states_ext += 0.01 * np.random.normal(size=states_ext.shape)
+                        states_ext_exp = np.expand_dims(states_ext.reshape(batch_size, -1), axis=2)
+                        for _ in range(400):
+                            h = self.keras_model.train_on_batch(states_ext_exp,
+                                                                y_esn[n+1-batch_size:n+1, :].reshape(batch_size, -1))
+
+                        if n % batch_size == 0:
+                            # callbacks
+                            pass
+
+                    if n % 6000 == 0:
+                        print mult, h
+                        plt.plot(y[0:n, 1])
+                        plt.plot(pred_train[0:n, 1])
+                        plt.show()
+
+        # CONTINUATION:
         # Remember the last state for later
         self.laststate = self.states_t[-1, :]
         self.lastinput = x[-1, :]
         self.lastoutput = y[-1, :]
-
-
-        # READOUT LEARNING
-        if self.verbose > 0:
-            print("\n\n ===== Fitting Readout =====\n")
-        # Disregard the first transient states
-        transient = min(int(x_esn.shape[1] / 10), 100)
-        # Include the inputs that shall skip the ESN
-        states_ext = np.hstack((self.states_t[:, self.rd_id], x[:, self.skip_esn_id]))
-        # Use scipy linear regression or keras back-propagation
-        if self.keras_model is None:
-            # Solve for W_out:
-            self.W_out = np.dot(np.linalg.pinv(states_ext[transient:, :]),
-                                self.inverse_out_activation(y[transient:, :])).T
-            # Apply learned weights to the collected states:
-            pred_train = self._unscale_out(self.out_activation(np.dot(states_ext, self.W_out.T)))
-
-        else:
-            # print(states_ext[transient:, :].shape, y[transient:, :].shape)
-            states_ext_exp = np.expand_dims(states_ext, axis=2)
-            # Train
-            self.keras_model.fit(states_ext_exp[transient:, :], y[transient:, :], **kwargs)
-            # Predict
-            pred_train = self._unscale_out(self.keras_model.predict(states_ext_exp))
 
         # VIZUALIZATION
         if inspect:
@@ -382,8 +438,10 @@ class FeedbackESN(BaseEstimator):
         if self.verbose > 0:
             print("\n\n ===== Predicting Reservoir + Readout =====\n")
         for n in range(n_samples):
-            self.states_p[n + 1, :] = self._update(self.states_p[n, :], x_esn[n + 1, :], y_esn[n, :])
-            states_ext = np.concatenate([self.states_p[n + 1, self.rd_id], x[n + 1, self.skip_esn_id]])
+            self.states_p[n + 1, :] = self._update(self.states_p[n, :],
+                                                   np.ravel(x_esn[n + 1, :]), np.ravel(y_esn[n, :]))
+            states_ext = np.hstack([self.states_p[n + 1, self.rd_id].reshape(1, -1),
+                                    x[n + 1, self.skip_esn_id].reshape(1, -1)])
 
             if self.keras_model is None:
                 y[n + 1, :] = self.out_activation(np.dot(self.W_out, states_ext))
