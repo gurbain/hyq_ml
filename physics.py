@@ -90,7 +90,7 @@ class HyQSim(threading.Thread):
 
         # Simulation state
         self.sim_time = 0
-        self.hyq_state = {"kadj": [], "prec": [], "adapt": [], "vel": []}
+        self.hyq_state = {"kadj": [], "prec": [], "adapt": [], "vel": [], "RH_HAA_tau_lim": []}
         self.hyq_action = dict()
         self.hyq_init_wbs = None
         self.hyq_wbs = None
@@ -150,6 +150,7 @@ class HyQSim(threading.Thread):
                                             queue_size=2,
                                             buff_size=2**20,
                                             tcp_nodelay=True)
+
             self.sub_debug = ros.Subscriber(self.hyq_debug_sub_name,
                                             StringDoubleArray,
                                             callback=self._reg_hyq_debug,
@@ -302,16 +303,6 @@ class HyQSim(threading.Thread):
         self.send_controller_cmd("3", "Freeze Base off!", timeout=15)
         self.send_controller_cmd("", "RCFController>>")
 
-        if self.kadj:
-            self.start_kadj()
-        if self.prec:
-            self.start_prec()
-        if self.adapt:
-            self.start_adapt()
-
-        # self.send_controller_cmd("narrowStance", "Narrowing stance posture!!!")
-        # self.send_controller_cmd("narrowStance", "Narrowing stance posture!!!")
-
         self.printv("\n ===== RCF Controller is Set =====\n")
         self.controller_started = True
 
@@ -354,18 +345,10 @@ class HyQSim(threading.Thread):
 
         self.process_state_flag.acquire()
         try:
-            inputs = []
-            if self.kadj:
-                inputs += self.hyq_state["kadj"]
-            if self.prec:
-                inputs += self.hyq_state["prec"]
-            inputs += self.hyq_state["vel"]
-            if self.adapt:
-                inputs += self.hyq_state["adapt"]
+            return self.hyq_state["RH_HAA_tau_lim"]
         finally:
             self.process_state_flag.release()
 
-        return np.mat(inputs)
 
     def get_hyq_action(self):
 
@@ -382,34 +365,17 @@ class HyQSim(threading.Thread):
             v = [r.velocity for r in copy.deepcopy(self.hyq_wbs.joints)]
             return p + v
 
-    def send_hyq_nn_pred(self, prediction, weight, error=None):
-
-        if type(prediction) is np.ndarray:
-            prediction = prediction.tolist()
-
-        if len(prediction) != 24:
-                ros.logerr("This method is designed to receive 12 joint" +
-                           " position and velocity in a specific format!")
-                return
+    def send_hyq_nn_pred(self, prediction):
 
         # Create and fill a JointState object
         joints = JointState()
-        joints.header = Header()
-        if self.rt:
-            joints.header.stamp = ros.get_rostime()
-        else:
-            joints.header.stamp = ros.Time(self.get_sim_time())
+        joints.header.stamp = ros.Time(self.get_sim_time())
         joints.position = prediction[0:12]
         joints.velocity = prediction[12:24]
         joints.effort = [0.0] * 12
 
         # Publish
         self.pub_nn.publish(joints)
-        self.pub_nn_w.publish(Float32(weight))
-
-        # Create and fill a JointState object for the errors
-        if self.publish_error and error is not None:
-            self.publish_errs(error)
 
     def apply_noise(self):
 
@@ -517,22 +483,20 @@ class HyQSim(threading.Thread):
         self.hyq_action["vel"] = vel
         self.hyq_action_it += 1
 
+    def _reg_qd(self, msg):
+
+        print msg
+
     def _reg_hyq_debug(self, msg):
 
-        stance = []
-        vel = []
-        st = 0
+        RH_HAA_tau_lim = []
         for i in range(len(msg.name)):
-            if msg.name[i] in ["forwVel"]:
-                vel = [msg.data[i]]
-            if st < 4 and msg.name[i] in ["stanceStatusLF", "stanceStatusLH", "stanceStatusRF", "stanceStatusRH"]:
-                stance += [msg.data[i]]
-                st += 1
+            if msg.name[i] in ["LF_KFE_load"]:
+                RH_HAA_tau_lim = [msg.data[i]]
 
         self.process_state_flag.acquire()
         try:
-            self.hyq_state["adapt"] = stance
-            self.hyq_state["vel"] = vel
+            self.hyq_state["RH_HAA_tau_lim"] = RH_HAA_tau_lim
         finally:
             self.process_state_flag.release()
 
@@ -549,44 +513,16 @@ if __name__ == '__main__':
     p.start()
     p.register_node()
 
-    if len(sys.argv) > 1:
-
-        if sys.argv[1] == "sine":
-            while not ros.is_shutdown():
-                t = p.get_sim_time()
-                pos = 15 * np.pi / 180 * np.sin(2 * np.pi * 2 * t)
-                vel = 15 * np.pi / 180 * np.cos(2 * np.pi * 2 * t)
-                p.set_hyq_action([0, 0, pos, 0, 0, pos, 0, 0, pos, 0, 0, pos,
-                                  0, 0, vel, 0, 0, vel, 0, 0, vel, 0, 0, vel])
-                p.send_hyq_traj()
-
-        if sys.argv[1] == "rcf":
-            trot_flag = False
-            for i in range(120):
-                print("Time: " + str(i) + "s and Sim time: " +
-                      str(p.get_sim_time()) + "s and state (len= " +
-                      str(np.array(p.get_hyq_state()).shape) + "): " +
-                      str(np.array(p.get_hyq_state())))
-                if trot_flag is False:
-
-                    if p.get_sim_time() > 1:
-                        p.start_rcf_trot()
-                        trot_flag = True
-                if ros.is_shutdown():
-                    p.stop()
-                    exit(-1)
-                time.sleep(1)
-
-    else:
-        for i in range(120):
-            print("Time: " + str(i) + "s and Sim time: " +
-                  str(p.get_sim_time()) + "s and state (len= " +
-                  str(np.array(p.get_hyq_state()).shape) + "): " +
-                  str(np.array(p.get_hyq_state())))
-            if ros.is_shutdown():
-                p.stop()
-                exit(-1)
-            time.sleep(1)
+    # Main loop
+    for i in range(120):
+        print("Time: " + str(i) + "s and Sim time: " +
+              str(p.get_sim_time()) + "s and state: " +
+              str(np.array(p.get_hyq_state())))
+        p.send_hyq_nn_pred([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+        if ros.is_shutdown():
+            p.stop()
+            exit(-1)
+        time.sleep(1)
 
     # Stop simulation
     p.stop()
