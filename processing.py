@@ -179,7 +179,6 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, x, y=None, **kwargs):
 
-        print
         self = self._fit_transform(x)
         return self.x_scaled
 
@@ -285,8 +284,8 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
 
         x_std = (x + np.ones(x.shape)) / 2
         n_sample = x.shape[0]
-        x_unscaled = x_std * (self.maxs.reshape(-1, n_sample) - self.mins.reshape(-1, n_sample)) + \
-                     self.mins.reshape(-1, n_sample)
+        x_unscaled = np.multiply(x_std, (self.maxs.reshape(1, -1) - self.mins.reshape(1, -1))) + \
+                     self.mins.reshape(1, -1)
 
         return x_unscaled
 

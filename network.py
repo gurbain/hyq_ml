@@ -1,6 +1,8 @@
 # IMPORTS
 import rospy
 import keras
+import tensorflow as tf
+from keras import backend as K
 from keras.callbacks import EarlyStopping, TensorBoard
 from keras.models import Model, load_model
 from keras.layers import Dense, Activation, Flatten, Input, LSTM
@@ -65,11 +67,11 @@ class NN(object):
     # ALGORITHM METAPARAMETERS #
 
     def __init__(self, nn_layers=nn, test_split=0.7, val_split=0.1, stop_delta=0.0001, stop_pat=150,
-                 optim='adam', metric='mae', batch_size=2048, max_epochs=150, regularization=0.0,
+                 optim='adam', metric='mae', batch_size=2048, max_epochs=10, regularization=0.0,
                  esn_n_res=100, esn_n_read=80, esn_in_mask=None, esn_out_mask=None, esn_real_fb=False,
                  esn_spec_rad=0.3, esn_damping=0.1, esn_sparsity=0.4, esn_noise=0.001,
                  data_file="data/sims/tc.pkl", save_folder="data/nn_learning/", checkpoint=False,
-                 verbose=2, random_state=12):
+                 no_callbacks=False, verbose=2, random_state=12):
 
         # ALGORITHM METAPARAMETERS
         self.data_file = data_file
@@ -89,6 +91,7 @@ class NN(object):
         self.save_folder = save_folder
         self.regularization = regularization
         self.checkpoint = checkpoint
+        self.no_callbacks = no_callbacks
         self.random_state = random_state
         if self.random_state is not None:
             np.random.seed(self.random_state)
@@ -121,6 +124,7 @@ class NN(object):
         self.test_accuracy = 0
         self.save_index = 0
         self.callbacks = []
+        self.graph = None
 
         # DATA VARIABLES
         self.x_t = None
@@ -389,42 +393,43 @@ class NN(object):
 
     def create_callbacks(self):
 
-        # Wrap in a regressor
-        if not hasattr(self, 'callbacks'):
-            self.callbacks = []
+        if not self.no_callbacks:
+            # Wrap in a regressor
+            if not hasattr(self, 'callbacks'):
+                self.callbacks = []
 
-        cb_names = [c.__class__.__name__ for c in self.callbacks]
-        if "NetworkSave" not in cb_names and self.checkpoint:
-            self.callbacks += [utils.NetworkSave(self.get_data_to_save(),
-                                                 monitor='val_loss', verbose=self.verbose,
-                                                 save_best_only=True, mode='min',
-                                                 max_epochs=self.max_epochs)]
+            cb_names = [c.__class__.__name__ for c in self.callbacks]
+            if "NetworkSave" not in cb_names and self.checkpoint:
+                self.callbacks += [utils.NetworkSave(self.get_data_to_save(),
+                                                     monitor='val_loss', verbose=self.verbose,
+                                                     save_best_only=True, mode='min',
+                                                     max_epochs=self.max_epochs)]
 
-        if "CustomHistory" not in cb_names:
-            self.callbacks += [utils.CustomHistory()]
+            if "CustomHistory" not in cb_names:
+                self.callbacks += [utils.CustomHistory()]
 
-        if "TensorBoard" not in cb_names:
-            self.callbacks += [TensorBoard()]
+            if "TensorBoard" not in cb_names:
+                self.callbacks += [TensorBoard()]
 
-        if "EarlyStopping" not in cb_names:
-            if self.stop_delta is not None:
-                self.callbacks += [EarlyStopping(monitor='val_loss',
-                                                 mode="min",
-                                                 verbose=self.verbose,
-                                                 patience=self.stop_pat,
-                                                 min_delta=self.stop_delta)]
+            if "EarlyStopping" not in cb_names:
+                if self.stop_delta is not None:
+                    self.callbacks += [EarlyStopping(monitor='val_loss',
+                                                     mode="min",
+                                                     verbose=self.verbose,
+                                                     patience=self.stop_pat,
+                                                     min_delta=self.stop_delta)]
 
-        if "PlotJupyter" not in cb_names:
-            if self.verbose == -1:
-                plt.rc('figure', autolayout=False)
-                utils.make_keras_picklable()
-                self.callbacks += [utils.PlotJupyter(self.x_test[:400, :], self.y_test[:400, :], network=self,
-                                                     plot=False, max_epochs=self.max_epochs, verbose=self.verbose)]
-            if self.verbose == -2 or self.verbose == -3:
-                plt.rc('figure', autolayout=False)
-                utils.make_keras_picklable()
-                self.callbacks += [utils.PlotJupyter(self.x_ft[:400, :], self.y_ft[:400, :], network=self,
-                                                     plot=True, max_epochs=self.max_epochs, verbose=self.verbose)]
+            if "PlotJupyter" not in cb_names:
+                if self.verbose == -1:
+                    plt.rc('figure', autolayout=False)
+                    utils.make_keras_picklable()
+                    self.callbacks += [utils.PlotJupyter(self.x_test[:400, :], self.y_test[:400, :], network=self,
+                                                         plot=False, max_epochs=self.max_epochs, verbose=self.verbose)]
+                if self.verbose == -2 or self.verbose == -3:
+                    plt.rc('figure', autolayout=False)
+                    utils.make_keras_picklable()
+                    self.callbacks += [utils.PlotJupyter(self.x_ft[:400, :], self.y_ft[:400, :], network=self,
+                                                         plot=True, max_epochs=self.max_epochs, verbose=self.verbose)]
         verbose = self.verbose
         if verbose > 1:
             verbose = 1
@@ -463,6 +468,9 @@ class NN(object):
         if self.verbose > 1:  # or self.verbose == -1:
             readout_fn.summary()
 
+        # Make the model graph thread-safe
+        self.graph = tf.get_default_graph()
+
         return readout_fn
 
     def create_nn(self):
@@ -477,12 +485,7 @@ class NN(object):
             self.readout = self.create_readout_fn()
         else:
             if self.max_epochs != 0:
-                self.readout = KerasRegressor(build_fn=self.create_readout_fn,
-                                              validation_split=self.val_split,
-                                              batch_size=self.batch_size,
-                                              epochs=self.max_epochs,
-                                              callbacks=self.callbacks,
-                                              verbose=max(self.verbose, 0))
+                self.readout = self.create_readout_fn()
 
             else:
                 self.readout = None
@@ -761,9 +764,10 @@ class NN(object):
 
         # Create ESN masks
         if self.esn_in_mask is None:
-            self.esn_in_mask = [False for _ in range(self.n_in)]
+            self.esn_in_mask = [True, False, False, False, False]  # [False for _ in range(self.n_in)]
         if self.esn_out_mask is None:
-            self.esn_out_mask = [True for _ in range(self.n_out)]
+            self.esn_out_mask = [False, True, True, False, True, True, False, True, True, False, True, True,
+                                 False, False, False, False, False, False, False, False, False, False, False, False] #[False for _ in range(self.n_out)]
 
         return self.x_ft, self.y_ft
 
@@ -773,8 +777,8 @@ class NN(object):
         if self.predict_in_pipe is None:
             self.predict_in_pipe = Pipeline([('xsc0', self.create_x_scaler())] + self.create_pp())
 
-        self.x_ft = self.predict_in_pipe.transform(x)
-        return self.x_ft
+        x_ft = self.predict_in_pipe.transform(x)
+        return x_ft
 
     def transform_y_ft(self, y):
 
@@ -796,15 +800,15 @@ class NN(object):
     def predict(self, x):
 
         x_ft = self.transform_x_ft(x)
-        y_ft = self.esn.predict(x_ft, batch_size=self.batch_size, verbose=0)
+        with self.graph.as_default():
+            y_ft = self.esn.predict(x_ft, batch_size=self.batch_size, verbose=0)
         y = self.inverse_transform_y_ft(y_ft)
 
-        # return y[0,:].flatten()
         return y
 
     def train(self, x=None, y=None, n_epochs=None, evaluate=True, plot_test_states=False, plot_train_states=False,
               plot_data=False, plot_fft=False, plot_hist=False, plot_train=False, plot_test=False,
-              plot_relation=False, win=5000):
+              plot_relation=False, win=5000, save=True):
 
         # Determine the number of training epochs
         if n_epochs is None:
@@ -838,32 +842,39 @@ class NN(object):
                 y = self.y_train
 
             # Get features and fit the network
-            print x.shape, y.shape
             x_ft, y_ft = self.fit_transform_ft(x, y)
-            print x_ft.shape, y_ft.shape
 
         # Fit the network
         self.printv("\n\n ===== Training Network =====\n")
         if self.epoch == 0:
-            y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, epochs=tot_epochs)
+            verbose = self.create_callbacks()
+            with self.graph.as_default():
+                y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, epochs=tot_epochs,
+                                            validation_split=self.val_split, batch_size=self.batch_size,
+                                            callbacks=self.callbacks, verbose=verbose)
 
         else:
             if n_epochs != 1:
                 verbose = self.create_callbacks()
-                y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, state_update=True,
-                                            epochs=tot_epochs, validation_split=self.val_split,
-                                            callbacks=self.callbacks, initial_epoch=self.epoch,
-                                            batch_size=self.batch_size, verbose=verbose)
+                with self.graph.as_default():
+                    y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, state_update=True,
+                                                epochs=tot_epochs, validation_split=self.val_split,
+                                                callbacks=self.callbacks, initial_epoch=self.epoch,
+                                                batch_size=self.batch_size, verbose=verbose)
             else:
                 self.create_callbacks()
-                y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states)
+                with self.graph.as_default():
+                    y_train_pred = self.esn.fit(x_ft, y_ft, inspect=plot_train_states, callbacks=self.callbacks,
+                                                epochs=tot_epochs, validation_split=self.val_split,
+                                                batch_size=self.batch_size, verbose=verbose)
 
         self.epoch = tot_epochs
         self.training_time = time.time() - self.t_training_init
         self.history = utils.history
 
         # Save all
-        self.save()
+        if save:
+            self.save()
 
         # Show plots
         if plot_train:

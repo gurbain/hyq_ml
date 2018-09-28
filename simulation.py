@@ -1,5 +1,6 @@
 from collections import deque
 import copy
+from keras import backend as K
 import numpy as np
 import pexpect
 import pickle
@@ -11,23 +12,21 @@ import tensorflow as tf
 import threading
 import time
 
-from std_msgs.msg import Float64, Float64MultiArray, MultiArrayLayout, Header
+from std_msgs.msg import Bool, Float64, Float64MultiArray, MultiArrayLayout, Header
+from std_srvs.srv import Trigger, TriggerResponse
 
 import control
 import physics
 import network
 import utils
 
-graph = tf.get_default_graph()
-
-
 class Simulation(object):
 
     def __init__(self, nn_folder=None, sim_file=None, verbose=2, t_train=0,
-                 pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15,
-                 t_stop_cl=160, save_folder=None, ol=False, view=False,
-                 pub_loss=True, epoch_num=100, plot=False, pub_error=True,
-                 train_buff_size=6000, real_physics=False):
+                 pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15, sm=False,
+                 t_stop_cl=160, save_folder=None, ol=False, view=False, train=True,
+                 pub_loss=True, epoch_num=150, plot=False, pub_error=True,
+                 train_buff_size=10000, real_physics=False):
 
         self.t_sim = t_sim
         self.t_train = t_train
@@ -50,6 +49,8 @@ class Simulation(object):
         self.epoch_num = epoch_num
         self.train_buff_size = train_buff_size
         self.real_physics = real_physics
+        self.sm = sm
+        self.train = train
         self.play_from_file = False
 
         # Class uninitialized objects
@@ -62,8 +63,14 @@ class Simulation(object):
         # Execution variables
         self.t = 0
         self.it = 0
-        self.action_it = 0
+        self.last_action_it = 0
+        self.last_state_it = 0
         self.train_it = 0
+        self.train_session = None
+        self.pred_session = None
+        self.train_graph = None
+        self.pred_graph = None
+        self.train_pred_lock = threading.Lock()
 
         # Training variable
         self.t_hist = [0]
@@ -76,6 +83,7 @@ class Simulation(object):
         self.accuracy = 0
         self.nn_weight = 0
         self.training_thread = None
+        self.train_sm_mode = "Training"
 
         # Plot tools
         self.plot_ps = None
@@ -89,6 +97,7 @@ class Simulation(object):
         self.mix_pub_name = "/sim_debug/mix_cl"
         self.loss_pub_name = "/sim_debug/prediction_loss"
         self.acc_pub_name = "/sim_debug/prediction_acc"
+        self.sm_ser_name = "/sim/rcf_nn_transition"
         self.pub_curr_state = None
         self.pub_rec_state = None
         self.pub_pred = None
@@ -96,6 +105,7 @@ class Simulation(object):
         self.pub_mix = None
         self.pub_loss = None
         self.pub_acc = None
+        self.ser_sm = None
 
     def start(self):
 
@@ -106,11 +116,12 @@ class Simulation(object):
                                       kadj=True,
                                       prec=False,
                                       adapt=False,
+                                      rt=self.real_physics,
                                       publish_error=self.publish_error)
         self.physics.start()
         self.physics.register_node()
 
-        # If sim folder is specified create a untrained network and use IN/OUTS from the file
+        # If sim folder is specified create a untrained network and read simulation from a FILE
         if self.sim_file is not None:
             self.play_from_file = True
             self.network = network.NN(data_file=self.sim_file,
@@ -120,22 +131,29 @@ class Simulation(object):
                                       verbose=0)
             self.network.load_data(True)
 
-        # Else, load the trained network
+        # Else, load the trained network and start a REAL simulation
         elif self.nn_folder is not None:
             self.play_from_file = False
             self.network = network.NN(max_epochs=100000,
                                       checkpoint=False,
+                                      esn_n_read=10,
+                                      no_callbacks=True,
                                       esn_in_mask=[True, False, False, False, False],
                                       esn_out_mask=[True] * 24,
+                                      esn_real_fb=True,
                                       verbose=0)
             self.network.load(self.nn_folder, load_all=True)
+            self.network.esn.verbose = 0
+            self.train_it += 1
 
         else:
             self.play_from_file = False
             self.network = network.NN(max_epochs=100000,
                                       checkpoint=False,
+                                      esn_n_read=10,
+                                      no_callbacks=True,
                                       esn_in_mask=[True, False, False, False, False],
-                                      esn_out_mask=[True] * 24,
+                                      esn_out_mask=[False] * 24,
                                       verbose=0,
                                       save_folder=self.save_folder)
 
@@ -183,6 +201,8 @@ class Simulation(object):
             self.pub_acc = ros.Publisher(self.acc_pub_name,
                                          Float64,
                                          queue_size=1)
+        if self.sm:
+            self.ser_sm = ros.Service(self.sm_ser_name, Trigger, self._sm_transition)
 
     def get_actions(self, state, pred=True):
 
@@ -191,17 +211,13 @@ class Simulation(object):
             target = self.network.interpolate(self.target_fct, self.t).tolist()[0]
         else:
             target = self.physics.get_hyq_action().tolist()[0]
+            self.last_action_it = self.physics.hyq_action_it
 
         # If we need the prediction
         if pred:
             # Predict network action
             if len(state) == 5:
-                # self.state.append(state)
-                # if len(self.state) < 10:
-                #     predicted = []
-                # else:
-                predicted = self.network.predict(np.mat(state)).tolist()
-                # self.state.popleft()
+                predicted = self.network.predict(np.mat(state)).tolist()[0]
             else:
                 predicted = []
 
@@ -213,6 +229,7 @@ class Simulation(object):
     def get_states(self):
 
         curr_state = self.physics.get_hyq_state().tolist()[0]
+        self.last_state_it = self.physics.hyq_state_it
 
         if self.play_from_file:
             rec_state_1 = self.network.interpolate(self.state_1_fct, self.t)
@@ -229,11 +246,104 @@ class Simulation(object):
 
     def _training_thread(self, x, y):
 
-        with graph.as_default():
-            self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num, evaluate=False)
-
         if self.verbose > 1:
-                print " [Training] Finished with Loss: {:.5f}".format(self.loss)
+            print " [Training] A Iteration: " + str(self.last_action_it) + \
+                  "\tFitting ESN with feature vectors of shape " + \
+                  str(x.shape) + " x " + str(y.shape) + "!"
+        self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num,  # plot_train_states=True,
+                                                      evaluate=False, save=False)
+        if self.verbose > 1:
+            print " [Training] A Iteration: " + str(self.last_action_it) + \
+                  "\tFinished with Loss: {:.5f}".format(self.loss)
+
+    def train_run_sm_step(self):
+
+        # GET DATA (ALWAYS)
+        curr_state, rec_state = self.get_states()
+        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0)) #(self.train_sm_mode == "Running"))
+
+        # TRAINING MODE
+        if self.train_sm_mode == "Training":
+
+            if self.train:
+                # Record states and action in a buffer
+                if len(curr_state) == 5 and len(tgt_action) == 24:
+                    self.x_train_step.append(curr_state)
+                    self.y_train_step.append(tgt_action)
+
+                # When no training yet done
+                if self.training_thread is None:
+                    # When buffer is full, train
+                    if len(self.x_train_step) == self.train_buff_size:
+                        x = np.mat(self.x_train_step[-self.train_buff_size:])
+                        y = np.mat(self.y_train_step[-self.train_buff_size:])
+                        self.training_thread = threading.Thread(name="train_thread", target=self._training_thread,
+                                                                args=[x, y])
+                        # Hack to avoid racing condition between training and execution thread
+                        self.training_thread.start()
+                        self.x_train_step = []
+                        self.y_train_step = []
+                else:
+                    # When buffer is full
+                    if len(self.x_train_step) > self.train_buff_size:
+                        # When training is finished start again with new buffer
+                        if not self.training_thread.isAlive():
+                            x = np.mat(self.x_train_step) # [-self.train_buff_size:])
+                            y = np.mat(self.y_train_step) #[-self.train_buff_size:])
+                            self.training_thread = threading.Thread(target=self._training_thread,
+                                                                    args=[x, y])
+                            # Hack to avoid racing condition between training and execution thread
+                            self.training_thread.start()
+                            self.x_train_step = []
+                            self.y_train_step = []
+                            self.train_it += 1
+
+        # TRANSITION TRAINING -> PREDICTION
+        elif self.train_sm_mode == "Training_running_transition":
+            self.x_train_step = []
+            self.y_train_step = []
+            self.nn_weight = 1
+
+            if self.training_thread is not None:
+                while self.training_thread.isAlive():
+                    if hasattr(self.network.readout, "model"):
+                        self.network.readout.model.stop_training = True
+                    time.sleep(0.1)
+            print "\n [State Machine] Transition to Full NN control by-passing RCF at action it: " + \
+                  str(self.last_action_it) + "!"
+            self.train_sm_mode = "Running"
+
+        # PREDICTION MODE
+        elif self.train_sm_mode == "Running":
+            pass
+
+        # TRANSITION PREDICTION -> TRAINING
+        elif self.train_sm_mode == "Running_training_transition":
+            self.nn_weight = 0
+            print "\n [State Machine] Transition to RCF control and NN Training!"
+            self.train_sm_mode = "Training"
+
+        # SEND PRED ON ROS (ALWAYS)
+        if len(pred_action) == 24:
+            self.physics.send_hyq_nn_pred(pred_action, self.nn_weight, np.array(tgt_action) - np.array(pred_action))
+
+        # DEBUG AND LOGGING (ALWAYS)
+        # Publish data on ROS topic to debug
+        if self.nn_weight == 1:
+            if len(pred_action) > 0:
+                mix_action = pred_action
+            else:
+                mix_action = tgt_action
+        else:
+            mix_action = tgt_action
+        self._publish_states(curr_state, rec_state)
+        self._publish_actions(pred_action, tgt_action, mix_action)
+        self._publish_loss()
+
+        # Save states and actions
+        if self.save_folder is not None:
+            self.state_history.append(curr_state)
+            self.action_history.append(mix_action)
 
     def train_step(self):
 
@@ -367,11 +477,14 @@ class Simulation(object):
                 if not self.real_physics and trot_flag:
                     self.physics.apply_noise()
 
-                # Choose between execution step or execution+training step
-                if self.t < self.t_train:
-                    self.train_step()
+                # Choose execution mode
+                if self.sm:
+                    self.train_run_sm_step()
                 else:
-                    self.step()
+                    if self.t < self.t_train:
+                        self.train_step()
+                    else:
+                        self.step()
 
                 # Display simulation progress
                 if self.it % 1000 == 0 and self.verbose > 1:
@@ -460,8 +573,22 @@ class Simulation(object):
         self.pub_loss.publish(Float64(self.loss))
         self.pub_acc.publish(Float64(self.accuracy))
 
-    def printv(self, txt):
+    def _sm_transition(self, msg):
 
+        ack = None
+        if self.train_sm_mode == "Training":
+            self.train_sm_mode = "Training_running_transition"
+            ack = "Switched to Running Mode!"
+        elif self.train_sm_mode == "Running":
+            self.train_sm_mode = "Running_training_transition"
+            ack = "Switched to Training Mode!"
+
+        if ack is not None:
+            return TriggerResponse(success=True, message=ack)
+        else:
+            return TriggerResponse(success=False, message="Cannot trigger transition, please check the NN process!")
+
+    def printv(self, txt):
         if self.verbose >= 1:
             print(txt)
 
@@ -584,7 +711,14 @@ if __name__ == '__main__':
         if sys.argv[1] == "hyq":
             folder = "data/nn_sim_learning/" + utils.timestamp()
             utils.mkdir(folder)
-            s = Simulation(save_folder=folder, view=False, plot=True,
-                           t_sim=10000, t_train=10000, t_start_cl=40,
-                           t_stop_cl=800, real_physics=True)
+            s = Simulation(save_folder=folder, plot=False, train=True,
+                           t_sim=10000, sm=True, real_physics=True)
+            s.run()
+
+        if sys.argv[1] == "hyq_pretrained":
+            folder = "data/nn_sim_learning/" + utils.timestamp()
+            utils.mkdir(folder)
+            s = Simulation(nn_folder=sys.argv[2], save_folder=folder,
+                           view=False, plot=True, train=True,
+                           t_sim=10000, sm=True, real_physics=True)
             s.run()

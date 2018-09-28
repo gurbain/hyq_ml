@@ -30,7 +30,8 @@ sys.stderr = stderr
 
 class HyQSim(threading.Thread):
 
-    def __init__(self, view=False, kadj=False, prec=False, adapt=False, remote=False, verbose=2, publish_error=False):
+    def __init__(self, view=False, kadj=False, prec=False, adapt=False, rt=True,
+                 remote=False, verbose=2, publish_error=False):
 
         threading.Thread.__init__(self)
 
@@ -89,16 +90,18 @@ class HyQSim(threading.Thread):
 
         # Simulation state
         self.sim_time = 0
-        self.sim_duration = 0
         self.hyq_state = {"kadj": [], "prec": [], "adapt": [], "vel": []}
         self.hyq_action = dict()
         self.hyq_init_wbs = None
         self.hyq_wbs = None
         self.hyq_state_it = 0
+        self.hyq_action_it = 0
         self.process_state_flag = threading.Lock()
         self.process_action_flag = threading.Lock()
 
         # Class behaviour
+        self.rt = rt
+        self.t_init = time.time()
         self.kadj = kadj
         self.prec = prec
         self.adapt = adapt
@@ -203,7 +206,7 @@ class HyQSim(threading.Thread):
 
     def start_sim(self):
 
-        self.sim_duration = 0
+        self.t_init = time.time()
         if self.sim_ps is not None:
             if self.sim_ps.isalive():
                 self.printv("\n ===== Physics is Already Started =====\n")
@@ -342,7 +345,10 @@ class HyQSim(threading.Thread):
 
     def get_sim_time(self):
 
-        return self.sim_time
+        if not self.rt:
+            return self.sim_time
+        else:
+            return time.time() - self.t_init
 
     def get_hyq_state(self):
 
@@ -389,13 +395,15 @@ class HyQSim(threading.Thread):
         # Create and fill a JointState object
         joints = JointState()
         joints.header = Header()
-        joints.header.stamp = ros.Time(self.get_sim_time())
+        if self.rt:
+            joints.header.stamp = ros.get_rostime()
+        else:
+            joints.header.stamp = ros.Time(self.get_sim_time())
         joints.position = prediction[0:12]
         joints.velocity = prediction[12:24]
         joints.effort = [0.0] * 12
 
         # Publish
-        print prediction, joints
         self.pub_nn.publish(joints)
         self.pub_nn_w.publish(Float32(weight))
 
@@ -492,10 +500,9 @@ class HyQSim(threading.Thread):
         try:
             self.hyq_state["kadj"] = kadj
             self.hyq_state["prec"] = prec
+            self.hyq_state_it += 1
         finally:
             self.process_state_flag.release()
-
-        self.hyq_state_it += 1
 
     def _reg_hyq_action(self, msg):
 
@@ -508,6 +515,7 @@ class HyQSim(threading.Thread):
 
         self.hyq_action["pos"] = pos
         self.hyq_action["vel"] = vel
+        self.hyq_action_it += 1
 
     def _reg_hyq_debug(self, msg):
 
@@ -537,7 +545,7 @@ class HyQSim(threading.Thread):
 if __name__ == '__main__':
 
     # Create and start simulation
-    p = HyQSim(view=False, kadj=True, prec=True, adapt=True)
+    p = HyQSim(view=True, kadj=True, prec=True, adapt=True)
     p.start()
     p.register_node()
 

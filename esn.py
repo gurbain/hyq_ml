@@ -125,9 +125,9 @@ class ForwardESN(BaseEstimator, TransformerMixin):
 
 class FeedbackESN(BaseEstimator):
 
-    def __init__(self, n_inputs, n_outputs, in_esn_mask, out_esn_mask,
+    def __init__(self, n_inputs, n_outputs, in_esn_mask, out_esn_mask, force_in_mask=True,
                  n_reservoir=200, n_read=100, spectral_radius=0.95, damping=0.1, sparsity=0.0, noise=0.001,
-                 fb_scaling=None, fb_shift=None, keras_model=None, real_fb=False, out_activation=utils.identity,
+                 fb_scaling=None, fb_shift=None, keras_model=None, real_fb=True, out_activation=utils.identity,
                  inverse_out_activation=utils.identity, random_state=None, verbose=1):
         """
         Args:
@@ -137,6 +137,9 @@ class FeedbackESN(BaseEstimator):
                          injected in the ESN, the false, directly in the readout
             out_esn_mask: a boolean mask of output size. The true elements are fed
                           back to the ESN
+            force_in_mask: a boolean to force all inputs that are directly fed to the
+                           readout to also go in the ESN (as the in_esn_mask is
+                           discriminant)
             n_reservoir: nr of reservoir neurons
             n_read: nr of reservoir random neurons connected to the readout
             spectral_radius: spectral radius of the recurrent weight matrix
@@ -149,6 +152,8 @@ class FeedbackESN(BaseEstimator):
                          input_size must be n_reservoir+1; output_size should
                          be the same as n_outputs. Call `compile` on the model
                          before passing it as a parameter
+            real_fb: use the real feedback of the ESN during training (longer because
+                     of sequential ESN update and readout training
             out_activation: output activation function (applied to the readout).
                             Only valid if no keras model is specified
             inverse_out_activation: inverse of the output activation function.
@@ -161,11 +166,16 @@ class FeedbackESN(BaseEstimator):
         # Reservoir parameters
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
-        self.in_esn_mask = in_esn_mask
         self.out_esn_mask = out_esn_mask
-        self.n_in_esn = sum(self.in_esn_mask)
+        self.force_in_mask = force_in_mask
+        self.skip_esn_id = [not i for i in in_esn_mask]
+        if self.force_in_mask:
+            self.n_in_esn = self.n_inputs
+            self.in_esn_mask = [True] * self.n_inputs
+        else:
+            self.n_in_esn = sum(self.in_esn_mask)
+            self.in_esn_mask = in_esn_mask
         self.n_out_esn = sum(self.out_esn_mask)
-        self.skip_esn_id = [not i for i in self.in_esn_mask]
         self.n_reservoir = n_reservoir
         self.n_read = n_read
         self.spectral_radius = spectral_radius
@@ -297,7 +307,6 @@ class FeedbackESN(BaseEstimator):
             x = np.reshape(x, (len(x), -1))
         if y.ndim < 2:
             y = np.reshape(y, (len(y), -1))
-        print x.shape, y.shape
         # Transform input and feedback signal:
         y_esn = self._scale_out(y)[:, self.out_esn_mask]
         x_esn = x[:, self.in_esn_mask]
@@ -505,6 +514,11 @@ class FeedbackESN(BaseEstimator):
         readout_name = folder + "/readout_" + str(index) + ".h5"
         if os.path.isfile(readout_name):
             self.keras_model = load_model(readout_name)
+
+    def printv(self, txt):
+
+        if self.verbose >= 1:
+            print(txt)
 
 
 class TestFeedbackESN(object):
