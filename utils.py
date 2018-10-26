@@ -97,6 +97,16 @@ def cleanup():
     process.kill()
 
 
+def kill_children():
+
+    print('\n\n -- Killing all children processes! -- \n')
+    process = psutil.Process()
+    children = process.children(recursive=True)
+    time.sleep(0.2)
+    for p in children:
+        p.kill()
+
+
 def save_on_top(newdata, filename):
     """ Append data to a file that is already saved """
 
