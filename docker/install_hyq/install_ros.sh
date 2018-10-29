@@ -25,12 +25,12 @@ echo "Installing ROS useful stuff and goodies..."
 sudo apt-get -y install ros-${ROS_DISTRO}-gazebo-ros-pkgs ros-${ROS_DISTRO}-ps3joy ros-${ROS_DISTRO}-joy ros-${ROS_DISTRO}-octomap ros-${ROS_DISTRO}-stereo-image-proc ros-${ROS_DISTRO}-opencv3 ros-${ROS_DISTRO}-robot-state-publisher ros-${ROS_DISTRO}-openni2-camera
 
 # Setup Bashrc
-#if grep -Fwq ${ROS_DISTRO} ~/.bashrc
-#then 
-# 	echo -e "Bashrc already updated, skipping this step..."
-#else
-#    	echo -e "Update the bashrc."
-#	echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
-#fi
+if grep -Fwq ${ROS_DISTRO} ~/.bashrc
+then 
+ 	echo -e "Bashrc already updated, skipping this step..."
+else
+    	echo -e "Update the bashrc."
+	echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
+fi
 
-#source ~/.bashrc
+source ~/.bashrc
