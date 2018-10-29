@@ -1,0 +1,20 @@
+# Goodies and nice stuff to have on a new system
+gitg
+gitk
+git-cola
+synaptic
+cmake-qt-gui
+nano
+unzip
+htop
+qtcreator
+vim
+gedit
+gedit-plugins
+meld
+grub-customizer
+jq
+stress
+dialog
+ipython
+curl
