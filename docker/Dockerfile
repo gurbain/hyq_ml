@@ -7,12 +7,11 @@ RUN apt-get update && \
     apt-get install -y lsb-release \
     git sudo dialog apt-utils\
     wget software-properties-common \
-    net-tools iputils-ping \
-    apt-utils
+    net-tools iputils-ping
 
 USER root
 RUN useradd -ms /bin/bash gurbain
-ADD /sudoers.txt /etc/sudoers
+ADD sudoers.txt /etc/sudoers
 RUN chmod 440 /etc/sudoers
 USER gurbain
 WORKDIR /home/gurbain
@@ -29,10 +28,16 @@ RUN cd hyq_ml && \
 #------------------------
 # ROS Install
 #------------------------
-RUN cd hyq_ml/docker/install_hyq && bash install_ros.sh
+RUN cd hyq_ml/docker/install_hyq && \
+    bash install_ros.sh
 
 
 # #------------------------
 # # DLS HyQ Install
 # #------------------------
-RUN cd hyq_ml/docker/install_hyq && bash install_dls.sh
+RUN cd hyq_ml/docker/install_hyq && \
+    bash install_dls.sh 
+RUN mkdir bin && \
+	cd hyq_ml/docker/install_hyq && \
+    bash setup_shell.sh
+ADD hyq /home/gurbain/bin/hyq

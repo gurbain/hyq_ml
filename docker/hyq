@@ -1,0 +1,2 @@
+roslaunch dls_supervisor operator.launch gazebo:=true osc:=false gui:=false rviz:=false
+

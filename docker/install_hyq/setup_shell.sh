@@ -20,6 +20,7 @@ else
 	echo "## Source ROS and HyQ Packages" >> ~/."${CURR_SHELL}rc"
 	echo "source /opt/ros/${ROS_DISTRO}/setup.${CURR_SHELL}" >> ~/."${CURR_SHELL}rc"
 	echo "source /opt/ros/dls-distro/setup.${CURR_SHELL}" >> ~/."${CURR_SHELL}rc"
+	echo "export PATH=/home/gurbain/bin:\$PATH" >> ~/."${CURR_SHELL}rc"
 
 fi
 
