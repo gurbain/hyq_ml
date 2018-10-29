@@ -34,3 +34,4 @@ sudo apt-get -y install ros-${ROS_DISTRO}-gazebo-ros-pkgs ros-${ROS_DISTRO}-ps3j
 #fi
 #
 #source ~/.bashrc
+
