@@ -7,6 +7,9 @@ data/*
 *.bag
 *.jpg
 
+# Pip
+*.egg-info
+
 # Logs
 logs/*
 notebooks/logs/*

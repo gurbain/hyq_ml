@@ -12,8 +12,5 @@ docker run \
        --add-host=schaap:172.18.20.236 \
        --add-host=schaap.elis.ugent.be:172.18.20.236 \
        --add-host=nas:172.18.20.252 \
-       -p 11345:11345 \
-       -p 11311:11311 \
-       -p 8888:8888 \
        -e DISPLAY=$DISPLAY \
        -it hyq

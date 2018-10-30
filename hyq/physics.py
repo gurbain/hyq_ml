@@ -9,6 +9,7 @@ import random
 import re
 import rospy as ros
 import rosgraph
+import string
 import sys
 import time
 import threading
@@ -47,13 +48,13 @@ class HyQSim(threading.Thread):
         self.sim_package = "dls_supervisor"
         self.sim_node = "operator.launch"
         self.sim_to_kill = ["ros", "gzserver", "gzclient"]
-        self.sim_not_kill = "PlotJuggler"
+        self.sim_not_kill = ["PlotJuggler", "rosmaster", "rosout", "roscore"]
         self.sim_params = "gazebo:=True osc:=False"
         if view is False:
             self.sim_params += " gui:=False"
         if rviz is False:
             self.sim_params += " rviz:=False"
-        self.rcf_config_file = "config/hyq_sim_options.ini"
+        self.rcf_config_file = "/home/gurbain/hyq_ml/config/hyq_sim_options.ini"
 
         # ROS Topics
         self.clock_sub_name = 'clock'
@@ -108,27 +109,11 @@ class HyQSim(threading.Thread):
         self.next_noise_it = 0
         self.verbose = verbose
         self.daemon = True
+        self.stopped = False
 
-    def run(self, remote=False):
+    def run(self):
 
         try:
-            # If the physics should not on this computer, just do not do anything
-            if self.remote:
-                self.printv("\n ===== Physics should run on remote computer =====\n")
-
-            # Else, start the simulator process
-            else:
-                # Init the config
-                if self.init_impedance is not None:
-                    self.set_init_impedances()
-
-                # Start the process
-                self.start_sim()
-
-                # Wait and start the controller
-                self.start_controller()
-
-
             # Subsribe to ROS topics
             self.sub_clock = ros.Subscriber(self.clock_sub_name, Clock,
                                             callback=self._reg_sim_time,
@@ -180,7 +165,14 @@ class HyQSim(threading.Thread):
                 self.pub_kfed_err = ros.Publisher(self.hyq_kfed_err_name,
                                                   Float32,
                                                   queue_size=1)
+            # Start the physics
+            self.start_sim()
+
+            # Wait and start the controller
+            self.start_controller()
+
             self.sim_started = True
+
         except Exception, e:
             if self.verbose > 0:
                 print "Exception encountered during simulation!"  # + str(e)
@@ -189,50 +181,81 @@ class HyQSim(threading.Thread):
                 if self.sim_ps.isalive():
                     self.stop_sim()
 
+        while not self.stopped:
+            time.sleep(0.1)
+
     def stop(self):
 
         self.stop_sim()
+        self.stopped = True
 
     def start_sim(self):
 
-        self.t_init = time.time()
+        # If the physics should not on this computer, just do not do anything
+        if self.remote:
+            self.printv(" ===== Physics should run on remote computer =====\n")
+            return
+
+        try:
+            # Init the config file
+            if self.init_impedance is not None:
+                self.set_init_impedances()
+
+            self.t_init = time.time()
+            if self.sim_ps is not None:
+                if self.sim_ps.isalive():
+                    self.printv(" ===== Physics is Already Started =====\n")
+                    return
+
+            proc = [self.sim_ps_name, self.sim_package,
+                    self.sim_node, self.sim_params]
+
+            self.printv(" ===== Starting Physics =====\n")
+
+            self.sim_ps = pexpect.spawn(" ".join(proc))
+            if self.verbose == 2:
+                self.sim_ps.logfile_read = sys.stdout
+
+        except Exception, e:
+            if self.verbose > 0:
+                print "Exception encountered during simulation!"  + str(e)
+                traceback.print_exc()
+            if self.sim_ps is not None:
+                if self.sim_ps.isalive():
+                    self.stop_sim()
+    
+    def stop_sim(self, clean_stop=False):
+
+        if self.remote:
+            return
+
+        self.printv(" ===== Stopping Physics =====\n")
+
+        if clean_stop:
+            self.sim_ps.sendcontrol("c")
+            self.sim_ps.sendcontrol("d")
+            self.sim_ps.sendcontrol("c")
+            i = 0
+            while self.sim_ps.isalive() and i < 300:
+                # print 'alive: ' + str(self.sim_ps.isalive()) + " i: " + str(i)
+                time.sleep(0.1)
+                i += 1
+
         if self.sim_ps is not None:
             if self.sim_ps.isalive():
-                self.printv("\n ===== Physics is Already Started =====\n")
-                return
-
-        proc = [self.sim_ps_name, self.sim_package,
-                self.sim_node, self.sim_params]
-
-        self.printv("\n ===== Starting Physics =====\n")
-
-        self.sim_ps = pexpect.spawn(" ".join(proc))
-        if self.verbose == 2:
-            self.sim_ps.logfile_read = sys.stdout
-
-    def stop_sim(self, clean_stop=True):
-
-        if not self.remote:
-            self.printv("\n ===== Stopping Physics =====\n")
-
-            if clean_stop:
-                self.sim_ps.sendcontrol("c")
-                self.sim_ps.sendcontrol("d")
-                self.sim_ps.sendcontrol("c")
-                i = 0
-                while self.sim_ps.isalive() and i < 300:
-                    # print 'alive: ' + str(self.sim_ps.isalive()) + " i: " + str(i)
-                    time.sleep(0.1)
-                    i += 1
-
-            # Kill all other ros processes
-            # if self.is_alive():
-            for proc in psutil.process_iter():
-                name = " ".join(proc.cmdline())
-                for y in self.sim_to_kill:
-                    for n in self.sim_not_kill:
-                        if y in name and n not in name:
-                            proc.kill()
+                for proc in psutil.process_iter():
+                    name = " ".join(proc.cmdline())
+                    for y in self.sim_to_kill:
+                        if y in name:
+                            kill_me = True
+                            for n in self.sim_not_kill:
+                                if n in name:
+                                    kill_me = False
+                            if kill_me:
+                                try:
+                                    proc.kill()
+                                except Exception, e:
+                                    pass
 
     def register_node(self):
 
@@ -240,7 +263,7 @@ class HyQSim(threading.Thread):
         # This method cannot be called from the class itself
         # as it has to run on main thread
         with utils.Capturing() as output:
-            ros.init_node('physics', anonymous=True)
+            ros.init_node("physics", anonymous=True, disable_signals=True)
             print output
 
     def send_controller_cmd(self, cmd, rsp, timeout=1):
@@ -271,7 +294,7 @@ class HyQSim(threading.Thread):
         self.send_controller_cmd("", "RCFController>>")
         self.send_controller_cmd("kadj", "Kinematic adjustment ON!!!")
 
-        self.printv("\n ===== RCF Controller is Set =====\n")
+        self.printv(" ===== RCF Controller is Set =====\n")
         self.controller_started = True
 
     def start_rcf_trot(self):
@@ -572,7 +595,8 @@ if __name__ == '__main__':
                 print("Time: " + str(i) + "s and Sim time: " +
                       str(p.get_sim_time()) + "s and state (len= " +
                       str(np.array(p.get_hyq_state()).shape) + "):\n" +
-                      str(np.array(p.get_hyq_state())))
+                      str(np.array(p.get_hyq_state())) + "\nAnd (x, y) = " +
+                      str(p.get_hyq_xy()))
                 if trot_flag is False:
                     if p.sim_started:
                         trot_flag = p.start_rcf_trot()
