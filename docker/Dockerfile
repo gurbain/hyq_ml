@@ -17,9 +17,8 @@ USER gurbain
 WORKDIR /home/gurbain
 
 #------------------------
-# Install Hyq_ml reposuitory
+# Install Hyq_ml repository
 #------------------------
-
 RUN git clone https://github.com/gurbain/hyq_ml
 RUN cd hyq_ml && \
     git checkout embodiment && \
@@ -28,16 +27,14 @@ RUN cd hyq_ml && \
 #------------------------
 # ROS Install
 #------------------------
-RUN cd hyq_ml/docker/install_hyq && \
+RUN cd hyq_ml/docker/install && \
     bash install_ros.sh
 
 
 # #------------------------
 # # DLS HyQ Install
 # #------------------------
+RUN cd hyq_ml/docker/install && \
+    bash install_dls.sh
 RUN cd hyq_ml/docker/install_hyq && \
-    bash install_dls.sh 
-RUN mkdir bin && \
-	cd hyq_ml/docker/install_hyq && \
     bash setup_shell.sh
-ADD hyq /home/gurbain/bin/hyq
