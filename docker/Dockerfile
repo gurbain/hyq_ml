@@ -11,7 +11,7 @@ RUN apt-get update && \
 
 USER root
 RUN useradd -ms /bin/bash gurbain
-ADD sudoers.txt /etc/sudoers
+ADD /etc/sudoers.txt /etc/sudoers
 RUN chmod 440 /etc/sudoers
 USER gurbain
 WORKDIR /home/gurbain
