@@ -36,5 +36,5 @@ RUN cd hyq_ml/docker/install && \
 # #------------------------
 RUN cd hyq_ml/docker/install && \
     bash install_dls.sh
-RUN cd hyq_ml/docker/install_hyq && \
+RUN cd hyq_ml/docker/install && \
     bash setup_shell.sh
