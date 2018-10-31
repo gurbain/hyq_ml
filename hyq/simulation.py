@@ -26,7 +26,7 @@ class Simulation(object):
                  pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15, sm=False,
                  t_stop_cl=160, save_folder=None, ol=False, view=False, train=True,
                  pub_loss=True, epoch_num=150, plot=False, pub_error=True,
-                 train_buff_size=10000, real_physics=False):
+                 init_impedance=None, train_buff_size=10000, real_physics=False):
 
         self.t_sim = t_sim
         self.t_train = t_train
@@ -49,6 +49,7 @@ class Simulation(object):
         self.epoch_num = epoch_num
         self.train_buff_size = train_buff_size
         self.real_physics = real_physics
+        self.init_impedance = init_impedance
         self.sm = sm
         self.train = train
         self.play_from_file = False
@@ -110,16 +111,14 @@ class Simulation(object):
     def start(self):
 
         # Create and start the handle thread to the physics simulation
-        self.physics = physics.HyQSim(view=self.view,
+        self.physics = physics.HyQSim(init_impedance=None,
+                                      view=self.view,
                                       remote=self.real_physics,
                                       verbose=self.verbose,
-                                      kadj=True,
-                                      prec=False,
-                                      adapt=False,
                                       rt=self.real_physics,
                                       publish_error=self.publish_error)
+        ros.init_node("simulation", anonymous=True)
         self.physics.start()
-        self.physics.register_node()
 
         # If sim folder is specified create a untrained network and read simulation from a FILE
         if self.sim_file is not None:
@@ -210,7 +209,7 @@ class Simulation(object):
         if self.play_from_file:
             target = self.network.interpolate(self.target_fct, self.t).tolist()[0]
         else:
-            target = self.physics.get_hyq_action().tolist()[0]
+            target = self.physics.get_hyq_tgt_action().tolist()[0]
             self.last_action_it = self.physics.hyq_action_it
 
         # If we need the prediction

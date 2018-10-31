@@ -399,7 +399,7 @@ class HyQSim(threading.Thread):
         self.process_action_flag.acquire()
         try:
             outputs = []
-            if self.hyq_action is not None:
+            if self.hyq_tgt_action is not None:
                 outputs = self.hyq_tgt_action
         finally:
             self.process_action_flag.release()
@@ -539,7 +539,6 @@ class HyQSim(threading.Thread):
             self.process_state_flag.release()
 
     def _reg_hyq_tgt_action(self, msg):
-
 
         # Robot Target Action (length = 8)
         out = [msg.position[1]]           # LF Hip FE Joint
