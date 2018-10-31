@@ -91,6 +91,10 @@ class HyQSim(threading.Thread):
         self.hyq_tgt_action = None
         self.hyq_x = 0
         self.hyq_y = 0
+        self.hyq_z = 0
+        self.hyq_phi = 0
+        self.hyq_theta = 0
+        self.hyq_psi= 0
         self.hyq_state_it = 0
         self.hyq_action_it = 0
         self.process_state_flag = threading.Lock()
@@ -406,9 +410,17 @@ class HyQSim(threading.Thread):
 
         return np.mat(outputs)
 
-    def get_hyq_xy(self):
+    def get_hyq_x_y_z(self):
 
-        return copy.deepcopy(self.hyq_x), copy.deepcopy(self.hyq_y)
+        return copy.deepcopy(self.hyq_x), \
+               copy.deepcopy(self.hyq_y), \
+               copy.deepcopy(self.hyq_z)
+
+    def get_hyq_phi_theta_psi(self):
+
+        return copy.deepcopy(self.hyq_phi), \
+               copy.deepcopy(self.hyq_theta), \
+               copy.deepcopy(self.hyq_psi)
 
     def send_hyq_nn_pred(self, prediction, weight, error=None):
 
@@ -531,8 +543,12 @@ class HyQSim(threading.Thread):
 
         self.process_state_flag.acquire()
         try:
+            self.hyq_phi = msg.base[0].position
+            self.hyq_theta = msg.base[1].position
+            self.hyq_psi= msg.base[2].position
             self.hyq_x = msg.base[3].position
             self.hyq_y = msg.base[4].position
+            self.hyq_z = msg.base[5].position
             self.hyq_state = inp
             self.hyq_state_it += 1
         finally:
@@ -594,8 +610,8 @@ if __name__ == '__main__':
                 print("Time: " + str(i) + "s and Sim time: " +
                       str(p.get_sim_time()) + "s and state (len= " +
                       str(np.array(p.get_hyq_state()).shape) + "):\n" +
-                      str(np.array(p.get_hyq_state())) + "\nAnd (x, y) = " +
-                      str(p.get_hyq_xy()))
+                      str(np.array(p.get_hyq_state())) + "\nAnd (x, y, z) = " +
+                      str(p.get_hyq_x_y_z()))
                 if trot_flag is False:
                     if p.sim_started:
                         trot_flag = p.start_rcf_trot()

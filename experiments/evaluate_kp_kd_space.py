@@ -1,3 +1,4 @@
+import numpy as np
 import os
 import rospy as ros
 import sys
@@ -7,7 +8,7 @@ from hyq import utils
 from hyq import physics
 
 
-FOLDER = "/home/gurbain/hyq_ml/data/stifness_space_exploration/" + \
+FOLDER = "/home/gurbain/hyq_ml/data/stiffness_space_exploration/" + \
          utils.timestamp() + "/"
 
 
@@ -21,9 +22,13 @@ def simulate(n, kp, kd):
     # Run Simulation for 40 seconds
     t = 0  # sim time
     i = 0  # real timeout
-    x = []  # robot init x position
-    y = []  # robot init y position
-    t_trot = 0 # start of the trotting gait
+    x = []      # robot init x position
+    y = []      # robot init y position
+    z = []      # robot init z position
+    phi = []    # robot init roll
+    theta = []  # robot init pitch
+    psi = []    # robot init yaw
+    t_trot = 0  # start of the trotting gait
     trot_flag = False
     while not ros.is_shutdown() and t < 50 and i < 2000:
 
@@ -39,9 +44,14 @@ def simulate(n, kp, kd):
                     t_trot = t
 
         # Retrieve robot x and y position
-        curr_x, curr_y = p.get_hyq_xy()
+        curr_x, curr_y, curr_z = p.get_hyq_x_y_z()
+        curr_phi, curr_theta, curr_psi = p.get_hyq_phi_theta_psi()
         x.append(curr_x)
         y.append(curr_y)
+        z.append(curr_z)
+        phi.append(curr_phi)
+        theta.append(curr_theta)
+        psi.append(curr_psi)
 
         # Count for timeout
         i += 1
@@ -52,8 +62,10 @@ def simulate(n, kp, kd):
         p.stop()
 
         # Save and quit
-        to_save = {"t_sim": t, "x": x, "y": y, "t_real": i,
-                   "t_trot": t_trot, "index": n, "Kp": kp, "Kd": kd}
+        to_save = {"t_sim": t, "t_real": i, "t_trot": t_trot, 
+                   "index": n, "Kp": kp, "Kd": kd,
+                   "x": x, "y": y, "z": z, 
+                   "phi": phi, "theta": theta, "psi": psi}
         utils.save_on_top(to_save, FOLDER + "results.pkl")
 
     return
@@ -69,9 +81,9 @@ if __name__ == '__main__':
     n = 1
     # ros.on_shutdown(utils.cleanup)
 
-    for kp in range(50, 1050, 50):
-        for kd in range(1, 13, 4):
-            for i in range(5):
+    for kp in np.logspace(0, 3, 30):
+        for kd in np.logspace(0, 2, 10):
+            for i in range(4):
                 if not ros.is_shutdown():
                     print "\n ===== Simulation N=" + str(n) + \
                           " - Kp=" + str(kp) + " - Kd=" + str(kd) + " =====\n"
