@@ -81,12 +81,11 @@ if __name__ == '__main__':
     n = 1
     # ros.on_shutdown(utils.cleanup)
 
-    for kp in np.logspace(0, 3, 30):
-        for kd in np.logspace(0, 2, 10):
-            for i in range(4):
+    for i in range(4):
+        for kp in np.logspace(0, 3, 30):
+            for kd in np.logspace(0, 2, 10):
                 if not ros.is_shutdown():
                     print "\n ===== Simulation N=" + str(n) + \
                           " - Kp=" + str(kp) + " - Kd=" + str(kd) + " =====\n"
-
                     simulate(n, kp, kd)
                     n += 1
