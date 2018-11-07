@@ -247,19 +247,19 @@ class HyQSim(threading.Thread):
 
         if self.sim_ps is not None:
             if self.sim_ps.isalive():
-                for proc in psutil.process_iter():
-                    name = " ".join(proc.cmdline())
-                    for y in self.sim_to_kill:
-                        if y in name:
-                            kill_me = True
-                            for n in self.sim_not_kill:
-                                if n in name:
-                                    kill_me = False
-                            if kill_me:
-                                try:
+                try:
+                    for proc in psutil.process_iter():
+                        name = " ".join(proc.cmdline())
+                        for y in self.sim_to_kill:
+                            if y in name:
+                                kill_me = True
+                                for n in self.sim_not_kill:
+                                    if n in name:
+                                        kill_me = False
+                                if kill_me:
                                     proc.kill()
-                                except Exception, e:
-                                    pass
+                except (psutil.ZombieProcess, psutil.AccessDenied, psutil.NoSuchProcess, IOError):
+                    pass
 
     def register_node(self):
 
@@ -341,25 +341,27 @@ class HyQSim(threading.Thread):
 
     def set_init_impedances(self):
 
-        f = fileinput.FileInput(self.rcf_config_file, inplace=True, backup='.bak')
+        f_origin = open(self.rcf_config_file, "r")
+        f_new = open(self.rcf_config_file + ".current_sim", "w")
 
-        for line in f:
+        for line in f_origin:
             if line.startswith("KpHAA = "):
-                print "KpHAA = {0:.3f}".format(float(self.init_impedance[0]))
+                f_new.write("KpHAA = {0:.3f}".format(float(self.init_impedance[0])) + "\n")
             elif line.startswith("KdHAA = "):
-                print "KdHAA = {0:.3f}".format(float(self.init_impedance[1]))
+                f_new.write("KdHAA = {0:.3f}".format(float(self.init_impedance[1])) + "\n")
             elif line.startswith("KpHFE = "):
-                print "KpHFE = {0:.3f}".format(float(self.init_impedance[2]))
+                f_new.write("KpHFE = {0:.3f}".format(float(self.init_impedance[2])) + "\n")
             elif line.startswith("KdHFE = "):
-                print "KdHFE = {0:.3f}".format(float(self.init_impedance[3]))
+                f_new.write("KdHFE = {0:.3f}".format(float(self.init_impedance[3])) + "\n")
             elif line.startswith("KpKFE = "):
-                print "KpKFE = {0:.3f}".format(float(self.init_impedance[4]))
+                f_new.write("KpKFE = {0:.3f}".format(float(self.init_impedance[4])) + "\n")
             elif line.startswith("KdKFE = "):
-                print "KdKFE = {0:.3f}".format(float(self.init_impedance[5]))
+                f_new.write("KdKFE = {0:.3f}".format(float(self.init_impedance[5])) + "\n")
             else:
-                print line.rstrip()
+                f_new.write(line.rstrip() + "\n")
 
-        f.close()
+        f_origin.close()
+        f_new.close()
 
     def get_impendances(self):
 
