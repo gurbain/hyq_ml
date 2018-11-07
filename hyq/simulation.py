@@ -22,7 +22,7 @@ import utils
 
 class Simulation(object):
 
-    def __init__(self, nn_folder=None, sim_file=None, verbose=2, t_train=0,
+    def __init__(self, nn_folder=None, sim_file=None, verbose=1, t_train=0,
                  pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15, sm=False,
                  t_stop_cl=160, save_folder=None, ol=False, view=False, train=True,
                  pub_loss=True, epoch_num=150, plot=False, pub_error=True,
@@ -151,8 +151,6 @@ class Simulation(object):
                                       checkpoint=False,
                                       esn_n_read=10,
                                       no_callbacks=True,
-                                      esn_in_mask=[True, False, False, False, False],
-                                      esn_out_mask=[False] * 24,
                                       verbose=0,
                                       save_folder=self.save_folder)
 

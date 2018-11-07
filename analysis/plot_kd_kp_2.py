@@ -10,7 +10,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FILENAME = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/stiffness_space_exploration/20181030-184700/results.pkl"
+FILENAME = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/stiffness_space_exploration/20181105-140249/results.pkl"
 
 def get_cols():
 

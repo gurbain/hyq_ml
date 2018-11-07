@@ -34,129 +34,56 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
 
     def _fill_mins_maxs(self):
 
-        mins = []
-        maxs = []
+        self.names = ["Bias",
+                      "Base Z Pos",
+                      "Base Roll",
+                      "Base Pitch",
 
-        if self.n_in == 1:
-            self.names = ["Forward Velocity"]
-            mins = [0]
-            maxs = [1]
+                      "LF Foot X Force",
+                      "LF Foot Y Force",
+                      "LF Foot Z Force",
+                      "RF Foot X Force",
+                      "RF Foot Y Force",
+                      "RF Foot Z Force",
+                      "LH Foot X Force",
+                      "LH Foot Y Force",
+                      "LH Foot Z Force",
+                      "RH Foot X Force",
+                      "RH Foot Y Force",
+                      "RH Foot Z Force",
 
-        if self.n_in > 1 and self.n_in < 46:
+                      "LF HFE Pos",
+                      "LF KFE Pos",
+                      "RF HFE Pos",
+                      "RF KFE Pos",
+                      "LH HFE Pos",
+                      "LH KFE Pos",
+                      "RH HFE Pos",
+                      "RH KFE Pos"]
 
-            self.names = ["Roll Angle",
-                          "Pitch Angle",
-                          "Roll Vel",
-                          "Pitch Vel",
-                          "Forward Velocity"]
-            mins = [math.radians(-90), math.radians(-90),
-                    math.radians(-90), math.radians(-90), 0]
-            maxs = [math.radians(90), math.radians(90),
-                    math.radians(90), math.radians(90), 1]
+        mins = [0.0, 0.0]
+        for i in range(2):
+            mins.append(math.radians(-30))
+        for i in range(12):
+            mins.append(-200)
+        for i in range(2):
+            mins.append(math.radians(-50))
+            mins.append(math.radians(-140))
+        for i in range(2):
+            mins.append(math.radians(-70))
+            mins.append(math.radians(20))
 
-            if self.n_in == 8 or self.n_in == 12:
-
-                self.names[4] = ["X Vel"]
-                mins[4] = -1.5
-                maxs[4] = 1.5
-                self.names += ["Y Vel",
-                               "Yaw Vel",
-                               "Forward Velocity"]
-                mins += [-1.5, math.radians(-90), 0]
-                maxs += [1.5, math.radians(90), 1]
-
-            if self.n_in == 9 or self.n_in == 12:
-
-                self.names += ["LF Stance Status",
-                               "RF Stance Status",
-                               "LH Stance Status",
-                               "RH Stance Status"]
-                mins += [-0.2, -0.2, -0.2, -0.2]
-                maxs += [1.2, 1.2, 1.2, 1.2]
-
-        if self.n_in == 46:
-            self.names = ["Roll Vel",
-                          "Pitch Vel",
-                          "Yaw Vel",
-                          "X Vel",
-                          "Y Vel",
-                          "Z Vel",
-
-                          "LF HAA Pos",
-                          "LF HFE Pos",
-                          "LF KFE Pos",
-                          "RF HAA Pos",
-                          "RF HFE Pos",
-                          "RF KFE Pos",
-                          "LH HAA Pos",
-                          "LH HFE Pos",
-                          "LH KFE Pos",
-                          "RH HAA Pos",
-                          "RH HFE Pos",
-                          "RH KFE Pos",
-
-                          "LF HAA Vel",
-                          "LF HFE Vel",
-                          "LF KFE Vel",
-                          "RF HAA Vel",
-                          "RF HFE Vel",
-                          "RF KFE Vel",
-                          "LH HAA Vel",
-                          "LH HFE Vel",
-                          "LH KFE Vel",
-                          "RH HAA Vel",
-                          "RH HFE Vel",
-                          "RH KFE Vel",
-
-                          "LF HAA Eff",
-                          "LF HFE Eff",
-                          "LF KFE Eff",
-                          "RF HAA Eff",
-                          "RF HFE Eff",
-                          "RF KFE Eff",
-                          "LH HAA Eff",
-                          "LH HFE Eff",
-                          "LH KFE Eff",
-                          "RH HAA Eff",
-                          "RH HFE Eff",
-                          "RH KFE Eff",
-
-                          "LF Stance",
-                          "RF Stance",
-                          "LH Stance",
-                          "RH Stance"]
-
-            mins = [-2, -2, -2, -0.5, -0.5, -0.5]
-            for i in range(2):
-                mins.append(math.radians(-90))
-                mins.append(math.radians(-50))
-                mins.append(math.radians(-140))
-            for i in range(2):
-                mins.append(math.radians(-90))
-                mins.append(math.radians(-70))
-                mins.append(math.radians(20))
-            for i in range(12):
-                mins.append(-10)
-            for i in range(12):
-                mins.append(-150)
-            for i in range(4):
-                mins.append(-1.2)
-
-            maxs = [2, 2, 2, 0.5, 0.5, 0.5]
-            for i in range(2):
-                maxs.append(math.radians(30))
-                maxs.append(math.radians(70))
-                maxs.append(math.radians(-20))
-            for i in range(2):
-                maxs.append(math.radians(30))
-                maxs.append(math.radians(50))
-                maxs.append(math.radians(140))
-            for i in range(12):
-                maxs.append(10)
-            for i in range(12):
-                maxs.append(150)
-            for i in range(4):
-                maxs.append(1.2)
+        maxs = [1.0, 4.0]
+        for i in range(2):
+            maxs.append(math.radians(30))
+        for i in range(12):
+            maxs.append(200)
+        for i in range(2):
+            maxs.append(math.radians(70))
+            maxs.append(math.radians(-20))
+        for i in range(2):
+            maxs.append(math.radians(50))
+            maxs.append(math.radians(140))
 
         self.mins = np.array(mins)
         self.maxs = np.array(maxs)
@@ -201,55 +128,30 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
 
     def __init__(self):
 
-        self.names = ["LF HAA Pos",
-                      "LF HFE Pos",
+        self.names = ["LF HFE Pos",
                       "LF KFE Pos",
-                      "RF HAA Pos",
                       "RF HFE Pos",
                       "RF KFE Pos",
-                      "LH HAA Pos",
                       "LH HFE Pos",
                       "LH KFE Pos",
-                      "RH HAA Pos",
                       "RH HFE Pos",
-                      "RH KFE Pos",
-
-                      "LF HAA Vel",
-                      "LF HFE Vel",
-                      "LF KFE Vel",
-                      "RF HAA Vel",
-                      "RF HFE Vel",
-                      "RF KFE Vel",
-                      "LH HAA Vel",
-                      "LH HFE Vel",
-                      "LH KFE Vel",
-                      "RH HAA Vel",
-                      "RH HFE Vel",
-                      "RH KFE Vel"]
+                      "RH KFE Pos"]
 
         mins = []
         for i in range(2):
-            mins.append(math.radians(-90))
             mins.append(math.radians(-50))
             mins.append(math.radians(-140))
         for i in range(2):
-            mins.append(math.radians(-90))
             mins.append(math.radians(-70))
             mins.append(math.radians(20))
-        for i in range(12):
-            mins.append(-10)
 
         maxs = []
         for i in range(2):
-            maxs.append(math.radians(30))
             maxs.append(math.radians(70))
             maxs.append(math.radians(-20))
         for i in range(2):
-            maxs.append(math.radians(30))
             maxs.append(math.radians(50))
             maxs.append(math.radians(140))
-        for i in range(12):
-            maxs.append(10)
 
         self.mins = np.array(mins)
         self.maxs = np.array(maxs)

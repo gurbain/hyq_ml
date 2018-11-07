@@ -44,21 +44,9 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 nn = [
-       # [('noise', 0.1)],
-       # [('sdec',)],
-       # [('esn', 100, 0.9)],
-       # [('sdec',), ('td', 10, 2), ('esnsfa', 50, 0.9, 14, -3, 0)],
-       # [('td', 6, 2)],#,
-       # [('esnsfa', 50, 0.9, 14, -3, 0)],
-       # [('fft', 12)],
-       # [('esnsfa', 80, 0.9, 15, -2, 0), ('td', 10, 2)], #
-       # [('lstm', 30)],
-       # [('noise', 200, 0.01)],
-       # [('osc', )],
        [('relu', 40)],
        [('relu', 40)],
        [('relu', 40)]
-       # [('relu', 20)],
      ]
 
 
@@ -68,7 +56,7 @@ class NN(object):
 
     def __init__(self, nn_layers=nn, test_split=0.7, val_split=0.1, stop_delta=0.0001, stop_pat=150,
                  optim='adam', metric='mae', batch_size=2048, max_epochs=10, regularization=0.0,
-                 esn_n_res=100, esn_n_read=80, esn_in_mask=None, esn_out_mask=None, esn_real_fb=False,
+                 esn_n_res=10, esn_n_read=80, esn_in_mask=None, esn_out_mask=None, esn_real_fb=False,
                  esn_spec_rad=0.3, esn_damping=0.1, esn_sparsity=0.4, esn_noise=0.001,
                  data_file="data/sims/tc.pkl", save_folder="data/nn_learning/", checkpoint=False,
                  no_callbacks=False, verbose=2, random_state=12):
@@ -764,10 +752,9 @@ class NN(object):
 
         # Create ESN masks
         if self.esn_in_mask is None:
-            self.esn_in_mask = [True, False, False, False, False]  # [False for _ in range(self.n_in)]
+            self.esn_in_mask = [False for _ in range(self.n_in)]
         if self.esn_out_mask is None:
-            self.esn_out_mask = [False, True, True, False, True, True, False, True, True, False, True, True,
-                                 False, False, False, False, False, False, False, False, False, False, False, False] #[False for _ in range(self.n_out)]
+            self.esn_out_mask = [False for _ in range(self.n_out)]
 
         return self.x_ft, self.y_ft
 
