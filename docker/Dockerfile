@@ -37,6 +37,24 @@ RUN sudo chmod a+x hyq_ml/docker/bin/hyq
 RUN cd hyq_ml/docker/install && \
     bash setup_shell.sh
 
+
+## Test
+RUN apt-get update &&\
+    apt-get install -y avahi-utils avahi-daemon libnss-mdns systemd
+RUN cd /lib/systemd/system/sysinit.target.wants/;\
+  ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1 \
+    rm -f /lib/systemd/system/multi-user.target.wants/*;\
+  rm -f /etc/systemd/system/*.wants/*;\
+  rm -f /lib/systemd/system/local-fs.target.wants/*; \
+  rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
+  rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
+  rm -f /lib/systemd/system/basic.target.wants/*;\
+  rm -f /lib/systemd/system/anaconda.target.wants/*; \
+  rm -f /lib/systemd/system/plymouth*; \
+  rm -f /lib/systemd/system/systemd-update-utmp*
+RUN mkdir -p /var/run/dbus
+ENV init /lib/systemd/systemd
+
 ## Why??
-RUN cd hyq_ml/docker/install && \
-    bash hack_me.sh
+#RUN cd hyq_ml/docker/install && \
+#    bash hack_me.sh
