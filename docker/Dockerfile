@@ -22,7 +22,7 @@ WORKDIR /home/gurbain
 # Dependencies
 #------------------------
 RUN sudo -H pip install keras tensorflow-gpu \
-         tensorflow sklearn tqdm pexpect
+         tensorflow sklearn tqdm pexpect docker
 
 #------------------------
 # Install Hyq_ml repository
@@ -49,6 +49,7 @@ RUN cd hyq_ml && sudo python setup.py develop
 # #------------------------
 # # HyQ Install Hack
 # #------------------------
+RUN cd hyq_ml && git pull origin master
 RUN cd hyq_ml/docker/install && \
     bash hack_me.sh
 
