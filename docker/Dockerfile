@@ -8,7 +8,8 @@ RUN apt-get update && \
     lsb-release build-essential \
     git sudo dialog apt-utils \
     wget software-properties-common \
-    net-tools iputils-ping wget
+    net-tools iputils-ping wget python-pip \
+    python-setuptools
 
 USER root
 RUN useradd -ms /bin/bash gurbain
@@ -18,8 +19,15 @@ USER gurbain
 WORKDIR /home/gurbain
 
 #------------------------
+# Dependencies
+#------------------------
+RUN sudo pip install keras tensorflow-gpu \
+         tensorflow sklearn tqdm pexpect
+
+#------------------------
 # Install Hyq_ml repository
 #------------------------
+RUN pwd
 RUN git clone https://github.com/gurbain/hyq_ml
 
 #------------------------
@@ -36,25 +44,14 @@ RUN cd hyq_ml/docker/install && \
 RUN sudo chmod a+x hyq_ml/docker/bin/hyq
 RUN cd hyq_ml/docker/install && \
     bash setup_shell.sh
+RUN cd hyq_ml && sudo python setup.py develop
 
 
-## Test
-RUN apt-get update &&\
-    apt-get install -y avahi-utils avahi-daemon libnss-mdns systemd
-RUN cd /lib/systemd/system/sysinit.target.wants/;\
-  ls | grep -v systemd-tmpfiles-setup | xargs rm -f $1 \
-    rm -f /lib/systemd/system/multi-user.target.wants/*;\
-  rm -f /etc/systemd/system/*.wants/*;\
-  rm -f /lib/systemd/system/local-fs.target.wants/*; \
-  rm -f /lib/systemd/system/sockets.target.wants/*udev*; \
-  rm -f /lib/systemd/system/sockets.target.wants/*initctl*; \
-  rm -f /lib/systemd/system/basic.target.wants/*;\
-  rm -f /lib/systemd/system/anaconda.target.wants/*; \
-  rm -f /lib/systemd/system/plymouth*; \
-  rm -f /lib/systemd/system/systemd-update-utmp*
-RUN mkdir -p /var/run/dbus
-ENV init /lib/systemd/systemd
+# #------------------------
+# # HyQ Install Hack
+# #------------------------
+RUN cd hyq_ml/docker/install && \
+    bash hack_me.sh
 
-## Why??
-#RUN cd hyq_ml/docker/install && \
-#    bash hack_me.sh
+
+
