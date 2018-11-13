@@ -27,7 +27,6 @@ RUN sudo pip install keras tensorflow-gpu \
 #------------------------
 # Install Hyq_ml repository
 #------------------------
-RUN pwd
 RUN git clone https://github.com/gurbain/hyq_ml
 
 #------------------------
