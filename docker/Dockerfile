@@ -21,7 +21,7 @@ WORKDIR /home/gurbain
 #------------------------
 # Dependencies
 #------------------------
-RUN sudo pip install keras tensorflow-gpu \
+RUN sudo -H pip install keras tensorflow-gpu \
          tensorflow sklearn tqdm pexpect
 
 #------------------------
