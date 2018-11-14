@@ -1,3 +1,4 @@
+#!/bin/bash
 docker run \
        --add-host=koe:172.18.20.19 \
        --add-host=koe.elis.ugent.be:172.18.20.19 \
@@ -13,4 +14,4 @@ docker run \
        --add-host=schaap.elis.ugent.be:172.18.20.236 \
        --add-host=nas:172.18.20.252 \
        -e DISPLAY=$DISPLAY \
-       -it hyq:latest
+       -it hyq:latest /bin/bash

@@ -47,10 +47,14 @@ RUN cd hyq_ml && sudo python setup.py develop
 
 
 # #------------------------
-# # HyQ Install Hack
+# # HyQ Install Hack and Entrypoint
 # #------------------------
+RUN cd hyq_ml/docker/install && git pull origin master
 RUN cd hyq_ml/docker/install && \
     bash hack_me.sh
+COPY /bin/entrypoint.sh /usr/local/bin/
+RUN sudo chmod a+x /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
 
 
 

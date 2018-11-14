@@ -9,5 +9,5 @@ timeout 2m /opt/ros/kinetic/bin/roslaunch \
            gazebo:=true osc:=false gui:=false rviz:=false
 RETVAL=$?
 
-echo "The Hack finished with the value= $RETVAL"
+echo "Hyq Docker Hacked!"
 exit 0
