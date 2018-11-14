@@ -36,7 +36,7 @@ sys.stderr = stderr
 class HyQSim(threading.Thread):
 
     def __init__(self, view=False, rviz=False, rt=True, remote=False,
-                 init_impedance=None, verbose=2, publish_error=False):
+                 init_impedance=None, verbose=1, publish_error=False):
 
         threading.Thread.__init__(self)
 

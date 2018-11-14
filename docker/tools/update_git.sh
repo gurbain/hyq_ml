@@ -8,7 +8,7 @@ DOCKER_TAG="latest"
 
 
 echo " --- Pull Git Repository Image --- "
-docker run -t $DOCKER_IMG:$DOCKER_TAG "cd /home/gurbain/hyq_ml && git pull $REMOTE $MASTER"
+docker run -it $DOCKER_IMG:$DOCKER_TAG /bin/sh -c "cd /home/gurbain/hyq_ml && git pull $REMOTE $MASTER"
 
 echo " --- Get New Container ID --- "
 CONTAINER_ID=$(docker container ls --all --quiet | head -n 1)
