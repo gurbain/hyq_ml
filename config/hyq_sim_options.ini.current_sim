@@ -2,21 +2,21 @@
 
 [JointGainsSwing]
 
-KpHAA = 10.826
-KpHFE = 10.826
-KpKFE = 10.826
-KdHAA = 1.668
-KdHFE = 1.668
-KdKFE = 1.668
+KpHAA = 150.0
+KpHFE = 250.0
+KpKFE = 250.0
+KdHAA = 12.0
+KdHFE = 8.0
+KdKFE = 6.0
 
 [JointGainsStance]
 
-KpHAA = 10.826
-KpHFE = 10.826
-KpKFE = 10.826
-KdHAA = 1.668
-KdHFE = 1.668
-KdKFE = 1.668
+KpHAA = 150.0
+KpHFE = 250.0
+KpKFE = 150.0
+KdHAA = 10.0
+KdHFE = 8.0
+KdKFE = 6.0
 
 [TrunkController]
 
