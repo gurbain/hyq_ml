@@ -21,15 +21,15 @@ import subprocess
 # (SSH keys with no password)
 USER = "gurbain"
 HOST = "paard"
-HOST_IP = '172.18.20.20'
+HOST_IP = '192.168.0.2'
 HOST_PORT = '5000'
-MACHINES = ["paard", "hond", "geit", "kat", "koe", "schaap"]
+MACHINES = ["paard",  "geit", "kat", "schaap"]
 KEY_FILE = "/home/gurbain/.docker_swarm_key"
 
-JOB_LIMIT = 20
+JOB_LIMIT = 200
 IMAGE = "hyq:latest"
 IDLE_TASK = "tail -f /dev/null"
-RUN_TASK = "bash -c 'ping -c 6 172.18.20.240 >> docker_sim/results.txt'"
+RUN_TASK = "bash -c 'ping -c 6 192.168.0.1 >> /home/gurbain/docker_sim/results.txt'"
            # source /opt/ros/dls-distro/setup.bash; \
            # export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
            # cd /home/gurbain/hyq_ml/hyq; \
@@ -37,7 +37,7 @@ RUN_TASK = "bash -c 'ping -c 6 172.18.20.240 >> docker_sim/results.txt'"
 
 SAVE_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
-MOUNT_OPT = "ro"
+MOUNT_OPT = "rw"
 
 
 def timestamp():
@@ -76,7 +76,7 @@ class Lan(object):
         machines_on = []
         for m in self.engine.nodes.list():
             if str(m.attrs["Status"]["State"]) == "ready":
-                machines_on.append(str(m.attrs["Description"]["Hostname"]))
+                machines_on.append(str(m.attrs["Description"]["Hostname"].split(".")[0]))
         machines_mask = [m in machines_on for m in self.swarm_machines]
         machines_ind = Picker(title="Select the computers to enable in the swarm",
                               options=self.swarm_machines,
@@ -115,7 +115,7 @@ class Lan(object):
     def stop(self):
 
         print "\n--- Stoping the swarm on this computer ---\n"
-        machines_on = [str(m.attrs["Description"]["Hostname"]) for m in self.engine.nodes.list()]
+        machines_on = [str(m.attrs["Description"]["Hostname"].split(".")[0]) for m in self.engine.nodes.list()]
 
         for m in machines_on:
             if m != self.swarm_host:
@@ -194,7 +194,7 @@ class Workers(object):
         for m in self.engine.nodes.list():
             if str(m.attrs["Status"]["State"]) == "ready":
                 self.nodes_id.append(m.id)
-                self.nodes_name.append(str(m.attrs["Description"]["Hostname"]))
+                self.nodes_name.append(str(m.attrs["Description"]["Hostname"].split(".")[0]))
 
         self.srv_names = [str(s.name) for s in self.engine.services.list()]
         self.srv_ids = [str(s.id) for s in self.engine.services.list()]
@@ -207,7 +207,7 @@ class Workers(object):
         for m in self.engine.nodes.list():
             if str(m.attrs["Status"]["State"]) == "ready":
                 self.nodes_id.append(m.id)
-                self.nodes_name.append(str(m.attrs["Description"]["Hostname"]))
+                self.nodes_name.append(str(m.attrs["Description"]["Hostname"].split(".")[0]))
 
         self.srv_names = [str(s.name) for s in self.engine.services.list()]
         self.srv_ids = [str(s.id) for s in self.engine.services.list()]
@@ -225,7 +225,7 @@ class Workers(object):
                             t = t2
                 if t is not None:
                     try:
-                        host = self.engine.nodes.get(t["NodeID"]).attrs["Description"]["Hostname"]
+                        host = self.engine.nodes.get(t["NodeID"]).attrs["Description"]["Hostname"].split(".")[0]
                         status = t["Status"]["State"]
                         creation = int(dateutil.parser.parse(t["CreatedAt"]).strftime("%s"))
                         service_name = s.name
@@ -382,12 +382,9 @@ class Tasks(object):
 
         self.cluster.browse()
 
-        worker_run_name = [w["service_name"] for w in self.cluster.workers
-                           if (w["type"] == "run" and w["status"] in ["shutdown", "complete", "running"])]
-        worker_run_id = [w["service_id"] for w in self.cluster.workers
-                         if (w["type"] == "run" and w["status"] in ["shutdown", "complete", "running"])]
-        worker_run_creat = [w["creation_timestamp"] for w in self.cluster.workers
-                            if (w["type"] == "run" and w["status"] in ["shutdown", "complete", "running"])]
+        worker_run_name = [w["service_name"] for w in self.cluster.workers if w["type"] == "run"]
+        worker_run_id = [w["service_id"] for w in self.cluster.workers if w["type"] == "run"]
+        worker_run_creat = [w["creation_timestamp"] for w in self.cluster.workers if w["type"] == "run"]
         indexes = Picker(title="Select the service to display the logs", 
                          options=worker_run_name).getIndex()
         if indexes == []:
@@ -396,7 +393,6 @@ class Tasks(object):
             for i in indexes:
                 print "\n--- Printing logs from service \"" + str(worker_run_name[i]) + "\" ---\n"
                 ids = self.engine.services.get(worker_run_id[i])
-                print worker_run_creat[i]
                 logs = ids.logs(details=False, stdout=True, stderr=True,
                                 timestamps=False, since=worker_run_creat[i])
                 for l in logs:
