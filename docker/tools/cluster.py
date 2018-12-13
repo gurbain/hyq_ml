@@ -29,11 +29,9 @@ KEY_FILE = "/home/gurbain/.docker_swarm_key"
 JOB_LIMIT = 200
 IMAGE = "hyq:latest"
 IDLE_TASK = "tail -f /dev/null"
-RUN_TASK = "bash -c 'ping -c 6 192.168.0.1 >> /home/gurbain/docker_sim/results.txt'"
-           # source /opt/ros/dls-distro/setup.bash; \
-           # export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
-           # cd /home/gurbain/hyq_ml/hyq; \
-           # roscore & python physics.py rcf'"
+RUN_TASK = "bash -c 'source /opt/ros/dls-distro/setup.bash; \
+            export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
+            cd /home/gurbain/hyq_ml/hyq; roscore & python physics.py rcf'"
 
 SAVE_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
@@ -333,6 +331,7 @@ class Tasks(object):
 
         self.max_job_attemps = 5
         self.max_waiting_time = 20
+        self.max_time_update = 10
 
     def process(self, config_list):
 
@@ -351,6 +350,10 @@ class Tasks(object):
         mkdir(exp_root_folder)
         self.exp_dir = self.__create_exp_folders(exp_root_folder + timestamp(),
                                                  self.task_dirs)
+
+        # Check status first before starting experiment
+        self.cluster.browse()
+        self.srv_status = copy.deepcopy(self.cluster.workers)
 
         # Launch all experiments
         while len(self.task_dirs) != 0:
@@ -402,6 +405,7 @@ class Tasks(object):
 
         self.cluster.browse()
 
+        cluster_save = copy.deepcopy(self.cluster.workers)
         # print self.srv_status, self.cluster.workers
 
         if self.srv_status is not None:
@@ -418,7 +422,7 @@ class Tasks(object):
 
              # Check if any job failed
             for new in self.cluster.workers:
-                if new["status"] in ["rejected", "failed"] and new["type"] == "run":
+                if new["status"] in ["rejected", "failed", "pause"] and new["type"] == "run":
                     # Set the service in idle mode
                     self.__start_idle(new, remove=False)
 
@@ -446,10 +450,10 @@ class Tasks(object):
             for old in self.srv_status:
                 for new in self.cluster.workers:
                     if old["service_name"] == new["service_name"]:
-                        if old["status"] == "running" and new["status"] == "complete":
+                        if old["status"] in ["running", "starting", "ready"] and new["status"] == "complete":
                             self.__modif_callback(new, old)
 
-        self.srv_status = copy.deepcopy(self.cluster.workers)
+        self.srv_status = cluster_save
 
     def __check_status(self):
 
@@ -482,8 +486,8 @@ class Tasks(object):
                 exit(-1)
 
         # Pick the first idle service available in the list
-        srv_ids = [w["service_id"] for w in self.cluster.workers 
-                   if (w["type"] == "idle" and w["status"] == "running")][0]
+        srv_ids = random.choice([w["service_id"] for w in self.cluster.workers 
+                   if (w["type"] == "idle" and w["status"] == "running")])
         try:
             srv = self.engine.services.get(srv_ids)
         except docker.errors.NotFound:
@@ -512,8 +516,20 @@ class Tasks(object):
                 exit(-1)
 
         # Update the service with the new command
-        success = srv.update(image=self.cluster.srv_img, command=self.cluster.srv_run_task,
+        done = False
+        t_init = time.time()
+        while not done:
+            try:
+                srv.update(image=self.cluster.srv_img, command=self.cluster.srv_run_task,
                              mounts=[folder + ":" + self.mount_dir + ":" + self.mount_opt])
+                done = True
+            except docker.errors.APIError as e:
+                pass
+
+            if time.time() - t_init > self.max_time_update:
+                print "--- ERROR: Timeout when trying to set service to running state ---\n"
+                exit(-1)
+        
 
     def __start_idle(self, srv=None, remove=True):
 
@@ -530,14 +546,25 @@ class Tasks(object):
             except docker.errors.NotFound:
                 return
 
+            # Update the service with the new command
+            done = False
+            t_init = time.time()
+            while not done:
+                try:
+                    s.update(image=self.cluster.srv_img, command=self.cluster.srv_idle_task,
+                             mounts=[])
+                    done = True
+                except docker.errors.APIError as e:
+                    pass
+
+                if time.time() - t_init > self.max_time_update:
+                    print "--- ERROR: Timeout when trying to set service to idle state ---\n"
+                    exit(-1)
+
             if remove:
                 for r in self.running:
                     if r["service_id"] == srv_id:
                         self.running.pop(self.running.index(r))
-
-            # Update the service with the new command
-            s.update(image=self.cluster.srv_img, command=self.cluster.srv_idle_task,
-                     mounts=[])
 
     def __del_callback(self, srv_name):
 
