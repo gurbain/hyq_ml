@@ -7,6 +7,7 @@ from picker import *
 import random
 import string
 import time
+import shutil
 import signal
 import sys
 import subprocess
@@ -28,9 +29,10 @@ IMAGE = "hyq:latest"
 IDLE_TASK = "tail -f /dev/null"
 RUN_TASK = "bash -c 'source /opt/ros/dls-distro/setup.bash; \
             export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
-            cd /home/gurbain/hyq_ml/hyq; roscore & python physics.py rcf'"
+            cd /home/gurbain/hyq_ml/hyq; roscore & python simulation.py "
 
 SAVE_FOLDER = "/home/gurbain/docker_sim/"
+TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
 
@@ -329,6 +331,7 @@ class Tasks(object):
 
         self.folder = SAVE_FOLDER
         self.mount_dir = MOUNT_FOLDER
+        self.def_config = TEST_SIM_CONFIG
         self.mount_opt = MOUNT_OPT
 
         self.max_job_attemps = 5
@@ -529,8 +532,10 @@ class Tasks(object):
         t_init = time.time()
         while not success:
             try:
-                srv.update(image=self.cluster.srv_img, command=self.cluster.srv_run_task,
-                             mounts=[folder + ":" + self.mount_dir + ":" + self.mount_opt])
+                print self.cluster.srv_run_task + str(folder) + "'"
+                srv.update(image=self.cluster.srv_img,
+                           command=self.cluster.srv_run_task + str(folder) + "'",
+                           mounts=[folder + ":" + self.mount_dir + ":" + self.mount_opt])
                 success = True
             except docker.errors.APIError as e:
                 pass
@@ -621,8 +626,8 @@ class Tasks(object):
             liste.append(hashe)
             mkdir(hashe)
 
-            # Associate folder to config
-            #config_list.pop(0)
+            # Add a config file
+            shutil.copyfile(self.def_config, hashe + '/config.txt')
 
         return liste
 
@@ -632,6 +637,8 @@ class Tasks(object):
         for t in task_lists:
             dst_name = root_folder + "/" + t.split("/")[-1]
             os.symlink(t, dst_name)
+
+
 
         return root_folder
 
