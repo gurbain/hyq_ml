@@ -1,0 +1,70 @@
+## DEFAULT HYQ SIMULATION CONFIG FILE
+##
+## Edit the following section to change the physics engine or network
+## features and behaviour.
+##
+
+
+## This section includes all iinformation about the simulation
+## timeline
+[Timing]
+t_sim = 15
+t_train = 0
+t_start_cl = 15
+t_stop_cl = 15
+
+## This section includes high-level parameters about the simulation
+## execution
+[Simulation]
+ol = True
+sm = False
+pub_actions = True
+pub_states = True
+pub_loss = True
+pub_error = True
+
+## This section controls the level of verbosity and GUI
+[Debug]
+view = False
+verbose = 1
+plot = False
+
+## This section includes the parameters of the HyQ Gazebo simulation
+[Physics]
+remote_server = False
+real_time = False
+init_impedance = None
+rviz = False
+
+## This section includes parameters about the training procedure
+[Training]
+train = True
+epoch_num = 150
+train_buff_size = 10000
+
+## This section includes most of the neural network parameters
+[Network]
+sim_file = None
+save_folder = None
+nn_struct = [ [('relu', 40)], [('relu', 40)], [('relu', 40)] ]
+test_split = 0.7
+val_split = 0.1
+stop_delta = 0.0001
+stop_pat = 150
+optim = 'adam'
+metric = 'mae'
+batch_size = 2048
+max_epochs = 10
+regularization = 0.0
+esn_n_res = 5
+esn_n_read = 5
+esn_in_mask = "[False, False, False, False, False]"
+esn_out_mask = "[False] * 24"
+esn_real_fb = False
+esn_spec_rad = 0.3
+esn_damping = 0.1
+esn_sparsity = 0.4
+esn_noise = 0.001
+checkpoint = False
+no_callbacks = False
+random_state = 42

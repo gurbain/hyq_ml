@@ -179,7 +179,7 @@ class HyQSim(threading.Thread):
 
         except Exception, e:
             if self.verbose > 0:
-                print "Exception encountered during simulation!"  # + str(e)
+                print "Exception encountered during simulation!"  + str(e)
                 # traceback.print_exc()
             if self.sim_ps is not None:
                 if self.sim_ps.isalive():

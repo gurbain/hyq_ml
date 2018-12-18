@@ -1,6 +1,14 @@
+# SKlearn forces warnings...
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
+
 from collections import deque
+import ConfigParser
 import copy
 from keras import backend as K
+import math
 import numpy as np
 import pexpect
 import pickle
@@ -22,37 +30,34 @@ import utils
 
 class Simulation(object):
 
-    def __init__(self, nn_folder=None, sim_file=None, verbose=1, t_train=0,
-                 pub_actions=True, publish_states=True, t_sim=180, t_start_cl=15, sm=False,
-                 t_stop_cl=160, save_folder=None, ol=False, view=False, train=True,
-                 pub_loss=True, epoch_num=150, plot=False, pub_error=True,
-                 init_impedance=None, train_buff_size=10000, real_physics=False):
-
-        self.t_sim = t_sim
-        self.t_train = t_train
-        self.t_start_cl = t_start_cl
-        self.t_stop_cl = t_stop_cl
-        self.t_cl = self.t_stop_cl - self.t_start_cl
+    def __init__(self, folder=None):
 
         # Class variable
-        self.view = view
-        self.plot = plot
-        self.verbose = verbose
-        self.nn_folder = nn_folder
-        self.publish_actions = pub_actions
-        self.publish_states = publish_states
-        self.publish_loss = pub_loss
-        self.publish_error = pub_error
-        self.save_folder = save_folder
-        self.sim_file = sim_file
-        self.ol = ol
-        self.epoch_num = epoch_num
-        self.train_buff_size = train_buff_size
-        self.real_physics = real_physics
-        self.init_impedance = init_impedance
-        self.sm = sm
-        self.train = train
+        self.config = dict()
+        self.t_sim = 0
+        self.t_train = 0
+        self.t_start_cl = 0
+        self.t_stop_cl = 0
+        self.t_cl = 0
+        self.plot = None
+        self.verbose = None
+        self.publish_actions = None
+        self.publish_states = None
+        self.publish_loss = None
+        self.publish_error = None
+        self.save_folder = None
+        self.sim_file = None
+        self.ol = None
+        self.epoch_num = 0
+        self.train_buff_size = 0
+        self.sm = None
+        self.train = None
         self.play_from_file = False
+
+        # Physics variable
+        self.view = False
+        self.remote = False
+        self.real_time = False
 
         # Class uninitialized objects
         self.physics = None
@@ -108,51 +113,144 @@ class Simulation(object):
         self.pub_acc = None
         self.ser_sm = None
 
+        # Parse the simulation folder 
+        self.folder = folder
+        self.__parse_folder()
+
+    def __parse_folder(self):
+
+        # Open the config file and retrieve the data
+        config_parser = ConfigParser.ConfigParser()
+        config_parser.read(self.folder + "/config.txt")
+        self.config = {s:dict(config_parser.items(s)) for s in config_parser.sections()}
+
+        self.t_sim = float(self.config["Timing"]["t_sim"])
+        self.t_train = float(self.config["Timing"]["t_train"])
+        self.t_start_cl = float(self.config["Timing"]["t_start_cl"])
+        self.t_stop_cl = float(self.config["Timing"]["t_stop_cl"])
+        self.t_cl = self.t_stop_cl - self.t_start_cl
+
+        # Class variable
+        self.plot = eval(self.config["Debug"]["plot"])
+        self.verbose = int(self.config["Debug"]["verbose"])
+        self.save_folder = self.config["Network"]["save_folder"]
+        self.publish_actions = eval(self.config["Simulation"]["pub_actions"])
+        self.publish_states = eval(self.config["Simulation"]["pub_states"])
+        self.publish_loss = eval(self.config["Simulation"]["pub_loss"])
+        self.publish_error = eval(self.config["Simulation"]["pub_error"])
+        self.save_folder = self.folder
+        self.sim_file = self.config["Network"]["sim_file"]
+        self.ol = eval(self.config["Simulation"]["ol"])
+        self.epoch_num = int(self.config["Training"]["epoch_num"])
+        self.train_buff_size = int(self.config["Training"]["train_buff_size"])
+        self.view = eval(self.config["Debug"]["view"])
+        self.remote = eval(self.config["Physics"]["remote_server"])
+        self.real_time = eval(self.config["Physics"]["real_time"])
+        self.sm = eval(self.config["Simulation"]["sm"])
+        self.train = eval(self.config["Training"]["train"])
+
     def start(self):
 
         # Create and start the handle thread to the physics simulation
         self.physics = physics.HyQSim(init_impedance=None,
                                       view=self.view,
-                                      remote=self.real_physics,
+                                      remote=self.remote,
                                       verbose=self.verbose,
-                                      rt=self.real_physics,
-                                      publish_error=self.publish_error)
+                                      rt=self.real_time,
+                                      publish_error=self.publish_error,)
         ros.init_node("simulation", anonymous=True)
         self.physics.start()
 
         # If sim folder is specified create a untrained network and read simulation from a FILE
-        if self.sim_file is not None:
+        if self.sim_file != "None":
             self.play_from_file = True
             self.network = network.NN(data_file=self.sim_file,
                                       save_folder=self.save_folder,
-                                      batch_size=256,
-                                      val_split=0.01,
-                                      verbose=0)
+                                      verbose=0, 
+                                      nn_layers=eval(self.config["Network"]["nn_struct"]),
+                                      test_split=float(self.config["Network"]["test_split"]),
+                                      val_split=float(self.config["Network"]["val_split"]),
+                                      stop_delta=float(self.config["Network"]["stop_delta"]),
+                                      stop_pat=int(self.config["Network"]["stop_pat"]),
+                                      optim=self.config["Network"]["optim"],
+                                      metric=self.config["Network"]["metric"],
+                                      batch_size=int(self.config["Network"]["batch_size"]),
+                                      max_epochs=int(self.config["Network"]["max_epochs"]),
+                                      regularization=float(self.config["Network"]["regularization"]),
+                                      esn_n_res=int(self.config["Network"]["esn_n_res"]),
+                                      esn_n_read=int(self.config["Network"]["esn_n_read"]),
+                                      esn_in_mask=eval(self.config["Network"]["esn_in_mask"]),
+                                      esn_out_mask=eval(self.config["Network"]["esn_out_mask"]),
+                                      esn_real_fb=eval(self.config["Network"]["esn_real_fb"]),
+                                      esn_spec_rad=float(self.config["Network"]["esn_spec_rad"]),
+                                      esn_damping=float(self.config["Network"]["esn_damping"]),
+                                      esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
+                                      esn_noise=float(self.config["Network"]["esn_noise"]),
+                                      checkpoint=eval(self.config["Network"]["checkpoint"]),
+                                      no_callbacks=eval(self.config["Network"]["no_callbacks"]),
+                                      random_state=int(self.config["Network"]["random_state"]))
+
+
+
             self.network.load_data(True)
 
         # Else, load the trained network and start a REAL simulation
-        elif self.nn_folder is not None:
-            self.play_from_file = False
-            self.network = network.NN(max_epochs=100000,
-                                      checkpoint=False,
-                                      esn_n_read=10,
-                                      no_callbacks=True,
-                                      esn_in_mask=[True, False, False, False, False],
-                                      esn_out_mask=[True] * 24,
-                                      esn_real_fb=True,
-                                      verbose=0)
-            self.network.load(self.nn_folder, load_all=True)
-            self.network.esn.verbose = 0
-            self.train_it += 1
+        # elif self.nn_folder is not None: # this check has to be adatapted
+        #     self.play_from_file = False
+        #     self.network = network.NN(max_epochs=100000,
+        #                               checkpoint=False,
+        #                               no_callbacks=True,
+        #                               esn_real_fb=True,
+        #                               verbose=0,
+        #                               nn_layers=eval(self.config["Network"]["nn_struct"]),
+        #                               test_split=float(self.config["Network"]["test_split"]),
+        #                               val_split=float(self.config["Network"]["val_split"]),
+        #                               stop_delta=float(self.config["Network"]["stop_delta"]),
+        #                               stop_pat=int(self.config["Network"]["stop_pat"]),
+        #                               optim=self.config["Network"]["optim"],
+        #                               metric=self.config["Network"]["metric"],
+        #                               batch_size=int(self.config["Network"]["batch_size"]),
+        #                               regularization=float(self.config["Network"]["regularization"]),
+        #                               esn_n_res=int(self.config["Network"]["esn_n_res"]),
+        #                               esn_n_read=int(self.config["Network"]["esn_n_read"]),
+        #                               esn_in_mask=eval(self.config["Network"]["esn_in_mask"]),
+        #                               esn_out_mask=eval(self.config["Network"]["esn_out_mask"]),
+        #                               esn_spec_rad=float(self.config["Network"]["esn_spec_rad"]),
+        #                               esn_damping=float(self.config["Network"]["esn_damping"]),
+        #                               esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
+        #                               esn_noise=float(self.config["Network"]["esn_noise"]),
+        #                               checkpoint=eval(self.config["Network"]["checkpoint"]),
+        #                               random_state=int(self.config["Network"]["random_state"]))
+        #     self.network.load(self.nn_folder, load_all=True)
+        #     self.network.esn.verbose = 0
+        #     self.train_it += 1
 
         else:
             self.play_from_file = False
             self.network = network.NN(max_epochs=100000,
                                       checkpoint=False,
-                                      esn_n_read=10,
                                       no_callbacks=True,
                                       verbose=0,
-                                      save_folder=self.save_folder)
+                                      save_folder=self.save_folder,
+                                      nn_layers=eval(self.config["Network"]["nn_struct"]),
+                                      test_split=float(self.config["Network"]["test_split"]),
+                                      val_split=float(self.config["Network"]["val_split"]),
+                                      stop_delta=float(self.config["Network"]["stop_delta"]),
+                                      stop_pat=int(self.config["Network"]["stop_pat"]),
+                                      optim=self.config["Network"]["optim"],
+                                      metric=self.config["Network"]["metric"],
+                                      batch_size=int(self.config["Network"]["batch_size"]),
+                                      regularization=float(self.config["Network"]["regularization"]),
+                                      esn_n_res=int(self.config["Network"]["esn_n_res"]),
+                                      esn_n_read=int(self.config["Network"]["esn_n_read"]),
+                                      esn_in_mask=eval(self.config["Network"]["esn_in_mask"]),
+                                      esn_out_mask=eval(self.config["Network"]["esn_out_mask"]),
+                                      esn_real_fb=eval(self.config["Network"]["esn_real_fb"]),
+                                      esn_spec_rad=float(self.config["Network"]["esn_spec_rad"]),
+                                      esn_damping=float(self.config["Network"]["esn_damping"]),
+                                      esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
+                                      esn_noise=float(self.config["Network"]["esn_noise"]),
+                                      random_state=int(self.config["Network"]["random_state"]))
 
         # Retrieve interpolation functions for the target and del the rest
         if self.play_from_file:
@@ -447,7 +545,7 @@ class Simulation(object):
 
         self.start()
 
-        self.printv("\n\n ===== Running the Simulation Loop =====\n")
+        self.printv("\n ===== Running the Simulation Loop =====\n")
 
         last_it = 0
         last_t = 0
@@ -464,15 +562,16 @@ class Simulation(object):
                         self._start_plotter()
 
                 # Start trotting when everything initialized
-                if not self.real_physics and not trot_flag:
-                    self.physics.start_rcf_trot()
-                    trot_flag = True
+                if not self.remote and not trot_flag:
+                    trot_flag = self.physics.start_rcf_trot()
+                    if trot_flag:
+                        self.printv(" ===== Trotting Started =====\n")
 
                 self.t_hist.append(self.t)
 
                 # Apply noise on the robot
-                if not self.real_physics and trot_flag:
-                    self.physics.apply_noise()
+                # if not self.remote and trot_flag:
+                #     self.physics.apply_noise()
 
                 # Choose execution mode
                 if self.sm:
@@ -488,15 +587,17 @@ class Simulation(object):
                     tp = (self.t - last_t)
                     if tp != 0:
                         f = (self.it - last_it) / tp
-                        print(" [Execution] Iteration: " + str(self.it) +
+                        print(" [Execution] It: " + str(self.it) +
                               "\tSim Time: " + "{:.2f}".format(self.t) + " s" +
                               "\tNN Freq: " + "{:.2f}".format(f) + " Hz" +
-                              "\tNN Weight: "+"{:.2f}".format(self.nn_weight))
+                              " / Weight: "+"{:.2f}".format(self.nn_weight) +
+                              "\tRobot dist: {:.2f} m".format(math.sqrt(sum([float(i)**2 for i in self.physics.get_hyq_x_y_z()]))))
                         last_it = self.it
                         last_t = self.t
 
                 self.it += 1
-
+        
+        self.printv(" ===== Final robot distance: {:.2f} m =====\n".format(math.sqrt(sum([float(i)**2 for i in self.physics.get_hyq_x_y_z()]))))
         self.stop()
 
     def stop(self):
@@ -592,9 +693,9 @@ class Simulation(object):
 
 class CPGSimulation(Simulation):
 
-    def __init__(self):
+    def __init__(self, folder=None):
 
-        super(CPGSimulation, self).__init__(nn_folder=None, view=True, ol=True, pub_actions=True)
+        super(CPGSimulation, self).__init__(folder=folder)
         self.cpg_config = {"params": [{'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
                                        'phase_offset': 0, 'o': 0, 'r': 1,
                                        'coupling': [0, -1, -1, 1]},
@@ -678,44 +779,9 @@ if __name__ == '__main__':
 
     if len(sys.argv) > 1:
 
-        if sys.argv[1] == "ol":
-            folder = "data/nn_sim_learning/" + utils.timestamp()
-            utils.mkdir(folder)
-            s = Simulation(sim_file=sys.argv[2], view=True, ol=True,
-                           pub_actions=True, save_folder=folder)
-            s.run()
+        s = Simulation(folder=sys.argv[1])
+        s.run()
 
-        if sys.argv[1] == "cl":
-            folder = "data/nn_sim_learning/" + utils.timestamp()
-            utils.mkdir(folder)
-            s = Simulation(nn_folder=sys.argv[2], save_folder=folder,
-                           t_sim=1000, t_train=999, t_start_cl=1500,
-                           t_stop_cl=1600)
-            s.run()
-
-        if sys.argv[1] == "train":
-            folder = "data/nn_sim_learning/" + utils.timestamp()
-            utils.mkdir(folder)
-            s = Simulation(save_folder=folder, view=False, plot=False,
-                           t_sim=500, t_train=150, t_start_cl=40,
-                           t_stop_cl=800)
-            s.run()
-
-        if sys.argv[1] == "cpg":
-            s = CPGSimulation()
-            s.run()
-
-        if sys.argv[1] == "hyq":
-            folder = "data/nn_sim_learning/" + utils.timestamp()
-            utils.mkdir(folder)
-            s = Simulation(save_folder=folder, plot=False, train=True,
-                           t_sim=10000, sm=True, real_physics=True)
-            s.run()
-
-        if sys.argv[1] == "hyq_pretrained":
-            folder = "data/nn_sim_learning/" + utils.timestamp()
-            utils.mkdir(folder)
-            s = Simulation(nn_folder=sys.argv[2], save_folder=folder,
-                           view=False, plot=True, train=True,
-                           t_sim=10000, sm=True, real_physics=True)
-            s.run()
+    else:
+        print("\nFailure: simulation.py expects a folder name in argument\n")
+        exit(-1)
