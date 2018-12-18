@@ -1,5 +1,5 @@
 import copy
-from datetime import datetime
+import datetime
 import dateutil.parser
 import docker
 import os
@@ -7,13 +7,10 @@ from picker import *
 import random
 import string
 import time
+import signal
 import sys
 import subprocess
-
-# Check why timeout
-# Add log when failed
-# Add log in results
-#
+import sys
 
 
 # Edit the following variables depending on your cluster configuration
@@ -37,6 +34,10 @@ SAVE_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
 
+
+def signal_handler(sig, frame):
+    print('\n\n--- User has quitted the manager! ---')
+    sys.exit(0)
 
 def timestamp():
     return time.strftime("%Y%m%d-%H%M%S", time.localtime())
@@ -99,7 +100,6 @@ class Lan(object):
         for m in machines_on:
             if m  not in machines_new:
                 self.rm(m)
-        return
 
     def start(self):
 
@@ -173,7 +173,7 @@ class Lan(object):
         p.communicate()
 
 
-class Workers(object):
+class Services(object):
 
     def __init__(self, engine):
 
@@ -225,7 +225,10 @@ class Workers(object):
                     try:
                         host = self.engine.nodes.get(t["NodeID"]).attrs["Description"]["Hostname"].split(".")[0]
                         status = t["Status"]["State"]
-                        creation = int(dateutil.parser.parse(t["CreatedAt"]).strftime("%s"))
+                        if "UpdatedAt" in  t.keys():
+                            creation = int((dateutil.parser.parse(t["UpdatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
+                        else:
+                            creation = int((dateutil.parser.parse(t["UpdatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
                         service_name = s.name
                         version = s.version
                         cmd = ""
@@ -242,7 +245,7 @@ class Workers(object):
                         self.workers.append({"type": cmd_type, "service_version": version,
                                              "service_id": srv, "service_name": service_name,
                                              "host": host, "cmd": cmd, "status": status,
-                                             "creation_timestamp": creation})
+                                             "last_timestamp": creation})
 
                     except (ValueError, docker.errors.NotFound, KeyError):
                         pass
@@ -261,16 +264,16 @@ class Workers(object):
                          if (w["type"] == "run" and w["status"] in ["complete", "shutdown"])]
         wrk_failed = [w for w in self.workers if (w["type"] == "run" and w["status"] == "failed")]
 
-        print "\n--- IDLE Workers: " + str(len(wrk_idle)) + " ---"
+        print "\n--- IDLE Services: " + str(len(wrk_idle)) + " ---"
         for i, n in enumerate(self.nodes_name):
             print str(n) + ": " + str(len([w for w in wrk_idle if w["host"] == n]))
-        print "\n--- RUNNING Workers: " + str(len(wrk_run)) + " ---"
+        print "\n--- RUNNING Services: " + str(len(wrk_run)) + " ---"
         for i, n in enumerate(self.nodes_name):
             print str(n) + ": " + str(len([w for w in wrk_run if w["host"] == n]))
-        print "\n--- FINISHED Workers: " + str(len(wrk_finished)) + " ---"
+        print "\n--- FINISHED Services: " + str(len(wrk_finished)) + " ---"
         for i, n in enumerate(self.nodes_name):
             print str(n) + ": " + str(len([w for w in wrk_finished if w["host"] == n]))
-        print "\n--- FAILED Workers: " + str(len(wrk_failed)) + " ---"
+        print "\n--- FAILED Services: " + str(len(wrk_failed)) + " ---"
         for i, n in enumerate(self.nodes_name):
             print str(n) + ": " + str(len([w for w in wrk_failed if w["host"] == n]))
 
@@ -308,7 +311,6 @@ class Workers(object):
             srv_id = self.engine.services.create(image=self.srv_img, command=self.srv_idle_task, 
                                                  name=self.def_name + name, mode=srv_replicas_mode,
                                                  restart_policy=srv_restart_policy)
-        return
 
 
 class Tasks(object):
@@ -316,7 +318,7 @@ class Tasks(object):
     def __init__(self, engine):
 
         self.engine = engine
-        self.cluster = Workers(self.engine)
+        self.cluster = Services(self.engine)
 
         self.srv_status = None
 
@@ -377,6 +379,10 @@ class Tasks(object):
         # Wait for all results
         while len(self.running) != 0:
             self.__monitor()
+            #for k in [s["service_name"] for s in self.running]:
+            #    for j in self.cluster.workers:
+            #        if j["service_name"] == k:
+            #            print "REMAIN: ", j
 
         print "--- Experiment is finished. Results are placed in " + str(self.exp_dir) + " ---\n"
         return self.res_dirs
@@ -387,7 +393,7 @@ class Tasks(object):
 
         worker_run_name = [w["service_name"] for w in self.cluster.workers if w["type"] == "run"]
         worker_run_id = [w["service_id"] for w in self.cluster.workers if w["type"] == "run"]
-        worker_run_creat = [w["creation_timestamp"] for w in self.cluster.workers if w["type"] == "run"]
+        worker_run_creat = [w["last_timestamp"] for w in self.cluster.workers if w["type"] == "run"]
         indexes = Picker(title="Select the service to display the logs", 
                          options=worker_run_name).getIndex()
         if indexes == []:
@@ -410,18 +416,8 @@ class Tasks(object):
 
         if self.srv_status is not None:
 
-            # Check for new or deleted services
-            # curr = set([w["service_name"] for w in self.cluster.workers])
-            # old = set([w["service_name"] for w in self.srv_status])
-            # new_srv = list(curr - old) 
-            # rm_srv = list(old - curr)
-            # for s in new_srv:
-            #     self.__add_callback(s)
-            # for s in rm_srv:
-            #     self.__del_callback(s)
-
              # Check if any job failed
-            for new in self.cluster.workers:
+            for new in cluster_save:
                 if new["status"] in ["rejected", "failed", "pause"] and new["type"] == "run":
                     # Set the service in idle mode
                     self.__start_idle(new, remove=False)
@@ -447,11 +443,21 @@ class Tasks(object):
                     self.__start_idle(new)
 
             # Check if status changed from running to complete
-            for old in self.srv_status:
-                for new in self.cluster.workers:
-                    if old["service_name"] == new["service_name"]:
-                        if old["status"] in ["running", "starting", "ready"] and new["status"] == "complete":
+            for new in cluster_save:
+                if new["status"] == "complete":
+                    running_services = [r["service_id"] for r in self.running \
+                                        if r["status"] in ["started", "restarted"]]
+                    if new["service_id"] in running_services:
+                            self.running[[r["service_id"] for r in self.running].index(new["service_id"])]["status"] = "saving"
+                            old = self.srv_status[[s["service_id"] for s in self.srv_status].index(new["service_id"])]
                             self.__modif_callback(new, old)
+            # for old in self.srv_status:
+            #     for new in cluster_save:
+
+            #         if old["service_name"] == new["service_name"]:
+            #             if new["status"] == "complete":
+            #                 if old["status"] != "complete" or old["service_version"] != new["service_version"]:
+            #                     self.__modif_callback(new, old)
 
         self.srv_status = cluster_save
 
@@ -464,7 +470,7 @@ class Tasks(object):
             try:
                 to_add = raw_input("There are already running jobs. Would you like to kill them first? (Y/n/q): ")
                 if to_add in ["", "Y", "y"]:
-                    self.__start_idle(srv=None)
+                    self.__start_idle(srv=None, remove=False)
                     time.sleep(2)
                 elif to_add in ["q", "Q"]:
                     exit(1)
@@ -491,14 +497,16 @@ class Tasks(object):
         try:
             srv = self.engine.services.get(srv_ids)
         except docker.errors.NotFound:
-            return
+            print "--- ERROR: Service does not exist ---\n"
+            exit(-1)
         srv_name = srv.name
         print "--- A new job is started with folder " + str(folder.split("/")[-1]) + \
               " on service " + str(srv_name) + " ---\n"
 
         if append:
             self.running.append({"service_name": srv_name, "folder": folder, "launch": 1,
-                                 "service_id": srv_ids, "time_init": time.time()})
+                                 "service_id": srv_ids, "time_init": time.time(),
+                                 "status": "started"})
         else:
             if folder in [r["folder"] for r in self.running]:
                 r = self.running[[r["folder"] for r in self.running].index(folder)]
@@ -506,6 +514,7 @@ class Tasks(object):
                 r["time_init"] = time.time()
                 r["service_name"] = srv_name
                 r["service_id"] = srv_ids
+                r["status"] = "restarted"
                 
                 if self.running[[r["folder"] for r in self.running].index(folder)]["launch"] > self.max_job_attemps:
                     print "--- ERROR: Timeout! You re-started the same job " + \
@@ -516,13 +525,13 @@ class Tasks(object):
                 exit(-1)
 
         # Update the service with the new command
-        done = False
+        success = False
         t_init = time.time()
-        while not done:
+        while not success:
             try:
                 srv.update(image=self.cluster.srv_img, command=self.cluster.srv_run_task,
                              mounts=[folder + ":" + self.mount_dir + ":" + self.mount_opt])
-                done = True
+                success = True
             except docker.errors.APIError as e:
                 pass
 
@@ -530,7 +539,6 @@ class Tasks(object):
                 print "--- ERROR: Timeout when trying to set service to running state ---\n"
                 exit(-1)
         
-
     def __start_idle(self, srv=None, remove=True):
 
         self.cluster.browse()
@@ -544,16 +552,17 @@ class Tasks(object):
             try:
                 s = self.engine.services.get(srv_id)
             except docker.errors.NotFound:
-                return
+                print "--- ERROR: Service does not exist ---\n"
+                exit(-1)
 
             # Update the service with the new command
-            done = False
+            success = False
             t_init = time.time()
-            while not done:
+            while not success:
                 try:
                     s.update(image=self.cluster.srv_img, command=self.cluster.srv_idle_task,
                              mounts=[])
-                    done = True
+                    success = True
                 except docker.errors.APIError as e:
                     pass
 
@@ -562,9 +571,15 @@ class Tasks(object):
                     exit(-1)
 
             if remove:
+                success = False
                 for r in self.running:
                     if r["service_id"] == srv_id:
                         self.running.pop(self.running.index(r))
+                        success = True
+                if success == False:
+                    print "--- ERROR: Cannot remove unexisting running service " + \
+                          str(srv_id) + " ---\n"
+                    exit(-1)
 
     def __del_callback(self, srv_name):
 
@@ -577,12 +592,22 @@ class Tasks(object):
 
     def __modif_callback(self, srv_new, srv_old):
 
-        print "--- Service " + str(srv_new["service_name"]) + " has change from status " + \
-              str(srv_old["status"]) + " to status " + str(srv_new["status"]) + " ---"
+        print "--- Service " + str(srv_new["service_name"]) + " has change status from " + \
+              str(srv_old["status"]) + " to " + str(srv_new["status"]) + " ---"
 
         # Check out results
         if srv_new["type"] == "run":
             print "\n--- Saving results for service " + str(srv_new["service_name"]) + " ---\n"
+
+            s_id = srv_new["service_id"]
+            r = self.running[[r["service_id"] for r in self.running].index(s_id)]
+            folder = r["folder"]
+            with open(folder + "/log.txt", 'w') as file:
+                ids = self.engine.services.get(s_id)
+                logs = ids.logs(details=False, stdout=True, stderr=True,
+                                timestamps=False, since=srv_old["last_timestamp"])
+                for l in logs:
+                    file.write(l)
 
         # Restart the node
         self.__start_idle(srv=srv_new)
@@ -619,13 +644,20 @@ class Manager(object):
 
     def process(self, arg_list):
 
-        if arg_list[0] in ["lan", "computer", "computers", "swarm"]:
+        if arg_list[0] in ["swarm", "net", "cluster", "network", "lan"]:
             self.process_lan()
 
         elif arg_list[0] in ["srv", "wrk", "worker", "workers", "service", "services"]:
-            self.process_wrk(arg_list)
+            self.process_srv(arg_list)
 
-        elif arg_list[0] in ["tasks", "task", "tsk"]:
+        elif arg_list[0] in ["jobs", "job", "sim", "simulation", "simulations", 
+                             "sims", "compute", "physics"]:
+            self.process_tsk(["job"] + arg_list[1:])
+
+        elif arg_list[0] in ["log", "logs"]:
+            self.process_tsk(["logs"] + arg_list[1:])
+
+        elif arg_list[0] in ["task", "tasks"]:
             self.process_tsk(arg_list[1:])
 
         else:
@@ -640,25 +672,25 @@ class Manager(object):
         else:
             lan.start()
 
-    def process_wrk(self, arg_list):
+    def process_srv(self, arg_list):
 
-        wrk = Workers(self.engine)
+        srv = Services(self.engine)
 
         if len(arg_list) == 1:
-            wrk.status()
+            srv.status()
 
         else:
             if arg_list[1] in ["add"]:
                 if len(arg_list) <= 2:
                     print "\n--- Provide the number of services to add ---\n"
                 else:
-                    wrk.add(arg_list[2])
+                    srv.add(arg_list[2])
 
             elif arg_list[1] in ["rm", "remove"]:
-                wrk.rm()
+                srv.rm()
 
             elif arg_list[1] in ["status"]:
-                wrk.change()
+                srv.change()
 
             else:
                 print "\n--- Invalid WRK argument. Please check the file ---\n"
@@ -666,7 +698,6 @@ class Manager(object):
     def process_tsk(self, arg_list):
 
         tsk = Tasks(self.engine)
-
         if arg_list[0] in ["test", "job", "jobs"]:
             if len(arg_list) > 1:
                 config_list = ["default" for i in range(int(arg_list[1]))]
@@ -685,6 +716,8 @@ class Manager(object):
 
 
 if __name__ == '__main__':
+
+    signal.signal(signal.SIGINT, signal_handler)
 
     if len(sys.argv) <= 1:
         print "\n--- This manager requires at least one argument (see file) ---\n"
