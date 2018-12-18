@@ -36,7 +36,7 @@ sys.stderr = stderr
 class HyQSim(threading.Thread):
 
     def __init__(self, view=False, rviz=False, rt=True, remote=False,
-                 init_impedance=None, verbose=2, publish_error=False):
+                 init_impedance=None, verbose=1, publish_error=False):
 
         threading.Thread.__init__(self)
 
@@ -202,8 +202,7 @@ class HyQSim(threading.Thread):
 
         try:
             # Init the config file
-            if self.init_impedance is not None:
-                self.set_init_impedances()
+            self.set_init_impedances()
 
             self.t_init = time.time()
             if self.sim_ps is not None:
@@ -345,18 +344,21 @@ class HyQSim(threading.Thread):
         f_new = open(self.rcf_config_file + ".current_sim", "w")
 
         for line in f_origin:
-            if line.startswith("KpHAA = "):
-                f_new.write("KpHAA = {0:.3f}".format(float(self.init_impedance[0])) + "\n")
-            elif line.startswith("KdHAA = "):
-                f_new.write("KdHAA = {0:.3f}".format(float(self.init_impedance[1])) + "\n")
-            elif line.startswith("KpHFE = "):
-                f_new.write("KpHFE = {0:.3f}".format(float(self.init_impedance[2])) + "\n")
-            elif line.startswith("KdHFE = "):
-                f_new.write("KdHFE = {0:.3f}".format(float(self.init_impedance[3])) + "\n")
-            elif line.startswith("KpKFE = "):
-                f_new.write("KpKFE = {0:.3f}".format(float(self.init_impedance[4])) + "\n")
-            elif line.startswith("KdKFE = "):
-                f_new.write("KdKFE = {0:.3f}".format(float(self.init_impedance[5])) + "\n")
+            if self.init_impedance is not None:
+                if line.startswith("KpHAA = "):
+                    f_new.write("KpHAA = {0:.3f}".format(float(self.init_impedance[0])) + "\n")
+                elif line.startswith("KdHAA = "):
+                    f_new.write("KdHAA = {0:.3f}".format(float(self.init_impedance[1])) + "\n")
+                elif line.startswith("KpHFE = "):
+                    f_new.write("KpHFE = {0:.3f}".format(float(self.init_impedance[2])) + "\n")
+                elif line.startswith("KdHFE = "):
+                    f_new.write("KdHFE = {0:.3f}".format(float(self.init_impedance[3])) + "\n")
+                elif line.startswith("KpKFE = "):
+                    f_new.write("KpKFE = {0:.3f}".format(float(self.init_impedance[4])) + "\n")
+                elif line.startswith("KdKFE = "):
+                    f_new.write("KdKFE = {0:.3f}".format(float(self.init_impedance[5])) + "\n")
+                else:
+                    f_new.write(line.rstrip() + "\n")
             else:
                 f_new.write(line.rstrip() + "\n")
 
@@ -607,7 +609,7 @@ if __name__ == '__main__':
 
         if sys.argv[1] == "rcf":
             trot_flag = False
-            for i in range(120):
+            for i in range(40):
 
                 print("Time: " + str(i) + "s and Sim time: " +
                       str(p.get_sim_time()) + "s and state (len= " +
