@@ -21,6 +21,8 @@ WORKDIR /home/gurbain
 #------------------------
 # Dependencies
 #------------------------
+RUN sudo -H pip install --upgrade travis pip \
+         setuptools wheel virtualenv
 RUN sudo -H pip install keras tensorflow-gpu \
          tensorflow sklearn tqdm pexpect docker \
          statsmodels mdp
