@@ -28,7 +28,7 @@ KEY_FILE = "/home/gurbain/.docker_swarm_key"
 JOB_LIMIT = 200
 IMAGE = "hyq:latest"
 IDLE_TASK = "tail -f /dev/null"
-RUN_TASK = "bash -c 'ls -al /home/gurbain; ls -al /home/gurbain/docker_sim; source /opt/ros/dls-distro/setup.bash; \
+RUN_TASK = "bash -c 'source /opt/ros/dls-distro/setup.bash; \
             export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
             cd /home/gurbain/hyq_ml/hyq; roscore & python simulation.py "
 
