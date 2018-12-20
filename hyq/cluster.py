@@ -1,3 +1,4 @@
+import ConfigParser
 import copy
 import datetime
 import dateutil.parser
@@ -27,7 +28,7 @@ KEY_FILE = "/home/gurbain/.docker_swarm_key"
 JOB_LIMIT = 200
 IMAGE = "hyq:latest"
 IDLE_TASK = "tail -f /dev/null"
-RUN_TASK = "bash -c 'source /opt/ros/dls-distro/setup.bash; \
+RUN_TASK = "bash -c 'ls -al /home/gurbain; ls -al /home/gurbain/docker_sim; source /opt/ros/dls-distro/setup.bash; \
             export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
             cd /home/gurbain/hyq_ml/hyq; roscore & python simulation.py "
 
@@ -227,10 +228,11 @@ class Services(object):
                     try:
                         host = self.engine.nodes.get(t["NodeID"]).attrs["Description"]["Hostname"].split(".")[0]
                         status = t["Status"]["State"]
-                        if "UpdatedAt" in  t.keys():
-                            creation = int((dateutil.parser.parse(t["UpdatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
-                        else:
-                            creation = int((dateutil.parser.parse(t["UpdatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
+                        # TODO: print the previous log if it fails
+                        # if "UpdatedAt" in  t.keys() and status not in ["failed", "shutdown"]:
+                        #     creation = int((dateutil.parser.parse(t["UpdatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
+                        # else:
+                        creation = int((dateutil.parser.parse(t["CreatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
                         service_name = s.name
                         version = s.version
                         cmd = ""
@@ -317,9 +319,12 @@ class Services(object):
 
 class Tasks(object):
 
-    def __init__(self, engine):
+    def __init__(self, engine=None):
 
-        self.engine = engine
+        if engine is None:
+            self.engine = docker.from_env()
+        else:
+            self.engine = engine
         self.cluster = Services(self.engine)
 
         self.srv_status = None
@@ -331,7 +336,6 @@ class Tasks(object):
 
         self.folder = SAVE_FOLDER
         self.mount_dir = MOUNT_FOLDER
-        self.def_config = TEST_SIM_CONFIG
         self.mount_opt = MOUNT_OPT
 
         self.max_job_attemps = 5
@@ -382,10 +386,6 @@ class Tasks(object):
         # Wait for all results
         while len(self.running) != 0:
             self.__monitor()
-            #for k in [s["service_name"] for s in self.running]:
-            #    for j in self.cluster.workers:
-            #        if j["service_name"] == k:
-            #            print "REMAIN: ", j
 
         print "--- Experiment is finished. Results are placed in " + str(self.exp_dir) + " ---\n"
         return self.res_dirs
@@ -422,6 +422,19 @@ class Tasks(object):
              # Check if any job failed
             for new in cluster_save:
                 if new["status"] in ["rejected", "failed", "pause"] and new["type"] == "run":
+
+                    # Save the error log
+                    s_id = new["service_id"]
+                    if s_id in [r["service_id"] for r in self.running]:
+                        r = self.running[[r["service_id"] for r in self.running].index(s_id)]
+                        folder = r["folder"]
+                        with open(folder + "/error_log.txt", 'w') as file:
+                            ids = self.engine.services.get(s_id)
+                            logs = ids.logs(details=False, stdout=True, stderr=True,
+                                    timestamps=False, since=new["last_timestamp"])
+                            for l in logs:
+                                file.write(l)
+
                     # Set the service in idle mode
                     self.__start_idle(new, remove=False)
 
@@ -441,7 +454,7 @@ class Tasks(object):
                               str(new["service_name"]) + " ---\n"
 
                 if new["status"] in ["shutdown", "rejected"] and new["type"] == "idle":
-                    print "--- A failed idle job is restarted on service " + \
+                    print "--- Failed idle job is restarted on service " + \
                            str(new["service_name"]) + " ---\n"
                     self.__start_idle(new)
 
@@ -532,10 +545,9 @@ class Tasks(object):
         t_init = time.time()
         while not success:
             try:
-                print self.cluster.srv_run_task + str(folder) + "'"
                 srv.update(image=self.cluster.srv_img,
                            command=self.cluster.srv_run_task + str(folder) + "'",
-                           mounts=[folder + ":" + self.mount_dir + ":" + self.mount_opt])
+                           mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
                 success = True
             except docker.errors.APIError as e:
                 pass
@@ -620,14 +632,15 @@ class Tasks(object):
     def __create_task_folders(self, root_folder, config):
 
         liste = []
-        for i in range(len(config)):
+        for c in config:
             hashe = os.path.join(root_folder, gen_hash([o for o in os.listdir(root_folder) 
                                                         if os.path.isdir(os.path.join(root_folder,o))]))
             liste.append(hashe)
             mkdir(hashe)
 
             # Add a config file
-            shutil.copyfile(self.def_config, hashe + '/config.txt')
+            with open(hashe + '/config.txt', 'w') as configfile:
+                c.write(configfile)
 
         return liste
 
@@ -637,8 +650,6 @@ class Tasks(object):
         for t in task_lists:
             dst_name = root_folder + "/" + t.split("/")[-1]
             os.symlink(t, dst_name)
-
-
 
         return root_folder
 
@@ -707,7 +718,9 @@ class Manager(object):
         tsk = Tasks(self.engine)
         if arg_list[0] in ["test", "job", "jobs"]:
             if len(arg_list) > 1:
-                config_list = ["default" for i in range(int(arg_list[1]))]
+                config = ConfigParser.ConfigParser()
+                config.read(TEST_SIM_CONFIG)
+                config_list = [config for i in range(int(arg_list[1]))]
             else:
                 config_list = ["default"]
             results = tsk.process(config_list)

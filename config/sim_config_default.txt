@@ -35,6 +35,7 @@ remote_server = False
 real_time = False
 init_impedance = None
 rviz = False
+save = True
 
 ## This section includes parameters about the training procedure
 [Training]
@@ -58,8 +59,8 @@ max_epochs = 10
 regularization = 0.0
 esn_n_res = 5
 esn_n_read = 5
-esn_in_mask = "[False, False, False, False, False]"
-esn_out_mask = "[False] * 24"
+esn_in_mask = [False, False, False, False, False]
+esn_out_mask = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
 esn_real_fb = False
 esn_spec_rad = 0.3
 esn_damping = 0.1

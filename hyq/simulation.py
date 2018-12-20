@@ -58,6 +58,14 @@ class Simulation(object):
         self.view = False
         self.remote = False
         self.real_time = False
+        self.save_physics_t_real = 0
+        self.save_physics_x = []
+        self.save_physics_y = []
+        self.save_physics_z = []
+        self.save_physics_phi = []
+        self.save_physics_theta = []
+        self.save_physics_psi = []
+        self.save_physics_t_trot = 0
 
         # Class uninitialized objects
         self.physics = None
@@ -549,6 +557,7 @@ class Simulation(object):
 
         last_it = 0
         last_t = 0
+        t_init = time.time()
         trot_flag = False
         while not ros.is_shutdown() and self.t < self.t_sim:
 
@@ -566,8 +575,7 @@ class Simulation(object):
                     trot_flag = self.physics.start_rcf_trot()
                     if trot_flag:
                         self.printv(" ===== Trotting Started =====\n")
-
-                self.t_hist.append(self.t)
+                        self.save_physics_t_trot = copy.copy(self.t)
 
                 # Apply noise on the robot
                 # if not self.remote and trot_flag:
@@ -595,6 +603,19 @@ class Simulation(object):
                         last_it = self.it
                         last_t = self.t
 
+                # Save physics results
+                self.t_hist.append(self.t)
+                if eval(self.config["Physics"]["save"]):
+                    curr_x, curr_y, curr_z = self.physics.get_hyq_x_y_z()
+                    curr_phi, curr_theta, curr_psi = self.physics.get_hyq_phi_theta_psi()
+                    self.save_physics_t_real.append(time.time() - t_init)
+                    self.save_physics_x.append(curr_x)
+                    self.save_physics_y.append(curr_y)
+                    self.save_physics_z.append(curr_z)
+                    self.save_physics_phi.append(curr_phi)
+                    self.save_physics_theta.append(curr_theta)
+                    self.save_physics_psi.append(curr_psi)
+
                 self.it += 1
         
         self.printv(" ===== Final robot distance: {:.2f} m =====\n".format(math.sqrt(sum([float(i)**2 for i in self.physics.get_hyq_x_y_z()]))))
@@ -607,8 +628,15 @@ class Simulation(object):
             with open(self.save_folder + "/state_action.pkl", "wb") as f:
                 pickle.dump([np.mat(self.state_history), np.mat(self.action_history), np.array(self.t_hist)],
                             f, protocol=2)
+
             if self.sim_file is not None and not self.ol:
                 self.network.save()
+
+        if eval(self.config["Physics"]["save"]):
+            to_save = {"t_sim": self.t_hist, "t_real": self.save_physics_t_real, "t_trot": self.save_physics_t_trot,
+                       "x": self.save_physics_x, "y": self.save_physics_y, "z": self.save_physics_z, 
+                       "phi": self.save_physics_phi, "theta": self.save_physics_theta, "psi": self.save_physics_psi}
+            utils.save_on_top(to_save, self.save_folder + "/physics.pkl")
 
         if self.plot:
             self._stop_plotter()
