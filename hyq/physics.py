@@ -54,7 +54,7 @@ class HyQSim(threading.Thread):
             self.sim_params += " gui:=False"
         if rviz is False:
             self.sim_params += " rviz:=False"
-        self.rcf_config_file = "/home/gurbain/hyq_ml/config/hyq_sim_options.ini"
+        self.rcf_config_file = "/home/gabs48/src/quadruped/hyq/hyq_ml/config/hyq_sim_options.ini"
 
         # ROS Topics
         self.clock_sub_name = 'clock'

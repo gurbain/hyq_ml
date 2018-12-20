@@ -58,7 +58,7 @@ class Simulation(object):
         self.view = False
         self.remote = False
         self.real_time = False
-        self.save_physics_t_real = 0
+        self.save_physics_t_real = []
         self.save_physics_x = []
         self.save_physics_y = []
         self.save_physics_z = []
@@ -87,7 +87,7 @@ class Simulation(object):
         self.train_pred_lock = threading.Lock()
 
         # Training variable
-        self.t_hist = [0]
+        self.t_hist = []
         self.state = deque([])
         self.state_history = []
         self.action_history = []
@@ -636,7 +636,8 @@ class Simulation(object):
             to_save = {"t_sim": self.t_hist, "t_real": self.save_physics_t_real, "t_trot": self.save_physics_t_trot,
                        "x": self.save_physics_x, "y": self.save_physics_y, "z": self.save_physics_z, 
                        "phi": self.save_physics_phi, "theta": self.save_physics_theta, "psi": self.save_physics_psi}
-            utils.save_on_top(to_save, self.save_folder + "/physics.pkl")
+
+            pickle.dump(to_save, open(self.save_folder + "/physics.pkl", "wb"), protocol=2)
 
         if self.plot:
             self._stop_plotter()
