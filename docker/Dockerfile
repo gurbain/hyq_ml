@@ -13,7 +13,7 @@ RUN apt-get update && \
 
 USER root
 RUN useradd -ms /bin/bash gurbain
-ADD /etc/sudoers.txt /etc/sudoers
+ADD /resources/etc/sudoers.txt /etc/sudoers
 RUN chmod 440 /etc/sudoers
 USER gurbain
 WORKDIR /home/gurbain
@@ -35,16 +35,16 @@ RUN git clone https://github.com/gurbain/hyq_ml
 #------------------------
 # ROS Install
 #------------------------
-RUN cd hyq_ml/docker/install && \
+RUN cd hyq_ml/docker/resources/install && \
     bash install_ros.sh
 
 # #------------------------
 # # DLS HyQ Install
 # #------------------------
-RUN cd hyq_ml/docker/install && \
+RUN cd hyq_ml/docker/resources/install && \
     bash install_dls.sh
 RUN sudo chmod a+x hyq_ml/docker/bin/hyq
-RUN cd hyq_ml/docker/install && \
+RUN cd hyq_ml/docker/resources/install && \
     bash setup_shell.sh
 RUN cd hyq_ml && sudo python setup.py develop
 
@@ -52,10 +52,10 @@ RUN cd hyq_ml && sudo python setup.py develop
 # #------------------------
 # # HyQ Install Hack and Entrypoint
 # #------------------------
-RUN cd hyq_ml/docker/install && git pull origin master
-RUN cd hyq_ml/docker/install && \
+RUN cd hyq_ml/docker/resources/install && git pull origin master
+RUN cd hyq_ml/docker/resources/install && \
     bash hack_me.sh
-COPY /bin/entrypoint.sh /usr/local/bin/
+COPY /resources/bin/entrypoint.sh /usr/local/bin/
 RUN sudo chmod a+x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
 

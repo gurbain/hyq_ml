@@ -7,7 +7,7 @@ from setuptools import find_packages
 
 
 setup(name='hyq',
-      version='1.0',
+      version='1.1',
       description='Collection of Machine Learning methods for the HyQ Robot ',
       author='Gabriel Urbain',
       author_email='gabriel.urbain@ugent.be',
