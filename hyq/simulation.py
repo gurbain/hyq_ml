@@ -45,7 +45,7 @@ class Simulation(object):
         self.publish_states = None
         self.publish_loss = None
         self.publish_error = None
-        self.save_folder = None
+        self.save_sim = False
         self.sim_file = None
         self.ol = None
         self.epoch_num = 0
@@ -58,6 +58,7 @@ class Simulation(object):
         self.view = False
         self.remote = False
         self.real_time = False
+        self.save_physics = False
         self.save_physics_t_real = []
         self.save_physics_x = []
         self.save_physics_y = []
@@ -141,12 +142,11 @@ class Simulation(object):
         # Class variable
         self.plot = eval(self.config["Debug"]["plot"])
         self.verbose = int(self.config["Debug"]["verbose"])
-        self.save_folder = self.config["Network"]["save_folder"]
         self.publish_actions = eval(self.config["Simulation"]["pub_actions"])
         self.publish_states = eval(self.config["Simulation"]["pub_states"])
         self.publish_loss = eval(self.config["Simulation"]["pub_loss"])
         self.publish_error = eval(self.config["Simulation"]["pub_error"])
-        self.save_folder = self.folder
+        self.save_sim = eval(self.config["Simulation"]["save"])
         self.sim_file = self.config["Network"]["sim_file"]
         self.ol = eval(self.config["Simulation"]["ol"])
         self.epoch_num = int(self.config["Training"]["epoch_num"])
@@ -154,6 +154,7 @@ class Simulation(object):
         self.view = eval(self.config["Debug"]["view"])
         self.remote = eval(self.config["Physics"]["remote_server"])
         self.real_time = eval(self.config["Physics"]["real_time"])
+        self.save_physics = eval(self.config["Physics"]["save"])
         self.sm = eval(self.config["Simulation"]["sm"])
         self.train = eval(self.config["Training"]["train"])
 
@@ -173,7 +174,7 @@ class Simulation(object):
         if self.sim_file != "None":
             self.play_from_file = True
             self.network = network.NN(data_file=self.sim_file,
-                                      save_folder=self.save_folder,
+                                      save_folder=self.folder,
                                       verbose=0, 
                                       nn_layers=eval(self.config["Network"]["nn_struct"]),
                                       test_split=float(self.config["Network"]["test_split"]),
@@ -239,7 +240,7 @@ class Simulation(object):
                                       checkpoint=False,
                                       no_callbacks=True,
                                       verbose=0,
-                                      save_folder=self.save_folder,
+                                      save_folder=self.folder,
                                       nn_layers=eval(self.config["Network"]["nn_struct"]),
                                       test_split=float(self.config["Network"]["test_split"]),
                                       val_split=float(self.config["Network"]["val_split"]),
@@ -444,7 +445,7 @@ class Simulation(object):
         self._publish_loss()
 
         # Save states and actions
-        if self.save_folder is not None:
+        if self.save_sim:
             self.state_history.append(curr_state)
             self.action_history.append(mix_action)
 
@@ -513,7 +514,7 @@ class Simulation(object):
         self._publish_loss()
 
         # Save states and actions
-        if self.save_folder is not None:
+        if self.save_sim:
             self.state_history.append(curr_state)
             self.action_history.append(mix_action)
 
@@ -545,7 +546,7 @@ class Simulation(object):
         self._publish_loss()
 
         # Save states and actions
-        if self.save_folder is not None:
+        if self.save_sim:
             self.state_history.append(curr_state)
             self.action_history.append(mix_action)
 
@@ -605,7 +606,7 @@ class Simulation(object):
 
                 # Save physics results
                 self.t_hist.append(self.t)
-                if eval(self.config["Physics"]["save"]):
+                if self.save_physics:
                     curr_x, curr_y, curr_z = self.physics.get_hyq_x_y_z()
                     curr_phi, curr_theta, curr_psi = self.physics.get_hyq_phi_theta_psi()
                     self.save_physics_t_real.append(time.time() - t_init)
@@ -623,21 +624,22 @@ class Simulation(object):
 
     def stop(self):
 
-        # Save new simulation in OL
-        if self.save_folder is not None:
-            with open(self.save_folder + "/state_action.pkl", "wb") as f:
+        # Save the simulation
+        if self.save_sim:
+            with open(self.folder + "/state_action.pkl", "wb") as f:
                 pickle.dump([np.mat(self.state_history), np.mat(self.action_history), np.array(self.t_hist)],
                             f, protocol=2)
 
             if self.sim_file is not None and not self.ol:
                 self.network.save()
 
-        if eval(self.config["Physics"]["save"]):
+        # Save the physics
+        if self.save_physics:
             to_save = {"t_sim": self.t_hist, "t_real": self.save_physics_t_real, "t_trot": self.save_physics_t_trot,
                        "x": self.save_physics_x, "y": self.save_physics_y, "z": self.save_physics_z, 
                        "phi": self.save_physics_phi, "theta": self.save_physics_theta, "psi": self.save_physics_psi}
 
-            pickle.dump(to_save, open(self.save_folder + "/physics.pkl", "wb"), protocol=2)
+            pickle.dump(to_save, open(self.folder + "/physics.pkl", "wb"), protocol=2)
 
         if self.plot:
             self._stop_plotter()
@@ -799,7 +801,7 @@ class CPGSimulation(Simulation):
             self._publish_actions(predicted, target, action)
 
             # Save states and actions
-            if self.save_folder is not None:
+            if self.save_sim:
                 self.state_history.append(state.tolist()[0])
                 self.action_history.append(action.tolist())
 

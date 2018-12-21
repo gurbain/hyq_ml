@@ -22,6 +22,7 @@ pub_actions = True
 pub_states = True
 pub_loss = True
 pub_error = True
+save = False
 
 ## This section controls the level of verbosity and GUI
 [Debug]
@@ -46,7 +47,6 @@ train_buff_size = 10000
 ## This section includes most of the neural network parameters
 [Network]
 sim_file = None
-save_folder = None
 nn_struct = [ [('relu', 40)], [('relu', 40)], [('relu', 40)] ]
 test_split = 0.7
 val_split = 0.1
