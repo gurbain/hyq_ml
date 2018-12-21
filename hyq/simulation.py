@@ -56,6 +56,7 @@ class Simulation(object):
 
         # Physics variable
         self.view = False
+        self.init_impedance = None
         self.remote = False
         self.real_time = False
         self.save_physics = False
@@ -152,6 +153,7 @@ class Simulation(object):
         self.epoch_num = int(self.config["Training"]["epoch_num"])
         self.train_buff_size = int(self.config["Training"]["train_buff_size"])
         self.view = eval(self.config["Debug"]["view"])
+        self.init_impedance = eval(self.config["Physics"]["init_impedance"])
         self.remote = eval(self.config["Physics"]["remote_server"])
         self.real_time = eval(self.config["Physics"]["real_time"])
         self.save_physics = eval(self.config["Physics"]["save"])
@@ -161,7 +163,7 @@ class Simulation(object):
     def start(self):
 
         # Create and start the handle thread to the physics simulation
-        self.physics = physics.HyQSim(init_impedance=None,
+        self.physics = physics.HyQSim(init_impedance=self.init_impedance,
                                       view=self.view,
                                       remote=self.remote,
                                       verbose=self.verbose,
