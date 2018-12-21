@@ -340,7 +340,7 @@ class Tasks(object):
 
         self.max_job_attemps = 5
         self.max_waiting_time = 20
-        self.max_time_update = 10
+        self.max_time_update = 60
 
     def process(self, config_list):
 
@@ -349,16 +349,10 @@ class Tasks(object):
         # Check if another simulation is running
         self.__check_status()
 
-        # Create task dirs
-        task_root_folder = self.folder + "tasks"
-        mkdir(task_root_folder)
-        self.task_dirs = self.__create_task_folders(task_root_folder, config_list)
-
         # Create experiment dir
         exp_root_folder = self.folder + "experiments/"
         mkdir(exp_root_folder)
-        self.exp_dir = self.__create_exp_folders(exp_root_folder + timestamp(),
-                                                 self.task_dirs)
+        self.task_dirs = self.__create_task_folders(exp_root_folder + timestamp(), config_list)
 
         # Check status first before starting experiment
         self.cluster.browse()
@@ -631,6 +625,7 @@ class Tasks(object):
 
     def __create_task_folders(self, root_folder, config):
 
+        mkdir(root_folder)
         liste = []
         for c in config:
             hashe = os.path.join(root_folder, gen_hash([o for o in os.listdir(root_folder) 
@@ -643,15 +638,6 @@ class Tasks(object):
                 c.write(configfile)
 
         return liste
-
-    def __create_exp_folders(self, root_folder, task_lists):
-
-        mkdir(root_folder)
-        for t in task_lists:
-            dst_name = root_folder + "/" + t.split("/")[-1]
-            os.symlink(t, dst_name)
-
-        return root_folder
 
 
 class Manager(object):
