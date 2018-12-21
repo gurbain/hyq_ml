@@ -44,7 +44,7 @@ RUN cd hyq_ml/docker/resources/install && \
 # #------------------------
 RUN cd hyq_ml/docker/resources/install && \
     bash install_dls.sh
-RUN sudo chmod a+x hyq_ml/docker/bin/hyq
+RUN sudo chmod a+x hyq_ml/docker/resources/bin/hyq
 RUN cd hyq_ml/docker/resources/install && \
     bash setup_shell.sh
 RUN cd hyq_ml && sudo python setup.py develop
