@@ -10,7 +10,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FILENAME = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/stiffness_space_exploration/20181030-184700/results.pkl"
+FILENAME = "/home/gurbain/docker_sim/experiments/20181221-154105/data_kd_kp.pkl"
 
 def get_cols():
 
@@ -35,7 +35,7 @@ def plot_data():
     kd_set = sorted(list(set(d["Kd"] for d in data)))
     kp_set = sorted(list(set(d["Kp"] for d in data)))
     n_sample = len(data) / len(kd_set) / len(kp_set)
-
+    print n_sample, kd_set, kp_set
     # Get final x,y distance for each robot
     x_dist = np.zeros((len(kp_set), len(kd_set), n_sample))
     y_dist = np.zeros((len(kp_set), len(kd_set), n_sample))
@@ -45,12 +45,12 @@ def plot_data():
     for d in data:
         kd_index = kd_set.index(d["Kd"])
         kp_index = kp_set.index(d["Kp"])
-        x_dist[kp_index, kd_index, sampling_index[kp_index, kd_index]] = d["x"][-1]
-        y_dist[kp_index, kd_index, sampling_index[kp_index, kd_index]] = d["y"][-1]
+        x_dist[kp_index, kd_index, sampling_index[kp_index, kd_index]] = d["x"]
+        y_dist[kp_index, kd_index, sampling_index[kp_index, kd_index]] = d["y"]
         x_vel[kp_index, kd_index, sampling_index[kp_index, kd_index]] = \
-            d["x"][-1] / (d["t_sim"] - d["t_trot"])
+            d["x"] / (d["t_sim"] - d["t_trot"])
         y_vel[kp_index, kd_index, sampling_index[kp_index, kd_index]] = \
-            d["y"][-1] / (d["t_sim"] - d["t_trot"])
+            d["y"] / (d["t_sim"] - d["t_trot"])
         sampling_index[kp_index, kd_index] += 1
 
     x_dist_av = np.mean(x_dist, axis=2)

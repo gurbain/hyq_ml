@@ -56,6 +56,9 @@ RUN cd hyq_ml && sudo python setup.py develop
 RUN cd hyq_ml/docker/resources/install && git pull origin master
 RUN cd hyq_ml/docker/resources/install && \
     bash hack_me.sh
+RUN sudo bash -c 'rm /opt/ros/dls-distro/share/rcf_controller/config/hyq_sim_options.ini \
+                  && ln -s /home/gurbain/hyq_ml/config/hyq_sim_options.ini.current_sim \
+                  /opt/ros/dls-distro/share/rcf_controller/config/hyq_sim_options.ini'
 COPY /resources/bin/entrypoint.sh /usr/local/bin/
 RUN sudo chmod a+x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
