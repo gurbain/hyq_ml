@@ -10,6 +10,7 @@ RUN apt-get update && \
     wget software-properties-common \
     net-tools iputils-ping wget python-pip \
     python-setuptools
+RUN apt-get install -y nmap nano htop ncdu tmux
 
 USER root
 RUN useradd -ms /bin/bash gurbain
