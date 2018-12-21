@@ -1,7 +1,10 @@
+import ConfigParser
 import matplotlib
 import numpy as np
 import os
 import pickle
+from tqdm import tqdm
+
 import matplotlib.pyplot as plt
 plt.style.use('fivethirtyeight')
 plt.rc('text', usetex=True)
@@ -10,7 +13,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FILENAME = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/stiffness_space_exploration/20181105-140249/results.pkl"
+EXP_FOLDER = "/home/gabs48/iminds/paard/docker_sim/experiments/20181221-154105"
 
 def get_cols():
 
@@ -25,11 +28,7 @@ def get_lines():
     return ["-", "--", ":", "-."]
 
 
-def plot_data():
-    # Retrieve data from file
-    if os.path.exists(FILENAME):
-        data = pickle.load(open(FILENAME, "rb"))
-        #print data
+def plot_data(data):
 
     # Get the Kp-Kd space
     kd_set = sorted(list(set(d["Kd"] for d in data)))
@@ -114,6 +113,41 @@ def plot_data():
     plt.legend()
     plt.show()
 
+
+def browse_folder():
+
+    print "Browse the full folder and retrieve data"
+    data_filename = os.path.join(EXP_FOLDER, "data.pkl")
+    if os.path.isfile(data_filename):
+        data = pickle.load(open(data_filename, "rb"))
+    else:
+        data = []
+        for subdir in os.listdir(EXP_FOLDER): #tqdm(os.listdir(EXP_FOLDER)):
+
+            config_filename = os.path.join(os.path.join(EXP_FOLDER, subdir), "config.txt")
+            physics_filename = os.path.join(os.path.join(EXP_FOLDER, subdir), "physics.pkl")
+            if os.path.isfile(config_filename) and os.path.isfile(physics_filename):
+
+                    config = ConfigParser.ConfigParser()
+                    config.read(config_filename)
+                    init_impedance = eval(config.get("Physics", "init_impedance"))
+                    kp = init_impedance[0]
+                    kd = init_impedance[1]
+
+                    physics = pickle.load(open(physics_filename, "rb"))
+                    x  = physics["x"][-1]
+                    print x
+
+                    kpkd = {"Kp": kp, "Kd": kd}
+                    kpkd.update(physics)
+                    data.append(kpkd)
+
+        pickle.dump(data, open(data_filename, "wb"), protocol=2)
+
+    return data
+
+
 if __name__ == "__main__":
 
-    plot_data()
+    data = browse_folder()
+    plot_data(data)

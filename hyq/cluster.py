@@ -352,7 +352,8 @@ class Tasks(object):
         # Create experiment dir
         exp_root_folder = self.folder + "experiments/"
         mkdir(exp_root_folder)
-        self.task_dirs = self.__create_task_folders(exp_root_folder + timestamp(), config_list)
+        self.exp_dir = exp_root_folder + timestamp()
+        self.task_dirs = self.__create_task_folders(self.exp_dir, config_list)
 
         # Check status first before starting experiment
         self.cluster.browse()
