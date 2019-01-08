@@ -28,6 +28,7 @@ import physics
 import network
 import utils
 
+
 class Simulation(object):
 
     def __init__(self, folder=None):
@@ -177,7 +178,7 @@ class Simulation(object):
             self.play_from_file = True
             self.network = network.NN(data_file=self.sim_file,
                                       save_folder=self.folder,
-                                      verbose=0, 
+                                      verbose=int(self.config["Network"]["verbose"]),
                                       nn_layers=eval(self.config["Network"]["nn_struct"]),
                                       test_split=float(self.config["Network"]["test_split"]),
                                       val_split=float(self.config["Network"]["val_split"]),
@@ -238,10 +239,10 @@ class Simulation(object):
 
         else:
             self.play_from_file = False
-            self.network = network.NN(max_epochs=100000,
+            self.network = network.NN(max_epochs=int(self.config["Network"]["max_epochs"]),
                                       checkpoint=False,
                                       no_callbacks=True,
-                                      verbose=0,
+                                      verbose=int(self.config["Network"]["verbose"]),
                                       save_folder=self.folder,
                                       nn_layers=eval(self.config["Network"]["nn_struct"]),
                                       test_split=float(self.config["Network"]["test_split"]),
@@ -322,7 +323,7 @@ class Simulation(object):
         # If we need the prediction
         if pred:
             # Predict network action
-            if len(state) == 5:
+            if len(state) == 24:
                 predicted = self.network.predict(np.mat(state)).tolist()[0]
             else:
                 predicted = []
@@ -352,15 +353,18 @@ class Simulation(object):
 
     def _training_thread(self, x, y):
 
-        if self.verbose > 1:
-            print " [Training] A Iteration: " + str(self.last_action_it) + \
-                  "\tFitting ESN with feature vectors of shape " + \
-                  str(x.shape) + " x " + str(y.shape) + "!"
+        if self.verbose >= 1:
+            print " [Training]  It: " + str(self.it) + \
+                  "\tRCF It: " + str(self.last_action_it) + \
+                  " - Fitting NN with FV of shape " + \
+                  str(x.shape) + " x " + str(y.shape) + \
+                  " through " + str(self.epoch_num) + " epochs!"
         self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num,  # plot_train_states=True,
                                                       evaluate=False, save=False)
-        if self.verbose > 1:
-            print " [Training] A Iteration: " + str(self.last_action_it) + \
-                  "\tFinished with Loss: {:.5f}".format(self.loss)
+        if self.verbose >= 1:
+            print " [Training]  It: " + str(self.it) + \
+                  "\tRCF It: " + str(self.last_action_it) + \
+                  " - Finished with Loss: {:.5f}".format(self.loss)
 
     def train_run_sm_step(self):
 
@@ -373,7 +377,7 @@ class Simulation(object):
 
             if self.train:
                 # Record states and action in a buffer
-                if len(curr_state) == 5 and len(tgt_action) == 24:
+                if len(curr_state) == 24 and len(tgt_action) == 8:
                     self.x_train_step.append(curr_state)
                     self.y_train_step.append(tgt_action)
 
@@ -430,7 +434,7 @@ class Simulation(object):
             self.train_sm_mode = "Training"
 
         # SEND PRED ON ROS (ALWAYS)
-        if len(pred_action) == 24:
+        if len(pred_action) == 8:
             self.physics.send_hyq_nn_pred(pred_action, self.nn_weight, np.array(tgt_action) - np.array(pred_action))
 
         # DEBUG AND LOGGING (ALWAYS)
@@ -477,8 +481,7 @@ class Simulation(object):
 
             # When buffer is full
             if len(self.x_train_step) > self.train_buff_size:
-
-                # When training is finished start again with new buffer
+                                # When training is finished start again with new buffer
                 if not self.training_thread.isAlive():
                     x = np.mat(self.x_train_step)
                     y = np.mat(self.y_train_step)
@@ -493,7 +496,7 @@ class Simulation(object):
         mix_action = tgt_action
         self.nn_weight = 0
 
-        if not self.ol and len(pred_action) == 24:
+        if not self.ol and len(pred_action) == 8:
             if self.t > self.t_stop_cl:
                 self.nn_weight = 1
                 mix_action = np.array(pred_action)
@@ -506,7 +509,7 @@ class Simulation(object):
                              (self.nn_weight * np.array(pred_action))
 
         # Send the NN prediction to the RCF controller
-        if len(pred_action) == 24:
+        if len(pred_action) == 8:
             self.physics.send_hyq_nn_pred(pred_action, self.nn_weight,
                                           np.array(tgt_action) - np.array(pred_action))
 
@@ -530,13 +533,13 @@ class Simulation(object):
         mix_action = tgt_action
         self.nn_weight = 0
 
-        if not self.ol and len(pred_action) == 24:
+        if not self.ol and len(pred_action) == 8:
             if self.t > self.t_start_cl:
                 self.nn_weight = 1
                 mix_action = np.array(pred_action)
 
         # Send the NN prediction to the RCF controller
-        if len(pred_action) == 24:
+        if len(pred_action) == 8:
             self.physics.send_hyq_nn_pred(pred_action,
                                           self.nn_weight,
                                           np.array(tgt_action) -
@@ -594,7 +597,7 @@ class Simulation(object):
                         self.step()
 
                 # Display simulation progress
-                if self.it % 1000 == 0 and self.verbose > 1:
+                if self.it % 1000 == 0 and self.verbose >= 1:
                     tp = (self.t - last_t)
                     if tp != 0:
                         f = (self.it - last_it) / tp

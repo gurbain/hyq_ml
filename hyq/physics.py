@@ -90,6 +90,7 @@ class HyQSim(threading.Thread):
         self.sim_time = 0
         self.hyq_state = None
         self.hyq_tgt_action = None
+        self.hyq_full_tgt_action = None
         self.hyq_x = 0
         self.hyq_y = 0
         self.hyq_z = 0
@@ -109,7 +110,6 @@ class HyQSim(threading.Thread):
         self.publish_error = publish_error
         self.error_it = 0
         self.error_pos = np.array([])
-        self.error_vel = np.array([])
         self.noise_it = 0
         self.next_noise_it = 0
         self.verbose = verbose
@@ -432,9 +432,9 @@ class HyQSim(threading.Thread):
         if type(prediction) is np.ndarray:
             prediction = prediction.tolist()
 
-        if len(prediction) != 12:
-                ros.logerr("This method is designed to receive 12 joint" +
-                           " position and velocity in a specific format!")
+        if len(prediction) != 8:
+                ros.logerr("This method is designed to receive 8 joint" +
+                           " position in a specific format!")
                 return
 
         # Create and fill a JointState object
@@ -444,9 +444,20 @@ class HyQSim(threading.Thread):
             joints.header.stamp = ros.get_rostime()
         else:
             joints.header.stamp = ros.Time(self.get_sim_time())
-        joints.position = prediction[0:12]
-        joints.velocity = [0.0] * 12
-        joints.effort = [0.0] * 12
+
+        pos = list(self.hyq_full_tgt_action.position)
+        pos[1] = prediction[0]           # LF Hip FE Joint
+        pos[2] = prediction[1]           # LF Knee FE Joint
+        pos[4] = prediction[2]           # RF Hip FE Joint
+        pos[5] = prediction[3]           # RF Knee FE Joint
+        pos[7] = prediction[4]           # LH Hip FE Joint
+        pos[8] = prediction[5]           # LH Knee FE Joint
+        pos[10] = prediction[6]          # RH Hip FE Joint
+        pos[11] = prediction[7]          # RH Knee FE Joint
+
+        joints.position = tuple(pos)
+        joints.velocity = self.hyq_full_tgt_action.velocity
+        joints.effort = self.hyq_full_tgt_action.effort
 
         # Publish
         self.pub_nn.publish(joints)
@@ -483,32 +494,36 @@ class HyQSim(threading.Thread):
         joints_err = JointState()
         joints_err.header = Header()
         joints_err.header.stamp = ros.Time(self.get_sim_time())
-        joints_err.position = error
+        joints_err.position = [0.0] * 12
         joints_err.velocity = [0.0] * 12
         joints_err.effort = [0.0] * 12
+
+        joints_err.position[1] = error[0]           # LF Hip FE Joint
+        joints_err.position[2] = error[1]           # LF Knee FE Joint
+        joints_err.position[4] = error[2]           # RF Hip FE Joint
+        joints_err.position[5] = error[3]           # RF Knee FE Joint
+        joints_err.position[7] = error[4]           # LH Hip FE Joint
+        joints_err.position[8] = error[5]           # LH Knee FE Joint
+        joints_err.position[10] = error[6]          # RH Hip FE Joint
+        joints_err.position[11] = error[7]          # RH Knee FE Joint
+
         self.pub_js_err.publish(joints_err)
 
         # Average and publish error summaries
         if self.error_it % 50 == 49:
-            haa_err = np.average(error_pos[0::3])
-            hfe_err = np.average(error_pos[1::3])
-            kfe_err = np.average(error_pos[2::3])
-            haad_err = np.average(error_vel[0::3])
-            hfed_err = np.average(error_vel[1::3])
-            kfed_err = np.average(error_vel[2::3])
-            tot_err = np.average(error_pos) + np.average(error_vel)
-            self.pub_haa_err.publish(Float32(haa_err))
+            hfe_err = np.average(error[0::2])
+            kfe_err = np.average(error[1::2])
+            tot_err = np.average(error)
+            self.pub_haa_err.publish(Float32(0))
             self.pub_hfe_err.publish(Float32(hfe_err))
             self.pub_kfe_err.publish(Float32(kfe_err))
-            self.pub_haad_err.publish(Float32(haad_err))
-            self.pub_hfed_err.publish(Float32(hfed_err))
-            self.pub_kfed_err.publish(Float32(kfed_err))
+            self.pub_haad_err.publish(Float32(0))
+            self.pub_hfed_err.publish(Float32(0))
+            self.pub_kfed_err.publish(Float32(0))
             self.pub_tot_err.publish(Float32(tot_err))
-            self.error_pos = error_pos
-            self.error_vel = error_vel
+            self.error_pos = error
         else:
-            self.error_pos = np.concatenate([self.error_pos, error_pos])
-            self.error_vel = np.concatenate([self.error_vel, error_vel])
+            self.error_pos = np.concatenate([self.error_pos, error])
 
         self.error_it += 1
 
@@ -574,6 +589,7 @@ class HyQSim(threading.Thread):
         self.process_action_flag.acquire()
         try:
             self.hyq_tgt_action = out
+            self.hyq_full_tgt_action = copy.deepcopy(msg)
             self.hyq_action_it += 1
         finally:
             self.process_action_flag.release()

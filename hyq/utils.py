@@ -135,6 +135,24 @@ def split(str, delim=" "):
     return array
 
 
+def mse(arr1, arr2):
+    """ Compute MSE between two arrays (1D) """
+
+    assert arr1.shape == arr2.shape, "Mean Square Error can only be computed on matrices with same size"
+    a, b = np.matrix(arr2).shape
+    return np.sum(np.square(arr2 - arr1)) / float(a * b)
+
+
+def nrmse(arr1, arr2):
+    """ Compute NRMSE between two arrays (1D) """
+
+    # Center signals around 0?
+    rmse = np.sqrt(mse(arr1, arr2))
+    max_val = max(np.max(arr1), np.max(arr2))
+    min_val = min(np.min(arr1), np.min(arr2))
+
+    return rmse / (max_val - min_val)
+
 class RedirectStdStreams(object):
 
     def __init__(self, stdout=None, stderr=None):

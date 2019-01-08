@@ -65,7 +65,7 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
         for i in range(2):
             mins.append(math.radians(-30))
         for i in range(12):
-            mins.append(-200)
+            mins.append(-100000)
         for i in range(2):
             mins.append(math.radians(-50))
             mins.append(math.radians(-140))
@@ -77,7 +77,7 @@ class HyQStateScaler(BaseEstimator, TransformerMixin):
         for i in range(2):
             maxs.append(math.radians(30))
         for i in range(12):
-            maxs.append(200)
+            maxs.append(100000)
         for i in range(2):
             maxs.append(math.radians(70))
             maxs.append(math.radians(-20))

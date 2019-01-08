@@ -55,7 +55,7 @@ class NN(object):
     # ALGORITHM METAPARAMETERS #
 
     def __init__(self, nn_layers=nn, test_split=0.7, val_split=0.1, stop_delta=0.0001, stop_pat=150,
-                 optim='adam', metric='mae', batch_size=2048, max_epochs=10, regularization=0.0,
+                 optim='Adam', metric='mae', batch_size=2048, max_epochs=10, regularization=0.0,
                  esn_n_res=10, esn_n_read=80, esn_in_mask=None, esn_out_mask=None, esn_real_fb=False,
                  esn_spec_rad=0.3, esn_damping=0.1, esn_sparsity=0.4, esn_noise=0.001,
                  data_file="data/sims/tc.pkl", save_folder="data/nn_learning/", checkpoint=False,
@@ -822,7 +822,7 @@ class NN(object):
             # Create the network
             self.esn = self.create_nn()
         else:
-            # If no x and y are specfied, use the loaded training set
+            # If no x and y are specified, use the loaded training set
             if x is None:
                 x = self.x_train
             if y is None:
