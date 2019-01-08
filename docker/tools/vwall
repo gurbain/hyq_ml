@@ -1,0 +1,53 @@
+#!/bin/bash
+
+SSH_USER="gurbain"
+SSH_HOST=".wall2.ilabt.iminds.be"
+declare -a SSH_NAMES=("geit" "paard" "kat" "schaap")
+declare -a SSH_NODES=("n064-23" "n064-13" "n064-06" "n064-22") 
+#declare -a SSH_NODES=("n064-14" "n064-16" "n064-18" "n064-10")
+NODES_NUM=${#SSH_NODES[@]}
+
+# Test SSH-AGENT
+if ! (ssh-add -l | grep -q jFed) then
+    echo "Starting SSH Agent"
+	eval `ssh-agent -s`
+	ssh-add /home/gabs48/.jFed/login-certs/ff1785b4dbb8cabf43801ccb5edee690.pem
+fi
+
+# Proxy
+# if nmcli -t -f active,ssid dev wifi | egrep '^yes' | cut -d\: -f2 | grep "iVisitor"; then
+# 	PROXY_COMMAND=""
+#     echo "You are connected to iVisitor, no need of proxy"
+# else
+# 	PROXY_COMMAND=" -oProxyCommand='ssh gurbain@bastion.test.iminds.be -W %h:%p'"
+#     echo "Setting a proxy through bastion.test.iminds.be"
+# fi
+PROXY_COMMAND="-oProxyCommand=ssh gurbain@bastion.test.iminds.be -W %h:%p"
+
+
+# Choose which computer to SSH to
+if [[ "$1" == "${SSH_NAMES[0]}" ]]; then
+	ssh -A -X "${SSH_USER}@${SSH_NODES[0]}${SSH_HOST}" -oProxyCommand="ssh gurbain@bastion.test.iminds.be -W %h:%p" #${PROXY_COMMAND}
+
+elif [[ "$1" == "${SSH_NAMES[1]}" ]]; then
+	ssh -A -X "${SSH_USER}@${SSH_NODES[1]}${SSH_HOST}" -oProxyCommand="ssh gurbain@bastion.test.iminds.be -W %h:%p" #${PROXY_COMMAND}
+
+elif [[ "$1" == "${SSH_NAMES[2]}" ]]; then
+	ssh -A -X "${SSH_USER}@${SSH_NODES[2]}${SSH_HOST}" -oProxyCommand="ssh gurbain@bastion.test.iminds.be -W %h:%p" #${PROXY_COMMAND}
+
+elif [[ "$1" == "${SSH_NAMES[3]}" ]]; then
+	ssh -A -X "${SSH_USER}@${SSH_NODES[3]}${SSH_HOST}" -oProxyCommand="ssh gurbain@bastion.test.iminds.be -W %h:%p" #${PROXY_COMMAND}
+
+
+else
+	ssh -A -X "${SSH_USER}@${SSH_NODES[1]}${SSH_HOST}" -oProxyCommand="ssh gurbain@bastion.test.iminds.be -W %h:%p" #${PROXY_COMMAND}
+fi
+
+# # Loop on all nodes
+# for (( i=1; i<${NODES_NUM}+1; i++ ));
+# do
+# 	# write name
+# 	printf "%s\n" "${SSH_USER}@${SSH_NODES[$i-1]}${SSH_HOST}" > file.txt# Connect in new tab
+# 	guake -n $HOME -e 'ssh -A -X $(cat $HOME/ssh_name) -oProxyCommand="ssh gurbain@bastion.test.iminds.be -W %h:%p"'
+	
+# done

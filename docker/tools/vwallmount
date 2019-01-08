@@ -1,0 +1,23 @@
+#!/bin/bash
+
+SSH_USER="gurbain"
+SSH_HOST=".wall2.ilabt.iminds.be"
+declare -a SSH_NAMES=("geit" "paard" "kat" "schaap")
+declare -a SSH_NODES=("n064-23" "n064-13" "n064-06" "n064-22") 
+#declare -a SSH_NODES=("n064-14" "n064-16" "n064-18" "n064-10")
+NODES_NUM=${#SSH_NODES[@]}
+
+# Test SSH-AGENT
+if ! (ssh-add -l | grep -q jFed) then
+    echo "Starting SSH Agent"
+	eval `ssh-agent -s`
+	ssh-add /home/gabs48/.jFed/login-certs/ff1785b4dbb8cabf43801ccb5edee690.pem
+fi
+
+# Loop on all nodes
+cd $HOME && mkdir -p iminds
+for (( i=1; i<${NODES_NUM}+1; i++ ));
+do
+	cd "$HOME/iminds" && mkdir -p "${SSH_NAMES[${i}-1]}"
+	sshfs "${SSH_USER}@${SSH_NODES[$i-1]}${SSH_HOST}:/users/gurbain" "${SSH_NAMES[${i}-1]}" -oIdentityFile='/home/gabs48/.jFed/login-certs/ff1785b4dbb8cabf43801ccb5edee690.pem' -oPort=22 -oProxyCommand="ssh -oIdentityFile='/home/gabs48/.jFed/login-certs/ff1785b4dbb8cabf43801ccb5edee690.pem' -oPort=22 gurbain@bastion.test.iminds.be -W %h:%p"
+done
