@@ -29,7 +29,7 @@ JOB_LIMIT = 200
 IMAGE = "hyq:latest"
 IDLE_CMD = ""
 RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
-          "cd /home/gurbain/hyq_ml/hyq; date  +%s; roscore & timeout 5m python simulation.py "
+          "cd /home/gurbain/hyq_ml/hyq; roscore & timeout 5m python simulation.py "
 IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
@@ -344,9 +344,12 @@ class Tasks(object):
         self.max_waiting_time = 60
         self.max_time_update = 20
 
+        self.docker_log = ""
+
     def process(self, config_list):
 
         print "\n--- Start New Experiment ---\n"
+        self.docker_log = ""
 
         # Check if another simulation is running
         self.__check_status()
@@ -386,6 +389,7 @@ class Tasks(object):
 
         print "--- Experiment is finished. Results are placed in " + str(self.exp_dir) + " ---\n"
         self.__monitor()
+        self.__save_docker_log()
         return self.res_dirs
 
     def logs(self):
@@ -404,10 +408,10 @@ class Tasks(object):
                 print "\n--- Printing logs from service \"" + str(worker_run_name[i]) + "\" ---\n"
                 ids = self.engine.services.get(worker_run_id[i])
                 logs = ids.logs(details=False, stdout=True, stderr=True,
-                                timestamps=True, since=worker_run_creat[i])
+                                timestamps=False, since=worker_run_creat[i])
                 for l in logs:
                     sys.stdout.write(l)
-                print worker_run_creat[i]
+                #print worker_run_creat[i]
 
     def __monitor(self):
 
@@ -504,6 +508,7 @@ class Tasks(object):
             self.cluster.browse()
             if time.time() - t_init > self.max_waiting_time:
                 print "--- ERROR: Timeout when waiting for idle service ---\n"
+                self.__save_docker_log()
                 exit(-1)
 
         # Pick the first idle service available in the list
@@ -513,6 +518,7 @@ class Tasks(object):
             srv = self.engine.services.get(srv_ids)
         except docker.errors.NotFound:
             print "--- ERROR: Service does not exist ---\n"
+            self.__save_docker_log()
             exit(-1)
         srv_name = srv.name
         print "--- A new job is started with folder " + str(folder.split("/")[-1]) + \
@@ -534,9 +540,11 @@ class Tasks(object):
                 if self.running[[r["folder"] for r in self.running].index(folder)]["launch"] > self.max_job_attemps:
                     print "--- ERROR: Timeout! You re-started the same job " + \
                           str(self.max_job_attemps) + " times without success! ---\n"
+                    self.__save_docker_log()
                     exit(-1)
             else:
                 print "--- ERROR: You cannot use relaunch a job that has not been launched yet! ---\n"
+                self.__save_docker_log()
                 exit(-1)
 
         # Update the service with the new command
@@ -545,15 +553,17 @@ class Tasks(object):
         while not success:
             try:
                 srv.update(image=self.cluster.srv_img, 
-                	       command=self.cluster.srv_run_cmd + str(folder) + "'",
+                           command=self.cluster.srv_run_cmd + str(folder) + "'",
                            args=self.cluster.srv_run_task,
                            mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
                 success = True
             except docker.errors.APIError as e:
+                self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
                 pass
 
             if time.time() - t_init > self.max_time_update:
                 print "--- ERROR: Timeout when trying to set service to running state ---\n"
+                self.__save_docker_log()
                 exit(-1)
         
     def __start_idle(self, srv=None, remove=True):
@@ -570,6 +580,7 @@ class Tasks(object):
                 s = self.engine.services.get(srv_id)
             except docker.errors.NotFound:
                 print "--- ERROR: Service does not exist ---\n"
+                self.__save_docker_log()
                 exit(-1)
 
             # Update the service with the new command
@@ -582,10 +593,12 @@ class Tasks(object):
                              args=self.cluster.srv_idle_task, mounts=[])
                     success = True
                 except docker.errors.APIError as e:
+                    self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
                     pass
 
                 if time.time() - t_init > self.max_time_update:
                     print "--- ERROR: Timeout when trying to set service to idle state ---\n"
+                    self.__save_docker_log()
                     exit(-1)
 
             if remove:
@@ -597,6 +610,7 @@ class Tasks(object):
                 if success == False:
                     print "--- ERROR: Cannot remove unexisting running service " + \
                           str(srv_id) + " ---\n"
+                    self.__save_docker_log()
                     exit(-1)
 
     def __del_callback(self, srv_name):
@@ -645,6 +659,11 @@ class Tasks(object):
                 c.write(configfile)
 
         return liste
+
+    def __save_docker_log(self):
+
+        with open(self.exp_dir + '/docker_err_log.txt', 'w') as f:
+            f.write(self.docker_log)
 
 
 class Manager(object):
