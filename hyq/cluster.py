@@ -406,12 +406,17 @@ class Tasks(object):
         else:
             for i in indexes:
                 print "\n--- Printing logs from service \"" + str(worker_run_name[i]) + "\" ---\n"
-                ids = self.engine.services.get(worker_run_id[i])
-                logs = ids.logs(details=False, stdout=True, stderr=True,
-                                timestamps=False, since=worker_run_creat[i])
-                for l in logs:
-                    sys.stdout.write(l)
-                #print worker_run_creat[i]
+                try:
+                    with utils.Timeout(10):
+                        ids = self.engine.services.get(worker_run_id[i])
+                        logs = ids.logs(details=False, stdout=True, stderr=True,
+                                    timestamps=False, since=worker_run_creat[i])
+                        for l in logs:
+                            sys.stdout.write(l)
+
+                except Timeout.Timeout as e: 
+                    self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                    pass
 
     def __monitor(self):
 
@@ -431,13 +436,18 @@ class Tasks(object):
                     if s_id in [r["service_id"] for r in self.running]:
                         r = self.running[[r["service_id"] for r in self.running].index(s_id)]
                         folder = r["folder"]
-                        with open(folder + "/error_log.txt", 'w') as file:
-                            ids = self.engine.services.get(s_id)
-                            logs = ids.logs(details=False, stdout=True, stderr=True,
-                                    timestamps=False, since=new["last_timestamp"])
-                            for l in logs:
-                                file.write(l)
-
+                        try:
+                            with utils.Timeout(10):
+                                with open(folder + "/error_log.txt", 'w') as file:
+                                    ids = self.engine.services.get(s_id)
+                                    logs = ids.logs(details=False, stdout=True, stderr=True,
+                                            timestamps=False, since=new["last_timestamp"])
+                                    for l in logs:
+                                        file.write(l)
+                        except Timeout.Timeout as e: 
+                            self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                            pass
+                        
                     # Set the service in idle mode
                     self.__start_idle(new, remove=False)
 
@@ -634,12 +644,17 @@ class Tasks(object):
             s_id = srv_new["service_id"]
             r = self.running[[r["service_id"] for r in self.running].index(s_id)]
             folder = r["folder"]
-            with open(folder + "/log.txt", 'w') as file:
-                ids = self.engine.services.get(s_id)
-                logs = ids.logs(details=False, stdout=True, stderr=True,
-                                timestamps=False, since=srv_old["last_timestamp"])
-                for l in logs:
-                    file.write(l)
+            try:
+                with utils.Timeout(10):
+                    with open(folder + "/log.txt", 'w') as file:
+                        ids = self.engine.services.get(s_id)
+                        logs = ids.logs(details=False, stdout=True, stderr=True,
+                                        timestamps=False, since=srv_old["last_timestamp"])
+                        for l in logs:
+                            file.write(l)
+            except Timeout.Timeout as e: 
+                self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                pass
 
         # Restart the node
         self.__start_idle(srv=srv_new)
