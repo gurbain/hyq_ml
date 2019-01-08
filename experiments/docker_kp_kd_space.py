@@ -22,6 +22,7 @@ if __name__ == '__main__':
                 # Open the config file and retrieve the data
                 config = ConfigParser.ConfigParser()
                 config.read(DEF_CONFIG)
+                config.set("Debug", "verbose", "2")
                 config.set("Simulation", "save", "False")
                 config.set("Physics", "save", "True")
                 config.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))

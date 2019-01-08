@@ -27,10 +27,11 @@ KEY_FILE = "/home/gurbain/.docker_swarm_key"
 
 JOB_LIMIT = 200
 IMAGE = "hyq:latest"
-IDLE_TASK = "tail -f /dev/null"
-RUN_TASK = "bash -c 'source /opt/ros/dls-distro/setup.bash; \
-            export PATH=\"/home/gurbain/hyq_ml/docker/bin:$PATH\"; \
-            cd /home/gurbain/hyq_ml/hyq; roscore & python simulation.py "
+IDLE_CMD = ""
+RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
+          "cd /home/gurbain/hyq_ml/hyq; date  +%s; roscore & timeout 5m python simulation.py "
+IDLE_TASK = ["sleep", "infinity"]
+RUN_TASK = [""]
 
 SAVE_FOLDER = "/home/gurbain/docker_sim/"
 TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
@@ -183,6 +184,8 @@ class Services(object):
         self.engine = engine
 
         self.srv_img = IMAGE
+        self.srv_idle_cmd = IDLE_CMD
+        self.srv_run_cmd = RUN_CMD
         self.srv_idle_task = IDLE_TASK
         self.srv_run_task = RUN_TASK
         self.swarm_machines = MACHINES
@@ -235,12 +238,10 @@ class Services(object):
                         creation = int((dateutil.parser.parse(t["CreatedAt"]) + datetime.timedelta(hours=1)).strftime("%s"))
                         service_name = s.name
                         version = s.version
-                        cmd = ""
-                        if 'Command' in t["Spec"]["ContainerSpec"].keys():
-                            cmd += " ".join(t["Spec"]["ContainerSpec"]["Command"])
+                        args = ""
                         if 'Args' in t["Spec"]["ContainerSpec"].keys():
-                            cmd += " ".join(t["Spec"]["ContainerSpec"]["Args"])
-                        if cmd == self.srv_idle_task:
+                            args += " ".join(t["Spec"]["ContainerSpec"]["Args"])
+                        if args == " ".join(self.srv_idle_task):
                             cmd_type = "idle"
                         else:
                             cmd_type = "run"
@@ -248,7 +249,7 @@ class Services(object):
                         # print cmd, status, service_name
                         self.workers.append({"type": cmd_type, "service_version": version,
                                              "service_id": srv, "service_name": service_name,
-                                             "host": host, "cmd": cmd, "status": status,
+                                             "host": host, "cmd": args, "status": status,
                                              "last_timestamp": creation})
 
                     except (ValueError, docker.errors.NotFound, KeyError):
@@ -312,7 +313,8 @@ class Services(object):
                                                              delay=0, max_attempts=0, 
                                                              window=0) 
             name = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(3))
-            srv_id = self.engine.services.create(image=self.srv_img, command=self.srv_idle_task, 
+            srv_id = self.engine.services.create(image=self.srv_img, command=self.srv_idle_cmd,
+                                                 args=self.srv_idle_task, 
                                                  name=self.def_name + name, mode=srv_replicas_mode,
                                                  restart_policy=srv_restart_policy)
 
@@ -339,8 +341,8 @@ class Tasks(object):
         self.mount_opt = MOUNT_OPT
 
         self.max_job_attemps = 5
-        self.max_waiting_time = 20
-        self.max_time_update = 60
+        self.max_waiting_time = 60
+        self.max_time_update = 20
 
     def process(self, config_list):
 
@@ -383,6 +385,7 @@ class Tasks(object):
             self.__monitor()
 
         print "--- Experiment is finished. Results are placed in " + str(self.exp_dir) + " ---\n"
+        self.__monitor()
         return self.res_dirs
 
     def logs(self):
@@ -401,9 +404,10 @@ class Tasks(object):
                 print "\n--- Printing logs from service \"" + str(worker_run_name[i]) + "\" ---\n"
                 ids = self.engine.services.get(worker_run_id[i])
                 logs = ids.logs(details=False, stdout=True, stderr=True,
-                                timestamps=False, since=worker_run_creat[i])
+                                timestamps=True, since=worker_run_creat[i])
                 for l in logs:
                     sys.stdout.write(l)
+                print worker_run_creat[i]
 
     def __monitor(self):
 
@@ -540,8 +544,9 @@ class Tasks(object):
         t_init = time.time()
         while not success:
             try:
-                srv.update(image=self.cluster.srv_img,
-                           command=self.cluster.srv_run_task + str(folder) + "'",
+                srv.update(image=self.cluster.srv_img, 
+                	       command=self.cluster.srv_run_cmd + str(folder) + "'",
+                           args=self.cluster.srv_run_task,
                            mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
                 success = True
             except docker.errors.APIError as e:
@@ -571,9 +576,10 @@ class Tasks(object):
             success = False
             t_init = time.time()
             while not success:
+
                 try:
-                    s.update(image=self.cluster.srv_img, command=self.cluster.srv_idle_task,
-                             mounts=[])
+                    s.update(image=self.cluster.srv_img, command=self.cluster.srv_idle_cmd,
+                             args=self.cluster.srv_idle_task, mounts=[])
                     success = True
                 except docker.errors.APIError as e:
                     pass
