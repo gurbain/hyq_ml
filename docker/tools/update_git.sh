@@ -8,7 +8,7 @@ DOCKER_TAG="latest"
 
 
 echo " --- Pull Git Repository Image --- "
-docker run -it $DOCKER_IMG:$DOCKER_TAG /bin/sh -c "cd /home/gurbain/hyq_ml && git config --global user.email 'gurbain@ugent.be' \
+docker run  $DOCKER_IMG:$DOCKER_TAG /bin/sh -c "cd /home/gurbain/hyq_ml && git config --global user.email 'gurbain@ugent.be' \
                                                    &&  git config --global user.name 'Gabriel Urbain' \
                                                    && git stash && git pull $REMOTE $MASTER"
 
