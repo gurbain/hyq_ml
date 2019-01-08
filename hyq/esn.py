@@ -406,7 +406,8 @@ class FeedbackESN(BaseEstimator):
             plt.colorbar()
             plt.show()
         if self.verbose > 0:
-            print("\nTraining error: " + str(np.sqrt(np.mean((pred_train - y)**2))))
+            print pred_train.shape, y.shape
+            print("\nTraining error: " + str(utils.nrmse(pred_train, y)))
 
         return pred_train
 
@@ -652,7 +653,7 @@ class TestFeedbackESN(object):
 
         pred_out = self.esn.predict(self.inputs_test, continuation=True, inspect=False)
         if self.verbose > 0:
-            print("\nTest error: " + str(np.sqrt(np.mean((pred_out - self.outputs_test) ** 2))))
+            print("\nTest error: " + str(utils.nrmse(pred_out, self.outputs_test)))
         plt.plot(self.t[6000:], self.outputs_test, label="Target")
         plt.plot(self.t[6000:], pred_out, label="Prediction")
         plt.legend()
