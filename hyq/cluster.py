@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 
+## CONSTANTS ##
 # Edit the following variables depending on your cluster configuration
 # And check that every computer can communicate via SSH without user password
 # (SSH keys with no password)
@@ -25,7 +26,6 @@ HOST_PORT = '5000'
 MACHINES = ["paard",  "geit", "kat", "schaap"]
 KEY_FILE = "/home/gurbain/.docker_swarm_key"
 
-JOB_LIMIT = 200
 IMAGE = "hyq:latest"
 IDLE_CMD = ""
 RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
@@ -38,12 +38,46 @@ TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
 
+JOB_LIMIT = 200
+MAX_JOBS_ATTEMPTS = 5
+JOB_PLACEMENT_TIMEOUT = 60
+DOCKER_TIMEOUT = 20
+
+
+## UTILS ##
+
+class Timeout():
+    """Timeout class using ALARM signal."""
+    class Timeout(Exception):
+        pass
+ 
+    def __init__(self, sec):
+        self.sec = sec
+ 
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.raise_timeout)
+        signal.alarm(self.sec)
+ 
+    def __exit__(self, *args):
+        signal.alarm(0)    # disable alarm
+ 
+    def raise_timeout(self, *args):
+        raise Timeout.Timeout()
+
+
+def timestamp():
+    """ Return a string stamp with current date and time """
+
+    return time.strftime("%Y%m%d-%H%M%S", time.localtime())
+
 
 def signal_handler(sig, frame):
     print('\n\n--- User has quitted the manager! ---')
     sys.exit(0)
 
+
 def timestamp():
+
     return time.strftime("%Y%m%d-%H%M%S", time.localtime())
 
 
@@ -51,12 +85,16 @@ def mkdir(path):
     if not os.path.exists(path):
         os.makedirs(path)
 
+
 def gen_hash(to_exclude, n=12):
     s = ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + \
                               string.digits) for _ in range(n))
     if s in to_exclude:
         s = generate_random(to_exclude=to_exclude, n=n)
     return s
+
+
+## MAIN CLASSES ##
 
 class Lan(object):
 
@@ -340,9 +378,9 @@ class Tasks(object):
         self.mount_dir = MOUNT_FOLDER
         self.mount_opt = MOUNT_OPT
 
-        self.max_job_attemps = 5
-        self.max_waiting_time = 60
-        self.max_time_update = 20
+        self.max_job_attemps = MAX_JOBS_ATTEMPTS
+        self.max_waiting_time = JOB_PLACEMENT_TIMEOUT
+        self.max_time_update = DOCKER_TIMEOUT
 
         self.docker_log = ""
 
@@ -407,7 +445,7 @@ class Tasks(object):
             for i in indexes:
                 print "\n--- Printing logs from service \"" + str(worker_run_name[i]) + "\" ---\n"
                 try:
-                    with utils.Timeout(10):
+                    with Timeout(10):
                         ids = self.engine.services.get(worker_run_id[i])
                         logs = ids.logs(details=False, stdout=True, stderr=True,
                                     timestamps=False, since=worker_run_creat[i])
@@ -415,7 +453,7 @@ class Tasks(object):
                             sys.stdout.write(l)
 
                 except Timeout.Timeout as e: 
-                    self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                    self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
                     pass
 
     def __monitor(self):
@@ -437,7 +475,7 @@ class Tasks(object):
                         r = self.running[[r["service_id"] for r in self.running].index(s_id)]
                         folder = r["folder"]
                         try:
-                            with utils.Timeout(10):
+                            with Timeout(10):
                                 with open(folder + "/error_log.txt", 'w') as file:
                                     ids = self.engine.services.get(s_id)
                                     logs = ids.logs(details=False, stdout=True, stderr=True,
@@ -445,30 +483,31 @@ class Tasks(object):
                                     for l in logs:
                                         file.write(l)
                         except Timeout.Timeout as e: 
-                            self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                            self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
                             pass
-                        
-                    # Set the service in idle mode
-                    self.__start_idle(new, remove=False)
 
                     # restart the job
                     r_id = [r["service_id"] for r in self.running]
                     if new["service_id"] in r_id:
 
                         # Set to idle
+                        self.__start_idle(new, remove=False)
                         folder = self.running[r_id.index(new["service_id"])]["folder"]
                         print "--- Failed job with folder " + str(folder.split("/")[-1]) + \
-                              " is re-started on service " + str(new["service_name"]) + " ---\n"
+                              " is re-started on service " + str(new["service_id"]) + " ---\n"
 
                         # Restart
                         self.__start_job(folder, append=False)
+                    
                     else:
+                        # Set the service in idle mode
+                        self.__start_idle(new, remove=True)
                         print "--- An old failed job is stopped on service " + \
-                              str(new["service_name"]) + " ---\n"
+                              str(new["service_id"]) + " ---\n"
 
                 if new["status"] in ["shutdown", "rejected"] and new["type"] == "idle":
                     print "--- Failed idle job is restarted on service " + \
-                           str(new["service_name"]) + " ---\n"
+                           str(new["service_id"]) + " ---\n"
                     self.__start_idle(new)
 
             # Check if status changed from running to complete
@@ -568,7 +607,7 @@ class Tasks(object):
                            mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
                 success = True
             except docker.errors.APIError as e:
-                self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
                 pass
 
             if time.time() - t_init > self.max_time_update:
@@ -603,7 +642,7 @@ class Tasks(object):
                              args=self.cluster.srv_idle_task, mounts=[])
                     success = True
                 except docker.errors.APIError as e:
-                    self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                    self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
                     pass
 
                 if time.time() - t_init > self.max_time_update:
@@ -645,7 +684,7 @@ class Tasks(object):
             r = self.running[[r["service_id"] for r in self.running].index(s_id)]
             folder = r["folder"]
             try:
-                with utils.Timeout(10):
+                with Timeout(10):
                     with open(folder + "/log.txt", 'w') as file:
                         ids = self.engine.services.get(s_id)
                         logs = ids.logs(details=False, stdout=True, stderr=True,
@@ -653,7 +692,7 @@ class Tasks(object):
                         for l in logs:
                             file.write(l)
             except Timeout.Timeout as e: 
-                self.self.docker_log += str(utils.timestamp()) + "| ERROR | "  + str(e)
+                self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
                 pass
 
         # Restart the node
