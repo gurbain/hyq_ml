@@ -22,3 +22,7 @@ misc/*
 
 # Pycharm
 .idea/*
+
+# Sims with Hyq
+*.current_sim
+*/*.current_sim

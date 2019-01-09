@@ -592,7 +592,9 @@ class Simulation(object):
                     trot_flag = self.physics.start_rcf_trot()
                     if trot_flag:
                         self.printv(" ===== Trotting Started =====\n")
-                        self.save_states_t_trot = copy.copy(self.t)
+                        if self.save_states or self.save_metrics:
+                            self.save_states_t_trot = copy.copy(self.t)
+                            self.save_trot_i = self.save_index
 
                 # Apply noise on the robot
                 # if not self.remote and trot_flag:
@@ -670,24 +672,30 @@ class Simulation(object):
         # Save the robot metrics
         if self.save_metrics:
             if self.t_train > 0 and not self.ol and self.t_start_cl < self.t_sim:
-                (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.t_hist, self.save_states_psi,
+                (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.t_hist[self.save_trot_i:],
+                                                                                   self.save_states_psi[self.save_trot_i:],
                                                                                    self.save_stop_train_i,
                                                                                    self.save_start_test_i)
-                (p_f, p_train_fft, p_test_fft, p_rms) = self._compute_diff_fft_sig(self.t_hist, self.save_states_phi,
+                (p_f, p_train_fft, p_test_fft, p_rms) = self._compute_diff_fft_sig(self.t_hist[self.save_trot_i:],
+                                                                                   self.save_states_phi[self.save_trot_i:],
                                                                                    self.save_stop_train_i,
                                                                                    self.save_start_test_i)
-                to_save = {"train_roll_range": max(self.save_states_phi[0:self.save_stop_train_i]) -
-                                               min(self.save_states_phi[0:self.save_stop_train_i]),
-                           "train_pitch_range": max(self.save_states_psi[0:self.save_stop_train_i]) -
-                                                min(self.save_states_psi[0:self.save_stop_train_i]),
-                           "train_x_range": self.save_states_x[self.save_stop_train_i] - self.save_states_x[0],
-                           "train_y_range": abs(self.save_states_y[self.save_stop_train_i] - self.save_states_y[0]),
+                to_save = {"train_roll_range": max(self.save_states_phi[self.save_trot_i:self.save_stop_train_i]) -
+                                               min(self.save_states_phi[self.save_trot_i:self.save_stop_train_i]),
+                           "train_pitch_range": max(self.save_states_psi[self.save_trot_i:self.save_stop_train_i]) -
+                                                min(self.save_states_psi[self.save_trot_i:self.save_stop_train_i]),
+                           "train_x_range": self.save_states_x[self.save_stop_train_i] -
+                                            self.save_states_x[self.save_trot_i],
+                           "train_y_range": abs(self.save_states_y[self.save_stop_train_i] -
+                                                self.save_states_y[self.save_trot_i]),
                            "cl_roll_range": max(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]) -
                                             min(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]),
                            "cl_pitch_range": max(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]) -
                                              min(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]),
-                           "cl_x_range": self.save_states_x[self.save_start_test_i] - self.save_states_x[self.save_stop_train_i],
-                           "cl_y_range": abs(self.save_states_y[self.save_start_test_i] - self.save_states_y[self.save_stop_train_i]),
+                           "cl_x_range": self.save_states_x[self.save_start_test_i] -
+                                         self.save_states_x[self.save_stop_train_i],
+                           "cl_y_range": abs(self.save_states_y[self.save_start_test_i] -
+                                             self.save_states_y[self.save_stop_train_i]),
                            "test_roll_range": max(self.save_states_phi[self.save_start_test_i:]) -
                                               min(self.save_states_phi[self.save_start_test_i:]),
                            "test_pitch_range": max(self.save_states_psi[self.save_start_test_i:]) -
@@ -695,15 +703,18 @@ class Simulation(object):
                            "test_x_range": self.save_states_x[-1] - self.save_states_x[self.save_start_test_i],
                            "test_y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]),
                            "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms,
-                           "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[0],
+                           "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
                            "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i]
                            }
             else:
-                to_save = {"roll_range": max(self.save_states_phi) - min(self.save_states_phi),
-                           "pitch_range": max(self.save_states_psi) - min(self.save_states_psi),
-                           "x_range": self.save_states_x[-1] - self.save_states_x[0],
-                           "y_range": abs(self.save_states_y[-1] - self.save_states_y[0]),
+                to_save = {"roll_range": max(self.save_states_phi[self.save_trot_i:]) -
+                                         min(self.save_states_phi[self.save_trot_i:]),
+                           "pitch_range": max(self.save_states_psi[self.save_trot_i:]) -
+                                          min(self.save_states_psi[self.save_trot_i:]),
+                           "x_range": self.save_states_x[-1] - self.save_states_x[self.save_trot_i],
+                           "y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_trot_i]),
+                           "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i]
                            }
 
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
