@@ -8,15 +8,15 @@
 ## This section includes all iinformation about the simulation
 ## timeline
 [Timing]
-t_sim = 15
-t_train = 0
-t_start_cl = 15
-t_stop_cl = 15
+t_sim = 150
+t_train = 130
+t_start_cl = 20
+t_stop_cl = 240
 
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
-ol = True
+ol = False
 sm = False
 pub_actions = True
 pub_states = True
@@ -42,7 +42,7 @@ rviz = False
 ## This section includes parameters about the training procedure
 [Training]
 train = True
-epoch_num = 150
+epoch_num = 100
 train_buff_size = 10000
 
 ## This section includes most of the neural network parameters
