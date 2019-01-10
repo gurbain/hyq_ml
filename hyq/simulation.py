@@ -12,7 +12,6 @@ from keras import backend as K
 import math
 #  import matplotlib.pyplot as plt
 import numpy as np
-import pause
 import pexpect
 import pickle
 import psutil
