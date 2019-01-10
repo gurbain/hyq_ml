@@ -7,10 +7,12 @@ warnings.warn = warn
 from collections import deque
 import ConfigParser
 import copy
+import datetime
 from keras import backend as K
 import math
 #  import matplotlib.pyplot as plt
 import numpy as np
+import pause
 import pexpect
 import pickle
 import psutil
@@ -55,6 +57,7 @@ class Simulation(object):
         self.sm = None
         self.train = None
         self.play_from_file = False
+        self.time_step = 0
 
         # Physics variable
         self.view = False
@@ -93,6 +96,7 @@ class Simulation(object):
         self.last_action_it = 0
         self.last_state_it = 0
         self.train_it = 0
+        self.nn_started = False
         self.train_session = None
         self.pred_session = None
         self.train_graph = None
@@ -163,6 +167,7 @@ class Simulation(object):
         self.save_ctrl = eval(self.config["Simulation"]["save_ctrl"])
         self.save_states = eval(self.config["Simulation"]["save_states"])
         self.save_metrics = eval(self.config["Simulation"]["save_metrics"])
+        self.time_step = float(self.config["Simulation"]["time_step"])
 
         self.epoch_num = int(self.config["Training"]["epoch_num"])
         self.train = eval(self.config["Training"]["train"])
@@ -372,6 +377,7 @@ class Simulation(object):
                   " through " + str(self.epoch_num) + " epochs!"
         self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num,  # plot_train_states=True,
                                                       evaluate=False, save=False)
+        self.train_it += 1
         if self.verbose >= 1:
             print " [Training]  It: " + str(self.it) + \
                   "\tRCF It: " + str(self.last_action_it) + \
@@ -477,6 +483,9 @@ class Simulation(object):
         if len(curr_state) != 0 and len(tgt_action) != 0:
             self.x_train_step.append(curr_state)
             self.y_train_step.append(tgt_action)
+            if len(self.x_train_step) > self.train_buff_size:
+                self.x_train_step.pop(0)
+                self.y_train_step.pop(0)
 
         # When no training yet done
         if self.training_thread is None:
@@ -491,8 +500,8 @@ class Simulation(object):
         else:
 
             # When buffer is full
-            if len(self.x_train_step) > self.train_buff_size:
-                                # When training is finished start again with new buffer
+            if len(self.x_train_step) >= self.train_buff_size:
+                # When training is finished start again with new buffer
                 if not self.training_thread.isAlive():
                     x = np.mat(self.x_train_step)
                     y = np.mat(self.y_train_step)
@@ -500,12 +509,16 @@ class Simulation(object):
                     self.training_thread.start()
                     self.x_train_step = []
                     self.y_train_step = []
-                    self.train_it += 1
 
         # EXECUTION
         # Define the weight between NN prediction and RCF Controller
         mix_action = tgt_action
         self.nn_weight = 0
+
+        if not self.nn_started and len(pred_action) == 8:
+            print(" [Execution] It: " + str(self.it) +
+                  "\tNN has started publishing meaningful values! ")
+            self.nn_started = True
 
         if not self.ol and len(pred_action) == 8:
             if self.t > self.t_stop_cl:
@@ -574,11 +587,16 @@ class Simulation(object):
 
         last_it = 0
         last_t = 0
+        step_it = 0
+        step_t = 0
         t_init = time.time()
         trot_flag = False
         while not ros.is_shutdown() and self.t < self.t_sim:
 
             self.t = self.physics.get_sim_time()
+            if self.it % 1000 == 0:
+                step_it = 0
+                step_t = self.t
 
             if self.t > 1:
 
@@ -610,7 +628,9 @@ class Simulation(object):
                         self.step()
 
                 # Display simulation progress
-                if self.it % 1000 == 0 and self.verbose >= 1:
+                if last_it == 0:
+                    last_it = self.it
+                if self.it % 500 == 0 and self.verbose >= 1:
                     tp = (self.t - last_t)
                     if tp != 0:
                         f = (self.it - last_it) / tp
@@ -641,8 +661,12 @@ class Simulation(object):
                     if self.nn_weight >= 1.0 and self.save_start_test_i == 0:
                         self.save_start_test_i = self.save_index
 
-                self.it += 1
-        
+            # Pause
+            self.it += 1
+            step_it += 1
+            while self.physics.get_sim_time() < step_t + step_it * self.time_step:
+                time.sleep(0.0001)
+
         self.printv(" ===== Final robot distance: "
                     "{:.2f} m =====\n".format(math.sqrt(sum([float(i)**2 for i in self.physics.get_hyq_x_y_z()]))))
         self.stop()

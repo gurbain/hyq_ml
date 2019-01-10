@@ -8,14 +8,21 @@
 ## This section includes all iinformation about the simulation
 ## timeline
 [Timing]
-t_sim = 150
-t_train = 130
-t_start_cl = 20
-t_stop_cl = 240
+#t_sim = 100
+#t_train = 80
+#t_start_cl = 20
+#t_stop_cl = 80
+
+t_sim = 100
+t_train = 40
+t_start_cl = 40
+t_stop_cl = 40
+
 
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
+time_step = 0.004
 ol = False
 sm = False
 pub_actions = True
@@ -42,8 +49,8 @@ rviz = False
 ## This section includes parameters about the training procedure
 [Training]
 train = True
-epoch_num = 100
-train_buff_size = 10000
+epoch_num = 400
+train_buff_size = 4000
 
 ## This section includes most of the neural network parameters
 [Network]
@@ -57,7 +64,7 @@ optim = adam
 metric = mae
 batch_size = 2048
 max_epochs = 1000
-regularization = 0.0
+regularization = 0.001
 esn_n_res = 5
 esn_n_read = 5
 esn_in_mask = [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]
