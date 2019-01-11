@@ -8,15 +8,14 @@
 ## This section includes all iinformation about the simulation
 ## timeline
 [Timing]
-#t_sim = 100
-#t_train = 80
-#t_start_cl = 20
-#t_stop_cl = 80
-
 t_sim = 100
-t_train = 40
-t_start_cl = 40
-t_stop_cl = 40
+t_train = 80
+t_start_cl = 20
+t_stop_cl = 80
+#t_sim = 100
+#t_train = 40
+#t_start_cl = 40
+#t_stop_cl = 40
 
 
 ## This section includes high-level parameters about the simulation
