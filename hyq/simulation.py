@@ -30,6 +30,7 @@ import control
 import physics
 import network
 import utils
+import training
 
 
 class Simulation(object):
@@ -55,7 +56,6 @@ class Simulation(object):
         self.train_buff_size = 0
         self.sm = None
         self.train = None
-        self.play_from_file = False
         self.time_step = 0
 
         # Physics variable
@@ -78,8 +78,11 @@ class Simulation(object):
         self.save_states_psi = []
         self.save_states_t_trot = 0
         self.save_metrics = False
+        self.save_action_target = []
+        self.save_action_pred = []
         self.save_stop_train_i = 0
         self.save_start_test_i = 0
+        self.save_trot_i = 0
         self.save_index = 0
 
         # Class uninitialized objects
@@ -119,7 +122,6 @@ class Simulation(object):
 
         # ROS variables
         self.curr_state_pub_name = "/sim_debug/curr_states"
-        self.rec_state_pub_name = "/sim_debug/rec_states"
         self.pred_pub_name = "/sim_debug/prediction"
         self.target_pub_name = "/sim_debug/target"
         self.mix_pub_name = "/sim_debug/mix_cl"
@@ -127,7 +129,6 @@ class Simulation(object):
         self.acc_pub_name = "/sim_debug/prediction_acc"
         self.sm_ser_name = "/sim/rcf_nn_transition"
         self.pub_curr_state = None
-        self.pub_rec_state = None
         self.pub_pred = None
         self.pub_target = None
         self.pub_mix = None
@@ -167,16 +168,16 @@ class Simulation(object):
         self.save_states = eval(self.config["Simulation"]["save_states"])
         self.save_metrics = eval(self.config["Simulation"]["save_metrics"])
         self.time_step = float(self.config["Simulation"]["time_step"])
-
-        self.epoch_num = int(self.config["Training"]["epoch_num"])
-        self.train = eval(self.config["Training"]["train"])
-        self.train_buff_size = int(self.config["Training"]["train_buff_size"])
+        self.sim_file = self.config["Simulation"]["sim_file"]
+        self.train = eval(self.config["Simulation"]["train"])
 
         self.init_impedance = eval(self.config["Physics"]["init_impedance"])
         self.remote = eval(self.config["Physics"]["remote_server"])
         self.real_time = eval(self.config["Physics"]["real_time"])
 
-        self.sim_file = self.config["Network"]["sim_file"]
+        if "Network" in self.config:
+            self.epoch_num = int(self.config["Network"]["epoch_num"])
+            self.train_buff_size = int(self.config["Network"]["train_buff_size"])
 
     def start(self):
 
@@ -190,70 +191,8 @@ class Simulation(object):
         ros.init_node("simulation", anonymous=True)
         self.physics.start()
 
-        # If sim folder is specified create a untrained network and read simulation from a FILE
-        if self.sim_file != "None":
-            self.play_from_file = True
-            self.network = network.NN(data_file=self.sim_file,
-                                      save_folder=self.folder,
-                                      verbose=int(self.config["Network"]["verbose"]),
-                                      nn_layers=eval(self.config["Network"]["nn_struct"]),
-                                      test_split=float(self.config["Network"]["test_split"]),
-                                      val_split=float(self.config["Network"]["val_split"]),
-                                      stop_delta=float(self.config["Network"]["stop_delta"]),
-                                      stop_pat=int(self.config["Network"]["stop_pat"]),
-                                      optim=self.config["Network"]["optim"],
-                                      metric=self.config["Network"]["metric"],
-                                      batch_size=int(self.config["Network"]["batch_size"]),
-                                      max_epochs=int(self.config["Network"]["max_epochs"]),
-                                      regularization=float(self.config["Network"]["regularization"]),
-                                      esn_n_res=int(self.config["Network"]["esn_n_res"]),
-                                      esn_n_read=int(self.config["Network"]["esn_n_read"]),
-                                      esn_in_mask=eval(self.config["Network"]["esn_in_mask"]),
-                                      esn_out_mask=eval(self.config["Network"]["esn_out_mask"]),
-                                      esn_real_fb=eval(self.config["Network"]["esn_real_fb"]),
-                                      esn_spec_rad=float(self.config["Network"]["esn_spec_rad"]),
-                                      esn_damping=float(self.config["Network"]["esn_damping"]),
-                                      esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
-                                      esn_noise=float(self.config["Network"]["esn_noise"]),
-                                      checkpoint=eval(self.config["Network"]["checkpoint"]),
-                                      no_callbacks=eval(self.config["Network"]["no_callbacks"]),
-                                      random_state=int(self.config["Network"]["random_state"]))
-
-            self.network.load_data(True)
-
-        # Else, load the trained network and start a REAL simulation
-        # elif self.nn_folder is not None: # this check has to be adatapted
-        #     self.play_from_file = False
-        #     self.network = network.NN(max_epochs=100000,
-        #                               checkpoint=False,
-        #                               no_callbacks=True,
-        #                               esn_real_fb=True,
-        #                               verbose=0,
-        #                               nn_layers=eval(self.config["Network"]["nn_struct"]),
-        #                               test_split=float(self.config["Network"]["test_split"]),
-        #                               val_split=float(self.config["Network"]["val_split"]),
-        #                               stop_delta=float(self.config["Network"]["stop_delta"]),
-        #                               stop_pat=int(self.config["Network"]["stop_pat"]),
-        #                               optim=self.config["Network"]["optim"],
-        #                               metric=self.config["Network"]["metric"],
-        #                               batch_size=int(self.config["Network"]["batch_size"]),
-        #                               regularization=float(self.config["Network"]["regularization"]),
-        #                               esn_n_res=int(self.config["Network"]["esn_n_res"]),
-        #                               esn_n_read=int(self.config["Network"]["esn_n_read"]),
-        #                               esn_in_mask=eval(self.config["Network"]["esn_in_mask"]),
-        #                               esn_out_mask=eval(self.config["Network"]["esn_out_mask"]),
-        #                               esn_spec_rad=float(self.config["Network"]["esn_spec_rad"]),
-        #                               esn_damping=float(self.config["Network"]["esn_damping"]),
-        #                               esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
-        #                               esn_noise=float(self.config["Network"]["esn_noise"]),
-        #                               checkpoint=eval(self.config["Network"]["checkpoint"]),
-        #                               random_state=int(self.config["Network"]["random_state"]))
-        #     self.network.load(self.nn_folder, load_all=True)
-        #     self.network.esn.verbose = 0
-        #     self.train_it += 1
-
-        else:
-            self.play_from_file = False
+        # Create the network
+        if "Network" in self.config:
             self.network = network.NN(max_epochs=int(self.config["Network"]["max_epochs"]),
                                       checkpoint=False,
                                       no_callbacks=True,
@@ -278,34 +217,25 @@ class Simulation(object):
                                       esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
                                       esn_noise=float(self.config["Network"]["esn_noise"]),
                                       random_state=int(self.config["Network"]["random_state"]))
-
-        # Retrieve interpolation functions for the target and del the rest
-        if self.play_from_file:
-            self.target_fct = self.network.get_fct(self.network.y_t,
-                                                   self.network.y_val)
-            self.state_1_fct = self.network.get_fct(self.network.x_t,
-                                                    self.network.x_val)
-            if self.network.x2_t.shape[0] is not 0:
-                self.state_2_fct = self.network.get_fct(self.network.x2_t,
-                                                        self.network.x2_val)
-
-            if max(self.network.y_t) - 1 < self.t_sim:
-                self.printv("\nThe nn data recorded file is too short. "
-                            "Lowering the simulation time from {:.2f}s".format(self.t_sim) +
-                            " to {:.2f}s".format(max(self.network.y_t) - 1))
-                self.t_sim = max(self.network.y_t) - 1
-            del self.network.y_t, self.network.y_val, \
-                self.network.x_t, self.network.x_val, \
-                self.network.x2_t, self.network.x2_val
+        elif "Force" in self.config:
+            self.network = training.FORCE(regularization=float(self.config["Force"]["regularization"]),
+                                          elm=eval(self.config["Force"]["elm"]),
+                                          err_window=int(self.config["Force"]["err_window"]),
+                                          x_scaling=eval(self.config["Force"]["x_scaling"]),
+                                          y_scaling=eval(self.config["Force"]["y_scaling"]),
+                                          in_fct=self.config["Force"]["in_fct"],
+                                          out_fct=self.config["Force"]["out_fct"],
+                                          delay_line_n=int(self.config["Force"]["delay_line_n"]),
+                                          delay_line_step=int(self.config["Force"]["delay_line_step"]),
+                                          save_folder=self.config["Force"]["save_folder"],
+                                          verbose=int(self.config["Force"]["verbose"]),
+                                          random_state=int(self.config["Force"]["random_state"]))
 
         # Create the ROS topics to debug simulation
         if self.publish_states:
             self.pub_curr_state = ros.Publisher(self.curr_state_pub_name,
                                                 Float64MultiArray,
                                                 queue_size=1)
-            self.pub_rec_state = ros.Publisher(self.rec_state_pub_name,
-                                               Float64MultiArray,
-                                               queue_size=1)
         if self.publish_actions:
             self.pub_pred = ros.Publisher(self.pred_pub_name,
                                           Float64MultiArray,
@@ -326,66 +256,62 @@ class Simulation(object):
         if self.sm:
             self.ser_sm = ros.Service(self.sm_ser_name, Trigger, self._sm_transition)
 
-    def get_actions(self, state, pred=True):
+    def get_actions(self, state, pred=True, train=True):
 
         # Load target action
-        if self.play_from_file:
-            target = self.network.interpolate(self.target_fct, self.t).tolist()[0]
-        else:
-            target = self.physics.get_hyq_tgt_action().tolist()[0]
-            self.last_action_it = self.physics.hyq_action_it
+        target_mat = self.physics.get_hyq_tgt_action()
+        target_lst = target_mat.tolist()[0]
+        self.last_action_it = self.physics.hyq_action_it
 
         # If we need the prediction
         if pred:
             # Predict network action
             if len(state) == 24:
-                predicted = self.network.predict(np.mat(state)).tolist()[0]
+                if self.network is not None:
+                    if self.network.__class__.__name__ == "NN":
+                        predicted = self.network.predict(np.mat(state)).tolist()[0]
+                    else:
+                        if train:
+                            predicted = self.network.fit_transform(np.mat(state), target_mat).tolist()[0]
+                        else:
+                            predicted = self.network.transform(np.mat(state)).tolist()[0]
+                else:
+                    predicted = []
             else:
                 predicted = []
 
         else:
             predicted = []
 
-        return predicted, target
+        return predicted, target_lst
 
     def get_states(self):
 
         curr_state = self.physics.get_hyq_state().tolist()[0]
         self.last_state_it = self.physics.hyq_state_it
 
-        if self.play_from_file:
-            rec_state_1 = self.network.interpolate(self.state_1_fct, self.t)
-
-            if hasattr(self, 'state_2_fct'):
-                rec_state_2 = self.network.interpolate(self.state_2_fct, self.t)
-                rec_state = np.mat(np.hstack((rec_state_1, rec_state_2))).tolist()[0]
-            else:
-                rec_state = rec_state_1.tolist()[0]
-        else:
-            rec_state = [0] * len(curr_state)
-
-        return curr_state, rec_state
+        return curr_state
 
     def _training_thread(self, x, y):
 
         if self.verbose >= 1:
-            print " [Training]  It: " + str(self.it) + \
+            print(" [Training]  It: " + str(self.it) + \
                   "\tRCF It: " + str(self.last_action_it) + \
                   " - Fitting NN with FV of shape " + \
                   str(x.shape) + " x " + str(y.shape) + \
-                  " through " + str(self.epoch_num) + " epochs!"
+                  " through " + str(self.epoch_num) + " epochs!")
         self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num,  # plot_train_states=True,
                                                       evaluate=False, save=False)
         self.train_it += 1
         if self.verbose >= 1:
-            print " [Training]  It: " + str(self.it) + \
+            print(" [Training]  It: " + str(self.it) + \
                   "\tRCF It: " + str(self.last_action_it) + \
-                  " - Finished with Loss: {:.5f}".format(self.loss)
+                  " - Finished with Loss: {:.5f}".format(self.loss))
 
-    def train_run_sm_step(self):
+    def train_run_sm_step_keras(self):
 
         # GET DATA (ALWAYS)
-        curr_state, rec_state = self.get_states()
+        curr_state = self.get_states()
         pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
 
         # TRAINING MODE
@@ -435,8 +361,8 @@ class Simulation(object):
                     if hasattr(self.network.readout, "model"):
                         self.network.readout.model.stop_training = True
                     time.sleep(0.1)
-            print "\n [State Machine] Transition to Full NN control by-passing RCF at action it: " + \
-                  str(self.last_action_it) + "!"
+            print("\n [State Machine] Transition to Full NN control by-passing RCF at action it: " + \
+                  str(self.last_action_it) + "!")
             self.train_sm_mode = "Running"
 
         # PREDICTION MODE
@@ -446,7 +372,7 @@ class Simulation(object):
         # TRANSITION PREDICTION -> TRAINING
         elif self.train_sm_mode == "Running_training_transition":
             self.nn_weight = 0
-            print "\n [State Machine] Transition to RCF control and NN Training!"
+            print("\n [State Machine] Transition to RCF control and NN Training!")
             self.train_sm_mode = "Training"
 
         # SEND PRED ON ROS (ALWAYS)
@@ -462,7 +388,7 @@ class Simulation(object):
                 mix_action = tgt_action
         else:
             mix_action = tgt_action
-        self._publish_states(curr_state, rec_state)
+        self._publish_states(curr_state)
         self._publish_actions(pred_action, tgt_action, mix_action)
         self._publish_loss()
 
@@ -470,11 +396,17 @@ class Simulation(object):
         if self.save_ctrl:
             self.save_ctrl_state.append(curr_state)
             self.save_ctrl_action.append(mix_action)
+        if self.save_metrics:
+            self.save_action_target.append(tgt_action)
+            if len(pred_action) == 8:
+                self.save_action_pred.append(pred_action)
+            else:
+                self.save_action_pred.append(tgt_action)
 
-    def train_step(self):
+    def train_step_keras(self):
 
         # Get state and target action
-        curr_state, rec_state = self.get_states()
+        curr_state = self.get_states()
         pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
 
         # TRAINING
@@ -516,7 +448,7 @@ class Simulation(object):
 
         if not self.nn_started and len(pred_action) == 8:
             print(" [Execution] It: " + str(self.it) +
-                  "\tNN has started publishing meaningful values! ")
+                  "\tNN has started publishing meaningful values!")
             self.nn_started = True
 
         if not self.ol and len(pred_action) == 8:
@@ -537,7 +469,7 @@ class Simulation(object):
                                           np.array(tgt_action) - np.array(pred_action))
 
         # Publish data on ROS topic to debug
-        self._publish_states(curr_state, rec_state)
+        self._publish_states(curr_state)
         self._publish_actions(pred_action, tgt_action, mix_action)
         self._publish_loss()
 
@@ -545,12 +477,65 @@ class Simulation(object):
         if self.save_ctrl:
             self.save_ctrl_state.append(curr_state)
             self.save_ctrl_action.append(mix_action)
+        if self.save_metrics:
+            self.save_action_target.append(tgt_action)
+            if len(pred_action) == 8:
+                self.save_action_pred.append(pred_action)
+            else:
+                self.save_action_pred.append(tgt_action)
+
+    def force_step(self):
+
+        # GET DATA AND TRAIN DIRECTLY
+        curr_state = self.get_states()
+        pred_action, tgt_action = self.get_actions(curr_state, pred=True)
+        self.train_it += 1
+
+        # EXECUTION
+        # Define the weight between NN prediction and RCF Controller
+        mix_action = tgt_action
+        self.nn_weight = 0
+        if not self.nn_started and len(pred_action) == 8:
+            print(" [Execution] It: " + str(self.it) +
+                  "\tNN has started publishing meaningful values! ")
+            self.nn_started = True
+
+        if not self.ol and len(pred_action) == 8:
+            if self.t > self.t_stop_cl:
+                self.nn_weight = 1
+                mix_action = np.array(pred_action)
+
+            elif self.t > self.t_start_cl:
+                self.nn_weight = (self.t - self.t_start_cl) / self.t_cl
+                mix_action = ((1 - self.nn_weight) * np.array(tgt_action)) + \
+                             (self.nn_weight * np.array(pred_action))
+
+        # Send the NN prediction to the RCF controller
+        if len(pred_action) == 8:
+            self.physics.send_hyq_nn_pred(pred_action, self.nn_weight,
+                                          np.array(tgt_action) - np.array(pred_action))
+
+        # Publish data on ROS topic to debug
+        self._publish_states(curr_state)
+        self._publish_actions(pred_action, tgt_action, mix_action)
+        self._publish_loss()
+
+        # Save states and actions
+        if self.save_ctrl:
+            self.save_ctrl_state.append(curr_state)
+            self.save_ctrl_action.append(mix_action)
+        if self.save_metrics:
+            self.save_action_target.append(tgt_action)
+            if len(pred_action) == 8:
+                self.save_action_pred.append(pred_action)
+            else:
+                self.save_action_pred.append(tgt_action)
 
     def step(self):
 
         # Get state and target action
-        curr_state, rec_state = self.get_states()
-        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
+        curr_state = self.get_states()
+        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0), train=False)
 
         # Define the weight between NN prediction and RCF Controller
         mix_action = tgt_action
@@ -569,7 +554,7 @@ class Simulation(object):
                                           np.array(pred_action))
 
         # Publish data on ROS topic to debug
-        self._publish_states(curr_state, rec_state)
+        self._publish_states(curr_state)
         self._publish_actions(pred_action, tgt_action, mix_action)
         self._publish_loss()
 
@@ -577,6 +562,12 @@ class Simulation(object):
         if self.save_ctrl:
             self.save_ctrl_state.append(curr_state)
             self.save_ctrl_action.append(mix_action)
+        if self.save_metrics:
+            self.save_action_target.append(tgt_action)
+            if len(pred_action) == 8:
+                self.save_action_pred.append(pred_action)
+            else:
+                self.save_action_pred.append(tgt_action)
 
     def run(self):
 
@@ -618,13 +609,22 @@ class Simulation(object):
                 #     self.physics.apply_noise()
 
                 # Choose execution mode
-                if self.sm:
-                    self.train_run_sm_step()
-                else:
-                    if self.t < self.t_train:
-                        self.train_step()
+                if self.network is not None:
+                    if self.network.__class__.__name__ == "NN":
+                        if self.sm:
+                            self.train_run_sm_step_keras()
+                        else:
+                            if self.t < self.t_train:
+                                self.train_step_keras()
+                            else:
+                                self.step()
                     else:
-                        self.step()
+                        if self.t < self.t_train:
+                            self.force_step()
+                        else:
+                            self.step()
+                else:
+                    self.step()
 
                 # Display simulation progress
                 if last_it == 0:
@@ -694,7 +694,8 @@ class Simulation(object):
 
         # Save the robot metrics
         if self.save_metrics:
-            if self.t_train > 0 and not self.ol and self.t_start_cl < self.t_sim:
+            if self.t_train > 0 and not self.ol and self.t_start_cl < self.t_sim and \
+                    self.save_start_test_i > self.save_stop_train_i > self.save_trot_i:
                 (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.t_hist[self.save_trot_i:],
                                                                                    self.save_states_psi[self.save_trot_i:],
                                                                                    self.save_stop_train_i,
@@ -711,6 +712,12 @@ class Simulation(object):
                                             self.save_states_x[self.save_trot_i],
                            "train_y_range": abs(self.save_states_y[self.save_stop_train_i] -
                                                 self.save_states_y[self.save_trot_i]),
+                           "train_z_range": max(self.save_states_z[self.save_trot_i:self.save_stop_train_i]) -
+                                            min(self.save_states_z[self.save_trot_i:self.save_stop_train_i]),
+                           "train_nrmse" : utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:
+                                                                                      self.save_stop_train_i]),
+                                                       np.mat(self.save_action_pred[self.save_trot_i:
+                                                                                    self.save_stop_train_i])),
                            "cl_roll_range": max(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]) -
                                             min(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]),
                            "cl_pitch_range": max(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]) -
@@ -719,12 +726,22 @@ class Simulation(object):
                                          self.save_states_x[self.save_stop_train_i],
                            "cl_y_range": abs(self.save_states_y[self.save_start_test_i] -
                                              self.save_states_y[self.save_stop_train_i]),
+                           "cl_z_range": max(self.save_states_z[self.save_stop_train_i:self.save_start_test_i]) -
+                                         min(self.save_states_z[self.save_stop_train_i:self.save_start_test_i]),
+                           "cl_nrmse" : utils.nrmse(np.mat(self.save_action_target[self.save_stop_train_i:
+                                                                                   self.save_start_test_i]),
+                                                    np.mat(self.save_action_pred[self.save_stop_train_i:
+                                                                                 self.save_start_test_i])),
                            "test_roll_range": max(self.save_states_phi[self.save_start_test_i:]) -
                                               min(self.save_states_phi[self.save_start_test_i:]),
                            "test_pitch_range": max(self.save_states_psi[self.save_start_test_i:]) -
                                                min(self.save_states_psi[self.save_start_test_i:]),
                            "test_x_range": self.save_states_x[-1] - self.save_states_x[self.save_start_test_i],
                            "test_y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]),
+                           "test_z_range": max(self.save_states_z[self.save_start_test_i:]) -
+                                           min(self.save_states_z[self.save_start_test_i:]),
+                           "test_nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_start_test_i:]),
+                                                     np.mat(self.save_action_pred[self.save_start_test_i:])),
                            "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms,
                            "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
@@ -737,6 +754,10 @@ class Simulation(object):
                                           min(self.save_states_psi[self.save_trot_i:]),
                            "x_range": self.save_states_x[-1] - self.save_states_x[self.save_trot_i],
                            "y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_trot_i]),
+                           "z_range": max(self.save_states_z[self.save_trot_i:]) -
+                                      min(self.save_states_z[self.save_trot_i:]),
+                           "nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:]),
+                                                np.mat(self.save_action_pred[self.save_trot_i:])),
                            "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i]
                            }
 
@@ -831,15 +852,12 @@ class Simulation(object):
                 mix_array = Float64MultiArray(data=action)
                 self.pub_mix.publish(mix_array)
 
-    def _publish_states(self, curr_state, rec_state):
+    def _publish_states(self, curr_state):
 
         if self.publish_states:
             if curr_state is not None:
                 curr_arr = Float64MultiArray(data=curr_state)
                 self.pub_curr_state.publish(curr_arr)
-            if rec_state is not None:
-                rec_arr = Float64MultiArray(data=rec_state)
-                self.pub_rec_state.publish(rec_arr)
 
     def _publish_loss(self):
 
@@ -862,6 +880,7 @@ class Simulation(object):
             return TriggerResponse(success=False, message="Cannot trigger transition, please check the NN process!")
 
     def printv(self, txt):
+
         if self.verbose >= 1:
             print(txt)
 

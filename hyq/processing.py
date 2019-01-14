@@ -244,7 +244,7 @@ class TimeDelay(BaseEstimator, TransformerMixin):
                 x_row = x_row.tolist()[0]
             y[i, :] = self.transform_it(x_row)
 
-        return y
+        return np.mat(y)
 
 
 class FFT(BaseEstimator, TransformerMixin):
