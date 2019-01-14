@@ -46,7 +46,7 @@ rviz = False
 ## This section includes most of the Keras and custom Echo-State Networks parameters
 [Network]
 epoch_num = 400
-train_buff_size = 500
+train_buff_size = 4000
 nn_struct = [ [('relu', 40)], [('relu', 40)], [('relu', 40)] ]
 test_split = 0.7
 val_split = 0.1
