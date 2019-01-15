@@ -17,6 +17,7 @@ import pickle
 import psutil
 import rospy as ros
 import rosbag
+import signal
 from scipy.interpolate import interp1d
 import sys
 import tensorflow as tf
@@ -44,6 +45,7 @@ class Simulation(object):
         self.t_start_cl = 0
         self.t_stop_cl = 0
         self.t_cl = 0
+        self.t_tc_off = 0
         self.plot = None
         self.verbose = None
         self.publish_actions = None
@@ -63,6 +65,8 @@ class Simulation(object):
         self.init_impedance = None
         self.remote = False
         self.real_time = False
+        self.tc_thread = None
+        self.tc_it = 1
 
         # Saving
         self.save_ctrl = False
@@ -98,6 +102,9 @@ class Simulation(object):
         self.last_action_it = 0
         self.last_state_it = 0
         self.train_it = 0
+        self.tc_z_period = 0
+        self.tc_z_gain = None
+        self.tc_z_i = 0
         self.nn_started = False
         self.train_session = None
         self.pred_session = None
@@ -151,15 +158,17 @@ class Simulation(object):
         self.t_train = float(self.config["Timing"]["t_train"])
         self.t_start_cl = float(self.config["Timing"]["t_start_cl"])
         self.t_stop_cl = float(self.config["Timing"]["t_stop_cl"])
+        self.t_tc_off = float(self.config["Timing"]["t_tc_off"])
         self.t_cl = self.t_stop_cl - self.t_start_cl
 
         # Class variable
         self.plot = eval(self.config["Debug"]["plot"])
         self.verbose = int(self.config["Debug"]["verbose"])
         self.view = eval(self.config["Debug"]["view"])
-
         self.sm = eval(self.config["Simulation"]["sm"])
         self.ol = eval(self.config["Simulation"]["ol"])
+        self.tc_z_period = eval(self.config["Simulation"]["trunk_cont_it_period"])
+        self.tc_z_gain = eval(self.config["Simulation"]["trunk_cont_gains"])
         self.publish_actions = eval(self.config["Simulation"]["pub_actions"])
         self.publish_states = eval(self.config["Simulation"]["pub_states"])
         self.publish_loss = eval(self.config["Simulation"]["pub_loss"])
@@ -189,6 +198,8 @@ class Simulation(object):
                                       rt=self.real_time,
                                       publish_error=self.publish_error,)
         ros.init_node("simulation", anonymous=True)
+        ros.on_shutdown(self.stop)
+        signal.signal(signal.SIGINT, self.stop)
         self.physics.start()
 
         # Create the network
@@ -227,6 +238,7 @@ class Simulation(object):
                                           out_fct=self.config["Force"]["out_fct"],
                                           delay_line_n=int(self.config["Force"]["delay_line_n"]),
                                           delay_line_step=int(self.config["Force"]["delay_line_step"]),
+                                          train_dropout_period=int(self.config["Force"]["train_dropout_period"]),
                                           save_folder=self.config["Force"]["save_folder"],
                                           verbose=int(self.config["Force"]["verbose"]),
                                           random_state=int(self.config["Force"]["random_state"]))
@@ -388,20 +400,7 @@ class Simulation(object):
                 mix_action = tgt_action
         else:
             mix_action = tgt_action
-        self._publish_states(curr_state)
-        self._publish_actions(pred_action, tgt_action, mix_action)
-        self._publish_loss()
-
-        # Save states and actions
-        if self.save_ctrl:
-            self.save_ctrl_state.append(curr_state)
-            self.save_ctrl_action.append(mix_action)
-        if self.save_metrics:
-            self.save_action_target.append(tgt_action)
-            if len(pred_action) == 8:
-                self.save_action_pred.append(pred_action)
-            else:
-                self.save_action_pred.append(tgt_action)
+        self.debug_step(curr_state, pred_action, tgt_action, mix_action)
 
     def train_step_keras(self):
 
@@ -468,21 +467,8 @@ class Simulation(object):
             self.physics.send_hyq_nn_pred(pred_action, self.nn_weight,
                                           np.array(tgt_action) - np.array(pred_action))
 
-        # Publish data on ROS topic to debug
-        self._publish_states(curr_state)
-        self._publish_actions(pred_action, tgt_action, mix_action)
-        self._publish_loss()
-
-        # Save states and actions
-        if self.save_ctrl:
-            self.save_ctrl_state.append(curr_state)
-            self.save_ctrl_action.append(mix_action)
-        if self.save_metrics:
-            self.save_action_target.append(tgt_action)
-            if len(pred_action) == 8:
-                self.save_action_pred.append(pred_action)
-            else:
-                self.save_action_pred.append(tgt_action)
+        # DEBUG AND LOGGING
+        self.debug_step(curr_state, pred_action, tgt_action, mix_action)
 
     def force_step(self):
 
@@ -494,42 +480,23 @@ class Simulation(object):
         # EXECUTION
         # Define the weight between NN prediction and RCF Controller
         mix_action = tgt_action
-        self.nn_weight = 0
-        if not self.nn_started and len(pred_action) == 8:
-            print(" [Execution] It: " + str(self.it) +
-                  "\tNN has started publishing meaningful values! ")
-            self.nn_started = True
-
         if not self.ol and len(pred_action) == 8:
             if self.t > self.t_stop_cl:
                 self.nn_weight = 1
-                mix_action = np.array(pred_action)
-
+                self.network.set_dropout_rate(self.nn_weight)
+                mix_action = pred_action
             elif self.t > self.t_start_cl:
                 self.nn_weight = (self.t - self.t_start_cl) / self.t_cl
-                mix_action = ((1 - self.nn_weight) * np.array(tgt_action)) + \
-                             (self.nn_weight * np.array(pred_action))
+                self.network.set_dropout_rate(self.nn_weight)
+                mix_action = pred_action
 
         # Send the NN prediction to the RCF controller
         if len(pred_action) == 8:
-            self.physics.send_hyq_nn_pred(pred_action, self.nn_weight,
+            self.physics.send_hyq_nn_pred(pred_action, 1,
                                           np.array(tgt_action) - np.array(pred_action))
 
-        # Publish data on ROS topic to debug
-        self._publish_states(curr_state)
-        self._publish_actions(pred_action, tgt_action, mix_action)
-        self._publish_loss()
-
-        # Save states and actions
-        if self.save_ctrl:
-            self.save_ctrl_state.append(curr_state)
-            self.save_ctrl_action.append(mix_action)
-        if self.save_metrics:
-            self.save_action_target.append(tgt_action)
-            if len(pred_action) == 8:
-                self.save_action_pred.append(pred_action)
-            else:
-                self.save_action_pred.append(tgt_action)
+        # DEBUG AND LOGGING
+        self.debug_step(curr_state, pred_action, tgt_action, mix_action)
 
     def step(self):
 
@@ -552,6 +519,34 @@ class Simulation(object):
                                           self.nn_weight,
                                           np.array(tgt_action) -
                                           np.array(pred_action))
+
+        # Stop the trunk controller if needed
+        if self.t > self.t_tc_off:
+            self.tc_step()
+
+        # DEBUG AND LOGGING
+        self.debug_step(curr_state, pred_action, tgt_action, mix_action)
+
+    def tc_step(self):
+
+        if not self.physics.trunk_cont_stopped:
+            if self.tc_it % self.tc_z_period == 0:
+                kp = self.tc_z_gain[self.tc_z_i][0]
+                kd = self.tc_z_gain[self.tc_z_i][1]
+                self.tc_thread = threading.Thread(target=self.physics.set_tc_z_gain,
+                                                  args=(kp, kd))
+                self.tc_thread.start()
+                print(" [Execution] It: " + str(self.it) +
+                      "\tLowering the Trunk Controller gains to Kp=" +
+                      str(kp) + " and Kd=" + str(kd) + " !")
+                self.tc_z_i += 1
+
+            if self.tc_z_i >= len(self.tc_z_gain):
+                self.physics.trunk_cont_stopped = True
+
+            self.tc_it += 1
+
+    def debug_step(self, curr_state, pred_action, tgt_action, mix_action):
 
         # Publish data on ROS topic to debug
         self._publish_states(curr_state)
@@ -663,17 +658,55 @@ class Simulation(object):
             # Pause
             self.it += 1
             step_it += 1
+            ik = 0
             while self.physics.get_sim_time() < step_t + step_it * self.time_step:
+                ik += 1
                 time.sleep(0.0001)
-
         self.printv(" ===== Final robot distance: "
                     "{:.2f} m =====\n".format(math.sqrt(sum([float(i)**2 for i in self.physics.get_hyq_x_y_z()]))))
         self.stop()
 
-    def stop(self):
+    def stop(self, sig=None, frame=None):
 
-        # Stop the physics thread
-        self.physics.stop()
+        # Stop the physics
+        try:
+            with utils.Timeout(5):
+                self.physics.stop()
+        except utils.Timeout.Timeout:
+            pass
+
+        # Stop threads
+        if self.tc_thread is not None:
+            try:
+                with utils.Timeout(3):
+                    self.tc_thread.join()
+            except utils.Timeout.Timeout:
+                pass
+            time.sleep(1)
+
+        # Save data
+        try:
+            if self.save_ctrl or self.save_states or self.save_metrics:
+                self._save_sim()
+        except Exception:
+            print "\nCould not save simulation data! Check time range!"
+            pass
+
+        # Stop plotjuggler
+        if self.plot:
+            self._stop_plotter()
+
+        # Killing main process if needed
+        process = psutil.Process()
+        children = process.children(recursive=True)
+        if len(children) > 0:
+            self.printv("\n ===== Failed Miserably. Killing blindly! =====\n")
+            time.sleep(0.2)
+            for p in children:
+                p.kill()
+        process.kill()
+
+    def _save_sim(self):
 
         # Save the states and actions (IOs of the controller)
         if self.save_ctrl:
@@ -748,24 +781,24 @@ class Simulation(object):
                            "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i]
                            }
             else:
-                to_save = {"roll_range": max(self.save_states_phi[self.save_trot_i:]) -
-                                         min(self.save_states_phi[self.save_trot_i:]),
-                           "pitch_range": max(self.save_states_psi[self.save_trot_i:]) -
-                                          min(self.save_states_psi[self.save_trot_i:]),
-                           "x_range": self.save_states_x[-1] - self.save_states_x[self.save_trot_i],
-                           "y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_trot_i]),
-                           "z_range": max(self.save_states_z[self.save_trot_i:]) -
-                                      min(self.save_states_z[self.save_trot_i:]),
-                           "nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:]),
-                                                np.mat(self.save_action_pred[self.save_trot_i:])),
-                           "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i]
-                           }
-
+                if len(self.save_states_phi[self.save_trot_i:]) > 0:
+                    to_save = {"roll_range": max(self.save_states_phi[self.save_trot_i:]) -
+                                             min(self.save_states_phi[self.save_trot_i:]),
+                               "pitch_range": max(self.save_states_psi[self.save_trot_i:]) -
+                                              min(self.save_states_psi[self.save_trot_i:]),
+                               "x_range": self.save_states_x[-1] - self.save_states_x[self.save_trot_i],
+                               "y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_trot_i]),
+                               "z_range": max(self.save_states_z[self.save_trot_i:]) -
+                                          min(self.save_states_z[self.save_trot_i:]),
+                               "nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:]),
+                                                    np.mat(self.save_action_pred[self.save_trot_i:])),
+                               "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i]
+                               }
+                else:
+                    to_save = {"roll_range": np.nan, "pitch_range": np.nan, "nrmse": np.nan,
+                               "x_range": np.nan, "y_range": np.nan, "z_range": np.nan, "t_sim": np.nan
+                               }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
-
-        # Stop plotjuggler
-        if self.plot:
-            self._stop_plotter()
 
     def _compute_diff_fft_sig(self, t, sig, ind_stop_train, ind_start_test):
 

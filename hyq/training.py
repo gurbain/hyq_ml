@@ -12,13 +12,15 @@ class FORCE(object):
 
     def __init__(self, regularization=0.0, elm=False,  err_window=10,
                  x_scaling=True, y_scaling=True, in_fct='lin', out_fct='lin',
-                 delay_line_n=20, delay_line_step=2,
+                 delay_line_n=20, delay_line_step=2, train_dropout_period=50,
                  save_folder="", verbose=2, random_state=12):
 
         # META PARAMETERS
         self.save_folder = save_folder
         self.verbose = verbose
         self.alpha = regularization
+        self.dropout_rate = 0
+        self.dropout_period = train_dropout_period
         self.in_fct = in_fct
         self.out_fct = out_fct
         self.epoch = 0
@@ -56,6 +58,10 @@ class FORCE(object):
 
         if self.verbose >= 1:
             print(txt)
+
+    def set_dropout_rate(self, rate):
+
+        self.dropout_rate = rate
 
     def delay_line(self, x=None):
         
@@ -148,6 +154,9 @@ class FORCE(object):
 
     def fit_transform(self, x=None, y=None):
 
+        if self.epoch % self.dropout_period >= self.dropout_period * (1 - self.dropout_rate):
+            return self.transform(x)
+
         # Transform features
         x, y = self.transform_ft(x, y)
 
@@ -178,6 +187,7 @@ class FORCE(object):
             print("ERROR: The FORCE class has to be fitted before prediction")
             return -1
 
+        self.epoch += 1
         x = self.transform_ft(x)
         return self.transform_out(x * self.w)
 

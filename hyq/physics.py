@@ -35,7 +35,7 @@ sys.stderr = stderr
 
 class HyQSim(threading.Thread):
 
-    def __init__(self, view=False, rviz=False, rt=True, remote=False,
+    def __init__(self, view=False, rviz=False, rt=True, remote=False, fast=False,
                  init_impedance=None, verbose=1, publish_error=False):
 
         threading.Thread.__init__(self)
@@ -54,6 +54,8 @@ class HyQSim(threading.Thread):
             self.sim_params += " gui:=False"
         if rviz is False:
             self.sim_params += " rviz:=False"
+        if fast:
+            self.sim_params += " world_name:=empty_fast.world"
         self.rcf_config_file = os.path.dirname(os.path.realpath(__file__)) + \
                                "/../config/hyq_sim_options.ini"
 
@@ -99,6 +101,8 @@ class HyQSim(threading.Thread):
         self.hyq_psi= 0
         self.hyq_state_it = 0
         self.hyq_action_it = 0
+        self.tc_kp = 5000
+        self.tc_kd = 800
         self.process_state_flag = threading.Lock()
         self.process_action_flag = threading.Lock()
 
@@ -106,6 +110,7 @@ class HyQSim(threading.Thread):
         self.rt = rt
         self.t_init = time.time()
         self.controller_started = False
+        self.trunk_cont_stopped = False
         self.sim_started = False
         self.publish_error = publish_error
         self.error_it = 0
@@ -180,7 +185,7 @@ class HyQSim(threading.Thread):
 
         except Exception, e:
             if self.verbose > 0:
-                print "Exception encountered during simulation!"  + str(e)
+                print "Exception encountered during simulation!" #+ str(e)
                 # traceback.print_exc()
             if self.sim_ps is not None:
                 if self.sim_ps.isalive():
@@ -216,7 +221,7 @@ class HyQSim(threading.Thread):
 
             self.printv(" ===== Starting Physics =====\n")
 
-            self.sim_ps = pexpect.spawn(" ".join(proc))
+            self.sim_ps = pexpect.spawn(" ".join(proc), ignore_sighup=False)
             if self.verbose == 2:
                 self.sim_ps.logfile_read = sys.stdout
 
@@ -233,7 +238,7 @@ class HyQSim(threading.Thread):
         if self.remote:
             return
 
-        self.printv(" ===== Stopping Physics =====\n")
+        self.printv(" ===== Stopping Physics =====")
 
         if clean_stop:
             self.sim_ps.sendcontrol("c")
@@ -283,9 +288,12 @@ class HyQSim(threading.Thread):
             except pexpect.exceptions.TIMEOUT:
                 if self.verbose > 0:
                     print "Command timed out; retrying!"
-                    if self.verbose > 1:
-                        print(str(self.sim_ps.before))
+                    if self.verbose > 0:
+                        print("Command: " + cmd + "\nExpected Response: "+
+                              rsp + "\nReceived Response: " + str(self.sim_ps.before))
                 pass
+
+        return rsp
 
     def start_controller(self):
 
@@ -317,6 +325,47 @@ class HyQSim(threading.Thread):
 
         else:
             return False
+
+    def stop_trunk_cont(self):
+
+        self.printv(" ===== Stopping Trunk Controller =====\n")
+
+        if self.controller_started and not self.trunk_cont_stopped:
+            self.send_controller_cmd("trunkCont", "Turning TrunkCont OFF")
+            self.printv(" ===== Trunk Controller Stopped =====\n")
+            self.trunk_cont_stopped = True
+
+    def get_tc_z_gain(self):
+
+        rsp = ""
+        try:
+            self.sim_ps.sendline("whereTrunkGains")
+            self.sim_ps.expect("FAKE_ANSWER", timeout=1)
+        except pexpect.exceptions.TIMEOUT:
+            rsp = str(self.sim_ps.before)
+            pass
+
+        self.tc_kp = int(float((rsp.split("Kp Z:"))[1].split("Kd Z")[0].strip()))
+        self.tc_kd = int(float((rsp.split("Kd Z:"))[1].split("Robot")[0].strip()))
+
+        return self.tc_kp, self.tc_kd
+
+    def set_tc_z_gain(self, new_kp=5000, new_kd=800):
+
+        if self.controller_started:
+
+            self.send_controller_cmd("changeTrunkControllerGains", "KpTrunkRoll")
+            for _ in range(20):
+                self.send_controller_cmd("", ":")
+
+            self.send_controller_cmd(str(int(new_kp)), "Are you SURE")
+            self.send_controller_cmd("1", "KdTrunkz")
+            self.send_controller_cmd(str(int(new_kd)), "Are you SURE")
+            self.send_controller_cmd("1", "weight")
+
+            for _ in range(16):
+                self.send_controller_cmd("", "")
+            self.send_controller_cmd("", "RCFController>>")
 
     def set_impedances(self, imp):
 
@@ -603,7 +652,7 @@ class HyQSim(threading.Thread):
 if __name__ == '__main__':
 
     # Create and start simulation
-    p = HyQSim()  # init_impedance=[150, 12, 250, 8, 250, 6])
+    p = HyQSim(verbose=2)  # init_impedance=[150, 12, 250, 8, 250, 6])
     p.start()
     p.register_node()
 

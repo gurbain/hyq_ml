@@ -5,18 +5,21 @@
 ##
 
 
-## This section includes all iinformation about the simulation
+## This section includes all information about the simulation
 ## timeline
 [Timing]
-t_sim = 50
-t_train = 28
-t_start_cl = 8
-t_stop_cl = 28
+t_sim = 40
+t_train = 25
+t_start_cl = 5
+t_stop_cl = 25
+t_tc_off = 55
 
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
 time_step = 0.004
+trunk_cont_gains = []
+trunk_cont_it_period = 350
 ol = False
 sm = False
 pub_actions = True
@@ -44,15 +47,16 @@ rviz = False
 
 ## This section includes most of the custom Neural Network trained with Force parameters
 [Force]
-regularization = 0.1
+regularization = 0.0001
 elm = False
 err_window = 10
 x_scaling = True
 y_scaling = False
 in_fct = lin
 out_fct = lin
-delay_line_n = 15
+delay_line_n = 2
 delay_line_step = 3
+train_dropout_period = 10
 save_folder = None
 verbose = 2
 random_state = 12
