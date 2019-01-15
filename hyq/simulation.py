@@ -59,6 +59,7 @@ class Simulation(object):
         self.sm = None
         self.train = None
         self.time_step = 0
+        self.finished = False
 
         # Physics variable
         self.view = False
@@ -198,7 +199,6 @@ class Simulation(object):
                                       rt=self.real_time,
                                       publish_error=self.publish_error,)
         ros.init_node("simulation", anonymous=True)
-        ros.on_shutdown(self.stop)
         signal.signal(signal.SIGINT, self.stop)
         self.physics.start()
 
@@ -576,7 +576,7 @@ class Simulation(object):
         step_t = 0
         t_init = time.time()
         trot_flag = False
-        while not ros.is_shutdown() and self.t < self.t_sim:
+        while not ros.is_shutdown() and self.t < self.t_sim and not self.finished:
 
             self.t = self.physics.get_sim_time()
             if self.it % 1000 == 0:
@@ -669,6 +669,7 @@ class Simulation(object):
     def stop(self, sig=None, frame=None):
 
         # Stop the physics
+        self.finished = True
         try:
             with utils.Timeout(5):
                 self.physics.stop()
@@ -700,11 +701,10 @@ class Simulation(object):
         process = psutil.Process()
         children = process.children(recursive=True)
         if len(children) > 0:
-            self.printv("\n ===== Failed Miserably. Killing blindly! =====\n")
+            self.printv("\n ===== Failed Miserably. Killing children blindly! =====\n")
             time.sleep(0.2)
             for p in children:
                 p.kill()
-        process.kill()
 
     def _save_sim(self):
 

@@ -221,7 +221,7 @@ class HyQSim(threading.Thread):
 
             self.printv(" ===== Starting Physics =====\n")
 
-            self.sim_ps = pexpect.spawn(" ".join(proc), ignore_sighup=False)
+            self.sim_ps = pexpect.spawn(" ".join(proc))
             if self.verbose == 2:
                 self.sim_ps.logfile_read = sys.stdout
 

@@ -464,7 +464,7 @@ class Tasks(object):
 
         if self.srv_status is not None:
 
-             # Check if any job failed
+            # Check if any job failed
             for new in cluster_save:
                 if new["status"] in ["rejected", "failed", "pause"] and new["type"] == "run":
 
