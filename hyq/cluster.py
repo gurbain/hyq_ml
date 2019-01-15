@@ -29,7 +29,7 @@ KEY_FILE = "/home/gurbain/.docker_swarm_key"
 IMAGE = "hyq:latest"
 IDLE_CMD = ""
 RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
-          "cd /home/gurbain/hyq_ml/hyq; roscore & timeout 5m python simulation.py "
+          "cd /home/gurbain/hyq_ml/hyq; roscore & timeout 10m python simulation.py "
 IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
@@ -41,7 +41,7 @@ MOUNT_OPT = "rw"
 JOB_LIMIT = 200
 MAX_JOBS_ATTEMPTS = 5
 JOB_PLACEMENT_TIMEOUT = 60
-DOCKER_TIMEOUT = 20
+DOCKER_TIMEOUT = 120
 
 
 ## UTILS ##
@@ -418,8 +418,7 @@ class Tasks(object):
                 for _ in range(min(n_desired_jobs, n_idle_jobs)):
                     self.res_dirs.append(self.task_dirs.pop(0))
                     self.__start_job(self.res_dirs[-1])
-                if min(n_desired_jobs, n_idle_jobs) > 0:
-                    time.sleep(1)
+                time.sleep(2)
 
         # Wait for all results
         while len(self.running) != 0:
@@ -498,6 +497,7 @@ class Tasks(object):
 
                         # Restart
                         self.__start_job(folder, append=False)
+                        time.sleep(2)
                     
                     else:
                         # Set the service in idle mode
@@ -509,6 +509,7 @@ class Tasks(object):
                     print "--- Failed idle job is restarted on service " + \
                            str(new["service_id"]) + " ---\n"
                     self.__start_idle(new)
+                    time.sleep(2)
 
             # Check if status changed from running to complete
             for new in cluster_save:
