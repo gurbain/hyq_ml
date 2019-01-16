@@ -33,7 +33,7 @@ RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
 IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
-SAVE_FOLDER = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/docker_sim/"
+SAVE_FOLDER = "/home/gurbain/data/docker_sim/"
 TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"

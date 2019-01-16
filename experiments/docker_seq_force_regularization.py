@@ -4,7 +4,7 @@ import numpy as np
 from hyq import cluster
 
 
-DEF_CONFIG = "/home/gabs48/src/quadruped/hyq/hyq_ml/config/sim_config_force_default.txt"
+DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
 
 
 if __name__ == '__main__':
