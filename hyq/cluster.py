@@ -33,7 +33,7 @@ RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
 IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
-SAVE_FOLDER = "/home/gurbain/docker_sim/"
+SAVE_FOLDER = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/docker_sim/"
 TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
@@ -95,6 +95,69 @@ def gen_hash(to_exclude, n=12):
 
 
 ## MAIN CLASSES ##
+
+class Sequential(object):
+
+    def __init__(self):
+
+        self.engine = docker.from_env()
+        self.img = IMAGE
+        self.cmd = RUN_CMD
+        self.task = RUN_TASK
+
+        self.task_dirs = None
+        self.exp_dir = None
+
+        self.folder = SAVE_FOLDER
+        self.mount_dir = MOUNT_FOLDER
+        self.mount_opt = MOUNT_OPT
+
+    def process(self, config_list):
+
+        print "\n--- Start New Experiment ---\n"
+
+        # Create experiment dir
+        exp_root_folder = self.folder + "experiments/"
+        mkdir(exp_root_folder)
+        self.exp_dir = exp_root_folder + timestamp()
+        self.task_dirs = self.__create_task_folders(self.exp_dir, config_list)
+
+        # Launch all experiments sequentially
+        for i, c in enumerate(self.task_dirs):
+
+            print "--- Starting docker simulation " + str(i) + "/" + \
+                  str(len(self.task_dirs)) + " with folder " + str(c.split("/")[-1])
+            self.__docker_process(c)
+
+        # Finishing
+        print "--- Experiment is finished! Results are placed in " + str(self.exp_dir) + " ---\n"
+
+        return self.exp_dir
+
+    def __docker_process(self, folder):
+
+        cont = self.engine.containers.run(image=self.img, detach=True,
+                                          command=self.cmd + str(folder) + "'",
+                                          mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
+
+        for line in cont.logs(stream=True):
+            print (line.strip())
+
+    def __create_task_folders(self, root_folder, config):
+
+        mkdir(root_folder)
+        liste = []
+        for c in config:
+            hashe = os.path.join(root_folder, gen_hash([o for o in os.listdir(root_folder)
+                                                        if os.path.isdir(os.path.join(root_folder,o))]))
+            liste.append(hashe)
+            mkdir(hashe)
+
+            # Add a config file
+            with open(hashe + '/config.txt', 'w') as configfile:
+                c.write(configfile)
+
+        return liste
 
 class Lan(object):
 
