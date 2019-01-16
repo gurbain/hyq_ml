@@ -40,7 +40,7 @@ MOUNT_OPT = "rw"
 
 JOB_LIMIT = 200
 MAX_JOBS_ATTEMPTS = 5
-JOB_PLACEMENT_TIMEOUT = 60
+JOB_PLACEMENT_TIMEOUT = 120
 DOCKER_TIMEOUT = 120
 
 
@@ -452,7 +452,7 @@ class Tasks(object):
                             sys.stdout.write(l)
 
                 except Timeout.Timeout as e: 
-                    self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
+                    self.docker_log += "\n" + str(timestamp()) + " | ERROR | "  + str(e)
                     pass
 
     def __monitor(self):
@@ -482,7 +482,7 @@ class Tasks(object):
                                     for l in logs:
                                         file.write(l)
                         except Timeout.Timeout as e: 
-                            self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
+                            self.docker_log += "\n" + str(timestamp()) + " | ERROR | "  + str(e)
                             pass
 
                     # restart the job
@@ -608,7 +608,7 @@ class Tasks(object):
                            mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
                 success = True
             except docker.errors.APIError as e:
-                self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
+                self.docker_log += "\n" + str(timestamp()) + " | ERROR | "  + str(e)
                 pass
 
             if time.time() - t_init > self.max_time_update:
@@ -693,7 +693,7 @@ class Tasks(object):
                         for l in logs:
                             file.write(l)
             except Timeout.Timeout as e: 
-                self.docker_log += str(timestamp()) + "| ERROR | "  + str(e)
+                self.docker_log += "\n" + str(timestamp()) + " | ERROR | "  + str(e)
                 pass
 
         # Restart the node
