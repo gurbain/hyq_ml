@@ -33,7 +33,7 @@ RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
 IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
-SAVE_FOLDER = "/home/gurbain/data/docker_sim/"
+SAVE_FOLDER = "/home/gurbain/docker_sim/"
 TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
@@ -136,12 +136,14 @@ class Sequential(object):
 
     def __docker_process(self, folder):
 
-        cont = self.engine.containers.run(image=self.img, detach=True,
-                                          command=self.cmd + str(folder) + "'",
-                                          mounts=[self.folder + ":" + self.mount_dir + ":" + self.mount_opt])
+        mounts = {self.mount_dir: {'bind': self.folder, 'mode': self.mount_opt}}
+        cont = self.engine.containers.run(image=self.img, volumes=mounts, tty=True, remove=True,
+                                          detach=True, command=self.cmd + str(folder) + "'")
 
-        for line in cont.logs(stream=True):
-            print (line.strip())
+        for l in cont.logs(stream=True):
+            if not cont.status in ["created", "running"]:
+                break
+            sys.stdout.write(l)
 
     def __create_task_folders(self, root_folder, config):
 
