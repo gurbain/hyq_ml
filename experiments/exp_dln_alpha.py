@@ -18,6 +18,9 @@ if __name__ == '__main__':
         for t in range(1, 18, 3):
             for r in np.logspace(-6, 1, 8):
 
+                print " ----->> i=" + str(i) + " t=" + str(t) + \
+                          " r=" + str(r)
+
                 # Open the config file and retrieve the data
                 config = ConfigParser.ConfigParser()
                 config.read(DEF_CONFIG)

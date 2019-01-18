@@ -19,6 +19,9 @@ if __name__ == '__main__':
             for kp in np.logspace(0.8, 3.2, 10):
                 for kd in np.logspace(-1, 1.4, 4):
 
+                    print " ----->> i=" + str(i) + " t=" + str(t) + \
+                          " kp=" + str(kp) + " kd=" + str(kd)
+                          
                     # Open the config file and retrieve the data
                     config = ConfigParser.ConfigParser()
                     config.read(DEF_CONFIG)
