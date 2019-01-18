@@ -99,7 +99,7 @@ def get_data(folder):
         for key in changing_config:
             d[key] = float(config_data[i][key])
 
-    return data
+    return data, changing_config
 
 
 def save_conf(folder, field_x, field_y, field_z):
@@ -108,33 +108,61 @@ def save_conf(folder, field_x, field_y, field_z):
         pickle.dump([folder, field_x, field_y, field_z], f, protocol=2)
 
 
-def get_fields(data, conf):
+def get_fields(data, config_fields, conf):
 
     fields = sorted(data[0].keys())
-    z_fields = ["No Field"] + fields
 
     if conf is not None:
-        f_x_mask = [f == conf[1] for f in fields]
+        f_x_mask = [f == conf[1] for f in config_fields]
         f_y_mask = [f == conf[2] for f in fields]
+    else:
+        f_x_mask = [False for _ in config_fields]
+        f_y_mask = [False for _ in fields]
+
+    f_x = config_fields[Picker(title="Select the Graph X-Axis (only one choice)",
+                               options=config_fields, init_options=f_x_mask).getIndex()[0]]
+    f_y_i = Picker(title="Select the Graph Y-Axis (only one choice)",
+                        options=fields, init_options=f_y_mask).getIndex()
+
+    f_y = []
+    for i in f_y_i:
+        f_y.append(fields[i])
+
+    z_fields = ["yes", "no - average all"]
+    z_set = []
+
+    config_fields.remove(f_x)
+    for z in config_fields:
+        z_set.append(sorted(list(set([d[z] for d in data]))))
+
+    for x in itertools.product(*z_set):
+        opt = "no - select "
+        for i, z in enumerate(x):
+            opt += config_fields[i] + "=" + str(z) + " "
+        z_fields.append(opt)
+
+    if conf is not None:
         f_z_mask = [f == conf[3] for f in z_fields]
     else:
-        f_x_mask = [False for _ in fields]
-        f_y_mask = [False for _ in fields]
         f_z_mask = [False for _ in z_fields]
 
-    f_x = fields[Picker(title="Select the Graph X-Axis (only one choice)",
-                        options=fields, init_options=f_x_mask).getIndex()[0]]
-    f_z = z_fields[Picker(title="Select the Field for Multiple Graphs (only one choice)",
-                          options=z_fields, init_options=f_z_mask).getIndex()[0]]
-    f_y = fields[Picker(title="Select the Graph Y-Axis (only one choice)",
-                        options=fields, init_options=f_y_mask).getIndex()[0]]
+    f_z_i = Picker(title="Do you want to plot multiple graphs?",
+                            options=z_fields, init_options=f_z_mask).getIndex()[0]
+
+    if f_z_i == 0:
+        f_z = config_fields[Picker(title="Select the Graph Z field",
+                                   options=config_fields,
+                                   init_options=[False for _ in config_fields]).getIndex()[0]]
+    else:
+        f_z = z_fields[f_z_i]
 
     return f_x, f_y, f_z
 
 
 def get_graph_data(data, field_x, field_y, field_z):
 
-    if z != "No Field":
+    print field_x, field_y, field_z
+    if field_z != "No Field":
         x_list = [d[field_x] for d in data]
         x_set = sorted(list(set(x_list)))
         z_list = [d[field_z] for d in data]
@@ -154,7 +182,7 @@ def get_graph_data(data, field_x, field_y, field_z):
         y_av = np.nanmean(y_val, axis=2)
         y_std = np.nanstd(y_val, axis=2)
 
-        return x_set, z_set, y_av, y_std
+        return x_set, y_av, y_std, z_set
 
     else:
         x_list = [d[field_x] for d in data]
@@ -177,40 +205,46 @@ def get_graph_data(data, field_x, field_y, field_z):
 
 def plot_graph(graph_data, field_x, field_y, field_z):
 
+    x_scale = "linear"
+    if 100 * (graph_data[0][1] - graph_data[0][0]) <= graph_data[0][-1] - graph_data[0][-2]:
+        x_scale = "log"
+
     if z != "No Field":
 
         plt.figure(figsize=(10, 8), dpi=80)
-        for j in range(len(graph_data[1])):
-            plt.semilogx(graph_data[0], graph_data[2][:, j], linestyle=get_lines(j),
-                         linewidth=2, color=get_cols(j),
-                         label=str(field_z).replace("_", " ") + " = " +
-                               str(graph_data[1][j]))
+        for j in range(len(graph_data[3])):
+            plt.plot(graph_data[0], graph_data[1][:, j], linestyle=get_lines(j),
+                     linewidth=2, color=get_cols(j),
+                     label=str(field_z).replace("_", " ") + " = " +
+                           str(graph_data[3][j]))
             plt.fill_between(graph_data[0],
-                             graph_data[2][:, j] - graph_data[3][:, j],
-                             graph_data[2][:, j] + graph_data[3][:, j],
+                             graph_data[1][:, j] - graph_data[2][:, j]/5.0,
+                             graph_data[1][:, j] + graph_data[2][:, j]/5.0,
                              alpha=0.1, edgecolor=get_cols(j), facecolor=get_cols(j))
         plt.title((str(field_y) + " depending on " + str(field_x) +
                   " with different " + str(field_z)).replace("_", " "))
+        plt.xscale(x_scale)
         plt.legend()
         plt.show()
 
     else:
 
         plt.figure(figsize=(10, 8), dpi=80)
-        plt.semilogx(graph_data[0], graph_data[1], linewidth=2)
-        plt.fill_between(graph_data[0], graph_data[1] - graph_data[2],
-                         graph_data[1] + graph_data[2], alpha=0.1)
+        plt.plot(graph_data[0], graph_data[1], linewidth=2)
+        plt.fill_between(graph_data[0], graph_data[1] - graph_data[2]/5.0,
+                         graph_data[1] + graph_data[2]/5.0, alpha=0.1)
         plt.title((str(field_y) + " depending on " +
                    str(field_x)).replace("_", " "))
+        plt.xscale(x_scale)
         plt.legend()
         plt.show()
 
 
 if __name__ == "__main__":
 
-    f, c = get_folder()
-    d = get_data(f)
-    x, y, z = get_fields(d, c)
-    save_conf(f, x, y, z)
-    g = get_graph_data(d, x, y, z)
-    plot_graph(g, x, y, z)
+    folder, default_conf = get_folder()
+    data, data_config_fields = get_data(folder)
+    field_x, fields_y, field_z = get_fields(data, data_config_fields, default_conf)
+    save_conf(folder, field_x, fields_y, field_z)
+    graph_data = get_graph_data(data, field_x, fields_y, field_z)
+    plot_graph(graph_data, field_x, fields_y, field_z)
