@@ -516,24 +516,24 @@ class HyQSim(threading.Thread):
         if self.publish_error and error is not None:
             self.publish_errs(error)
 
-    def apply_noise(self):
+    def apply_noise(self, noise_val, noise_it_min, noise_it_max):
 
         if self.noise_it == 0:
             self.srv_noise = ros.ServiceProxy("/gazebo/apply_body_wrench", ApplyBodyWrench)
-            self.next_noise_it = random.randint(5000, 15000)
+            self.next_noise_it = random.randint(noise_it_min, noise_it_max)
 
         if self.noise_it == self.next_noise_it:
             noise = Wrench()
-            noise.force.x = random.uniform(-50, 50)
-            noise.force.y = random.uniform(-50, 50)
-            noise.force.z = random.uniform(-50, 50)
+            noise.force.x = random.uniform(-noise_val, noise_val)
+            noise.force.y = random.uniform(-noise_val, noise_val)
+            noise.force.z = random.uniform(-noise_val, noise_val)
 
             try:
                 self.srv_noise("hyq::base_link", "", None, noise, ros.Time.now(), ros.Duration.from_sec(1.0))
             except:
                 pass
 
-            self.next_noise_it += random.randint(2000, 15000)
+            self.next_noise_it += random.randint(noise_it_min, noise_it_max)
 
         self.noise_it += 1
 

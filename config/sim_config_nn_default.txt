@@ -12,6 +12,7 @@ t_sim = 100
 t_train = 80
 t_start_cl = 20
 t_stop_cl = 120
+t_tc_off = 200
 
 
 ## This section includes high-level parameters about the simulation
@@ -42,6 +43,9 @@ remote_server = False
 real_time = False
 init_impedance = None
 rviz = False
+noise = 50
+noise_it_min = 50
+noise_it_max = 750
 
 ## This section includes most of the Keras and custom Echo-State Networks parameters
 [Network]

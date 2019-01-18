@@ -12,6 +12,7 @@ t_sim = 15
 t_train = 0
 t_start_cl = 15
 t_stop_cl = 15
+t_tc_off = 100
 
 ## This section includes high-level parameters about the simulation
 ## execution
@@ -35,6 +36,9 @@ remote_server = False
 real_time = False
 init_impedance = None
 rviz = False
+noise = 500
+noise_it_min = 50
+noise_it_max = 750
 
 ## This section controls the level of verbosity and GUI
 [Debug]

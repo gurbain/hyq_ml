@@ -68,6 +68,9 @@ class Simulation(object):
         self.real_time = False
         self.tc_thread = None
         self.tc_it = 1
+        self.noise = 0
+        self.noise_it_min = 0
+        self.noise_it_max = 0
 
         # Saving
         self.save_ctrl = False
@@ -184,6 +187,9 @@ class Simulation(object):
         self.init_impedance = eval(self.config["Physics"]["init_impedance"])
         self.remote = eval(self.config["Physics"]["remote_server"])
         self.real_time = eval(self.config["Physics"]["real_time"])
+        self.noise = float(self.config["Physics"]["noise"])
+        self.noise_it_min = int(self.config["Physics"]["noise_it_min"])
+        self.noise_it_max = int(self.config["Physics"]["noise_it_max"])
 
         if "Network" in self.config:
             self.epoch_num = int(self.config["Network"]["epoch_num"])
@@ -600,8 +606,11 @@ class Simulation(object):
                             self.save_trot_i = self.save_index
 
                 # Apply noise on the robot
-                # if not self.remote and trot_flag:
-                #     self.physics.apply_noise()
+                if not self.remote and trot_flag:
+                    if self.noise > 0.0:
+                        if self.t < self.t_train:
+                            self.physics.apply_noise(self.noise, self.noise_it_min,
+                                                     self.noise_it_max)
 
                 # Choose execution mode
                 if self.network is not None:
@@ -745,6 +754,24 @@ class Simulation(object):
                                             self.save_states_x[self.save_trot_i],
                            "train_y_range": abs(self.save_states_y[self.save_stop_train_i] -
                                                 self.save_states_y[self.save_trot_i]),
+                           "train_x_speed": (self.save_states_x[self.save_stop_train_i] -
+                                             self.save_states_x[self.save_trot_i]) /
+                                            (self.t_hist[self.save_stop_train_i] -
+                                             self.t_hist[self.save_trot_i]),
+                           "train_y_speed": (self.save_states_y[self.save_stop_train_i] -
+                                             self.save_states_y[self.save_trot_i]) /
+                                            (self.t_hist[self.save_stop_train_i] -
+                                             self.t_hist[self.save_trot_i]),
+                           "train_dist": math.sqrt((self.save_states_x[self.save_stop_train_i] -
+                                                    self.save_states_x[self.save_trot_i])**2 +
+                                                   (self.save_states_y[self.save_stop_train_i] -
+                                                    self.save_states_y[self.save_trot_i])**2),
+                           "train_speed": math.sqrt((self.save_states_x[self.save_stop_train_i] -
+                                                     self.save_states_x[self.save_trot_i])**2 +
+                                                    (self.save_states_y[self.save_stop_train_i] -
+                                                     self.save_states_y[self.save_trot_i])**2) /
+                                          (self.t_hist[self.save_stop_train_i] -
+                                           self.t_hist[self.save_trot_i]),
                            "train_z_range": max(self.save_states_z[self.save_trot_i:self.save_stop_train_i]) -
                                             min(self.save_states_z[self.save_trot_i:self.save_stop_train_i]),
                            "train_nrmse" : utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:
@@ -759,10 +786,27 @@ class Simulation(object):
                                          self.save_states_x[self.save_stop_train_i],
                            "cl_y_range": abs(self.save_states_y[self.save_start_test_i] -
                                              self.save_states_y[self.save_stop_train_i]),
+                           "cl_x_speed": (self.save_states_x[self.save_start_test_i] -
+                                          self.save_states_x[self.save_stop_train_i]) /
+                                         (self.t_hist[self.save_start_test_i] -
+                                          self.t_hist[self.save_stop_train_i]),
+                           "cl_y_speed": (self.save_states_y[self.save_start_test_i] -
+                                          self.save_states_y[self.save_stop_train_i]) /
+                                         (self.t_hist[self.save_start_test_i] -
+                                          self.t_hist[self.save_stop_train_i]),
+                           "cl_dist": math.sqrt((self.save_states_x[self.save_start_test_i] -
+                                                 self.save_states_x[self.save_stop_train_i])**2 +
+                                                (self.save_states_y[self.save_start_test_i] -
+                                                 self.save_states_y[self.save_stop_train_i])**2),
+                           "cl_speed": math.sqrt((self.save_states_x[self.save_start_test_i] -
+                                                  self.save_states_x[self.save_stop_train_i])**2 +
+                                                 (self.save_states_y[self.save_start_test_i] -
+                                                  self.save_states_y[self.save_stop_train_i])**2) /
+                                       (self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i]),
                            "cl_z_range": max(self.save_states_z[self.save_stop_train_i:self.save_start_test_i]) -
                                          min(self.save_states_z[self.save_stop_train_i:self.save_start_test_i]),
-                           "cl_nrmse" : utils.nrmse(np.mat(self.save_action_target[self.save_stop_train_i:
-                                                                                   self.save_start_test_i]),
+                           "cl_nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_stop_train_i:
+                                                                                  self.save_start_test_i]),
                                                     np.mat(self.save_action_pred[self.save_stop_train_i:
                                                                                  self.save_start_test_i])),
                            "test_roll_range": max(self.save_states_phi[self.save_start_test_i:]) -
@@ -771,6 +815,19 @@ class Simulation(object):
                                                min(self.save_states_psi[self.save_start_test_i:]),
                            "test_x_range": self.save_states_x[-1] - self.save_states_x[self.save_start_test_i],
                            "test_y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]),
+                           "test_x_speed": (self.save_states_x[-1] - self.save_states_x[self.save_start_test_i]) /
+                                           (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
+                           "test_y_speed": (self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]) /
+                                           (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
+                           "test_dist": math.sqrt((self.save_states_x[-1] -
+                                                   self.save_states_x[self.save_start_test_i])**2 +
+                                                  (self.save_states_y[-1] -
+                                                   self.save_states_y[self.save_start_test_i])**2),
+                           "test_speed": math.sqrt((self.save_states_x[-1] -
+                                                    self.save_states_x[self.save_start_test_i])**2 +
+                                                   (self.save_states_y[-1] -
+                                                    self.save_states_y[self.save_start_test_i])**2) /
+                                        (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
                            "test_z_range": max(self.save_states_z[self.save_start_test_i:]) -
                                            min(self.save_states_z[self.save_start_test_i:]),
                            "test_nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_start_test_i:]),
