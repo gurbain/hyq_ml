@@ -699,7 +699,7 @@ class Simulation(object):
             if self.save_ctrl or self.save_states or self.save_metrics:
                 self._save_sim()
         except Exception:
-            print "\nCould not save simulation data! Check time range!"
+            print "\nCould not save simulation data! Check: " + str(e)
             pass
 
         # Stop plotjuggler
