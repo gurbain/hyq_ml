@@ -698,7 +698,7 @@ class Simulation(object):
         try:
             if self.save_ctrl or self.save_states or self.save_metrics:
                 self._save_sim()
-        except Exception:
+        except Exception as e:
             print "\nCould not save simulation data! Check: " + str(e)
             pass
 
