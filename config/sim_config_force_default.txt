@@ -12,7 +12,6 @@ t_sim = 46
 t_train = 31
 t_start_cl = 16
 t_stop_cl = 31
-t_tc_off = 55
 
 ## This section includes high-level parameters about the simulation
 ## execution

@@ -631,9 +631,10 @@ class HyQSim(threading.Thread):
             self.hyq_y = msg.base[4].position
             self.hyq_z = msg.base[5].position
             if (self.hyq_z < 0.4 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0) and self.trot_started:
-                print "\nThe robot has fallen because of Z=" + str(self.hyq_z) + \
+                if not self.hyq_has_fallen:
+                    print "\nThe robot has fallen because of Z=" + str(self.hyq_z) + \
                       " or PHI=" + str(self.hyq_phi) + " or PSI=" + str(self.hyq_psi)
-                self.hyq_has_fallen = True
+                    self.hyq_has_fallen = True
             self.hyq_state = inp
             self.hyq_state_it += 1
         finally:

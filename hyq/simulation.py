@@ -1,6 +1,7 @@
 # SKlearn forces warnings...
 def warn(*args, **kwargs):
     pass
+
 import warnings
 warnings.warn = warn
 
@@ -8,7 +9,6 @@ from collections import deque
 import ConfigParser
 import copy
 import datetime
-from keras import backend as K
 import math
 #  import matplotlib.pyplot as plt
 import numpy as np
@@ -20,18 +20,15 @@ import rosbag
 import signal
 from scipy.interpolate import interp1d
 import sys
-import tensorflow as tf
 import threading
 import time
 
 from std_msgs.msg import Bool, Float64, Float64MultiArray, MultiArrayLayout, Header
 from std_srvs.srv import Trigger, TriggerResponse
 
-import control
 import physics
-import network
 import utils
-import training
+import force
 
 
 class Simulation(object):
@@ -45,7 +42,6 @@ class Simulation(object):
         self.t_start_cl = 0
         self.t_stop_cl = 0
         self.t_cl = 0
-        self.t_tc_off = 0
         self.plot = None
         self.verbose = None
         self.publish_actions = None
@@ -167,7 +163,6 @@ class Simulation(object):
         self.t_train = float(self.config["Timing"]["t_train"])
         self.t_start_cl = float(self.config["Timing"]["t_start_cl"])
         self.t_stop_cl = float(self.config["Timing"]["t_stop_cl"])
-        self.t_tc_off = float(self.config["Timing"]["t_tc_off"])
         self.t_cl = self.t_stop_cl - self.t_start_cl
 
         # Class variable
@@ -196,10 +191,6 @@ class Simulation(object):
         self.noise_it_min = int(self.config["Physics"]["noise_it_min"])
         self.noise_it_max = int(self.config["Physics"]["noise_it_max"])
 
-        if "Network" in self.config:
-            self.epoch_num = int(self.config["Network"]["epoch_num"])
-            self.train_buff_size = int(self.config["Network"]["train_buff_size"])
-
     def start(self):
 
         # Create and start the handle thread to the physics simulation
@@ -214,51 +205,25 @@ class Simulation(object):
         self.physics.start()
 
         # Create the network
-        if "Network" in self.config:
-            self.network = network.NN(max_epochs=int(self.config["Network"]["max_epochs"]),
-                                      checkpoint=False,
-                                      no_callbacks=True,
-                                      verbose=int(self.config["Network"]["verbose"]),
-                                      save_folder=self.folder,
-                                      nn_layers=eval(self.config["Network"]["nn_struct"]),
-                                      test_split=float(self.config["Network"]["test_split"]),
-                                      val_split=float(self.config["Network"]["val_split"]),
-                                      stop_delta=float(self.config["Network"]["stop_delta"]),
-                                      stop_pat=int(self.config["Network"]["stop_pat"]),
-                                      optim=self.config["Network"]["optim"],
-                                      metric=self.config["Network"]["metric"],
-                                      batch_size=int(self.config["Network"]["batch_size"]),
-                                      regularization=float(self.config["Network"]["regularization"]),
-                                      esn_n_res=int(self.config["Network"]["esn_n_res"]),
-                                      esn_n_read=int(self.config["Network"]["esn_n_read"]),
-                                      esn_in_mask=eval(self.config["Network"]["esn_in_mask"]),
-                                      esn_out_mask=eval(self.config["Network"]["esn_out_mask"]),
-                                      esn_real_fb=eval(self.config["Network"]["esn_real_fb"]),
-                                      esn_spec_rad=float(self.config["Network"]["esn_spec_rad"]),
-                                      esn_damping=float(self.config["Network"]["esn_damping"]),
-                                      esn_sparsity=float(self.config["Network"]["esn_sparsity"]),
-                                      esn_noise=float(self.config["Network"]["esn_noise"]),
-                                      random_state=int(self.config["Network"]["random_state"]))
-        elif "Force" in self.config:
-            self.network = training.FORCE(regularization=float(self.config["Force"]["regularization"]),
-                                          elm=eval(self.config["Force"]["elm"]),
-                                          elm_fct=self.config["Force"]["elm_fct"],
-                                          elm_n=int(self.config["Force"]["elm_n"]),
-                                          lpf=eval(self.config["Force"]["lpf"]),
-                                          lpf_fc=float(self.config["Force"]["lpc_fc"]),
-                                          lpf_ts=float(self.config["Force"]["lpf_ts"]),
-                                          lpf_ord=int(self.config["Force"]["lpf_ord"]),
-                                          err_window=int(self.config["Force"]["err_window"]),
-                                          x_scaling=eval(self.config["Force"]["x_scaling"]),
-                                          y_scaling=eval(self.config["Force"]["y_scaling"]),
-                                          in_fct=self.config["Force"]["in_fct"],
-                                          out_fct=self.config["Force"]["out_fct"],
-                                          delay_line_n=int(self.config["Force"]["delay_line_n"]),
-                                          delay_line_step=int(self.config["Force"]["delay_line_step"]),
-                                          train_dropout_period=int(self.config["Force"]["train_dropout_period"]),
-                                          save_folder=self.config["Force"]["save_folder"],
-                                          verbose=int(self.config["Force"]["verbose"]),
-                                          random_state=int(self.config["Force"]["random_state"]))
+        self.network = force.FORCE(regularization=float(self.config["Force"]["regularization"]),
+                                   elm=eval(self.config["Force"]["elm"]),
+                                   elm_fct=self.config["Force"]["elm_fct"],
+                                   elm_n=int(self.config["Force"]["elm_n"]),
+                                   lpf=eval(self.config["Force"]["lpf"]),
+                                   lpf_fc=float(self.config["Force"]["lpc_fc"]),
+                                   lpf_ts=float(self.config["Force"]["lpf_ts"]),
+                                   lpf_ord=int(self.config["Force"]["lpf_ord"]),
+                                   err_window=int(self.config["Force"]["err_window"]),
+                                   x_scaling=eval(self.config["Force"]["x_scaling"]),
+                                   y_scaling=eval(self.config["Force"]["y_scaling"]),
+                                   in_fct=self.config["Force"]["in_fct"],
+                                   out_fct=self.config["Force"]["out_fct"],
+                                   delay_line_n=int(self.config["Force"]["delay_line_n"]),
+                                   delay_line_step=int(self.config["Force"]["delay_line_step"]),
+                                   train_dropout_period=int(self.config["Force"]["train_dropout_period"]),
+                                   save_folder=self.config["Force"]["save_folder"],
+                                   verbose=int(self.config["Force"]["verbose"]),
+                                   random_state=int(self.config["Force"]["random_state"]))
 
         # Create the ROS topics to debug simulation
         if self.publish_states:
@@ -327,173 +292,7 @@ class Simulation(object):
 
         return curr_state
 
-    def _training_thread(self, x, y):
-
-        if self.verbose >= 1:
-            print(" [Training]  It: " + str(self.it) + \
-                  "\tRCF It: " + str(self.last_action_it) + \
-                  " - Fitting NN with FV of shape " + \
-                  str(x.shape) + " x " + str(y.shape) + \
-                  " through " + str(self.epoch_num) + " epochs!")
-        self.loss, self.accuracy = self.network.train(x, y, n_epochs=self.epoch_num,  # plot_train_states=True,
-                                                      evaluate=False, save=False)
-        self.train_it += 1
-        if self.verbose >= 1:
-            print(" [Training]  It: " + str(self.it) + \
-                  "\tRCF It: " + str(self.last_action_it) + \
-                  " - Finished with Loss: {:.5f}".format(self.loss))
-
-    def train_run_sm_step_keras(self):
-
-        # GET DATA (ALWAYS)
-        curr_state = self.get_states()
-        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
-
-        # TRAINING MODE
-        if self.train_sm_mode == "Training":
-
-            if self.train:
-                # Record states and action in a buffer
-                if len(curr_state) == 13 and len(tgt_action) == 8:
-                    self.x_train_step.append(curr_state)
-                    self.y_train_step.append(tgt_action)
-
-                # When no training yet done
-                if self.training_thread is None:
-                    # When buffer is full, train
-                    if len(self.x_train_step) == self.train_buff_size:
-                        x = np.mat(self.x_train_step[-self.train_buff_size:])
-                        y = np.mat(self.y_train_step[-self.train_buff_size:])
-                        self.training_thread = threading.Thread(name="train_thread", target=self._training_thread,
-                                                                args=[x, y])
-                        # Hack to avoid racing condition between training and execution thread
-                        self.training_thread.start()
-                        self.x_train_step = []
-                        self.y_train_step = []
-                else:
-                    # When buffer is full
-                    if len(self.x_train_step) > self.train_buff_size:
-                        # When training is finished start again with new buffer
-                        if not self.training_thread.isAlive():
-                            x = np.mat(self.x_train_step)  # [-self.train_buff_size:])
-                            y = np.mat(self.y_train_step)  # [-self.train_buff_size:])
-                            self.training_thread = threading.Thread(target=self._training_thread,
-                                                                    args=[x, y])
-                            # Hack to avoid racing condition between training and execution thread
-                            self.training_thread.start()
-                            self.x_train_step = []
-                            self.y_train_step = []
-                            self.train_it += 1
-
-        # TRANSITION TRAINING -> PREDICTION
-        elif self.train_sm_mode == "Training_running_transition":
-            self.x_train_step = []
-            self.y_train_step = []
-            self.nn_weight = 1
-
-            if self.training_thread is not None:
-                while self.training_thread.isAlive():
-                    if hasattr(self.network.readout, "model"):
-                        self.network.readout.model.stop_training = True
-                    time.sleep(0.1)
-            print("\n [State Machine] Transition to Full NN control by-passing RCF at action it: " + \
-                  str(self.last_action_it) + "!")
-            self.train_sm_mode = "Running"
-
-        # PREDICTION MODE
-        elif self.train_sm_mode == "Running":
-            pass
-
-        # TRANSITION PREDICTION -> TRAINING
-        elif self.train_sm_mode == "Running_training_transition":
-            self.nn_weight = 0
-            print("\n [State Machine] Transition to RCF control and NN Training!")
-            self.train_sm_mode = "Training"
-
-        # SEND PRED ON ROS (ALWAYS)
-        if len(pred_action) == 8:
-            self.physics.send_hyq_nn_pred(pred_action, self.nn_weight, np.array(tgt_action) - np.array(pred_action))
-
-        # DEBUG AND LOGGING (ALWAYS)
-        # Publish data on ROS topic to debug
-        if self.nn_weight == 1:
-            if len(pred_action) > 0:
-                mix_action = pred_action
-            else:
-                mix_action = tgt_action
-        else:
-            mix_action = tgt_action
-        self.debug_step(curr_state, pred_action, tgt_action, mix_action)
-
-    def train_step_keras(self):
-
-        # Get state and target action
-        curr_state = self.get_states()
-        pred_action, tgt_action = self.get_actions(curr_state, pred=(self.train_it > 0))
-
-        # TRAINING
-        # Always continue filling the buffer
-        if len(curr_state) != 0 and len(tgt_action) != 0:
-            self.x_train_step.append(curr_state)
-            self.y_train_step.append(tgt_action)
-            if len(self.x_train_step) > self.train_buff_size:
-                self.x_train_step.pop(0)
-                self.y_train_step.pop(0)
-
-        # When no training yet done
-        if self.training_thread is None:
-            # When buffer is full, train
-            if len(self.x_train_step) == self.train_buff_size:
-                x = np.mat(self.x_train_step)
-                y = np.mat(self.y_train_step)
-                self.training_thread = threading.Thread(target=self._training_thread, args=[x, y])
-                self.training_thread.start()
-                self.x_train_step = []
-                self.y_train_step = []
-        else:
-
-            # When buffer is full
-            if len(self.x_train_step) >= self.train_buff_size:
-                # When training is finished start again with new buffer
-                if not self.training_thread.isAlive():
-                    x = np.mat(self.x_train_step)
-                    y = np.mat(self.y_train_step)
-                    self.training_thread = threading.Thread(target=self._training_thread, args=[x, y])
-                    self.training_thread.start()
-                    self.x_train_step = []
-                    self.y_train_step = []
-
-        # EXECUTION
-        # Define the weight between NN prediction and RCF Controller
-        mix_action = tgt_action
-        self.nn_weight = 0
-
-        if not self.nn_started and len(pred_action) == 8:
-            print(" [Execution] It: " + str(self.it) +
-                  "\tNN has started publishing meaningful values!")
-            self.nn_started = True
-
-        if not self.ol and len(pred_action) == 8:
-            if self.t > self.t_stop_cl:
-                self.nn_weight = 1
-                mix_action = np.array(pred_action)
-
-            elif self.t > self.t_start_cl:
-                self.nn_weight = (self.t - self.t_start_cl) / self.t_cl
-
-                # Compute the sum action for debug purpose
-                mix_action = ((1 - self.nn_weight) * np.array(tgt_action)) + \
-                             (self.nn_weight * np.array(pred_action))
-
-        # Send the NN prediction to the RCF controller
-        if len(pred_action) == 8:
-            self.physics.send_hyq_nn_pred(pred_action, self.nn_weight,
-                                          np.array(tgt_action) - np.array(pred_action))
-
-        # DEBUG AND LOGGING
-        self.debug_step(curr_state, pred_action, tgt_action, mix_action)
-
-    def force_step(self):
+    def train_step(self):
 
         # GET DATA AND TRAIN DIRECTLY
         curr_state = self.get_states()
@@ -543,31 +342,8 @@ class Simulation(object):
                                           np.array(tgt_action) -
                                           np.array(pred_action))
 
-        # Stop the trunk controller if needed
-        if self.t > self.t_tc_off:
-            self.tc_step()
-
         # DEBUG AND LOGGING
         self.debug_step(curr_state, pred_action, tgt_action, mix_action)
-
-    def tc_step(self):
-
-        if not self.physics.trunk_cont_stopped:
-            if self.tc_it % self.tc_z_period == 0:
-                kp = self.tc_z_gain[self.tc_z_i][0]
-                kd = self.tc_z_gain[self.tc_z_i][1]
-                self.tc_thread = threading.Thread(target=self.physics.set_tc_z_gain,
-                                                  args=(kp, kd))
-                self.tc_thread.start()
-                print(" [Execution] It: " + str(self.it) +
-                      "\tLowering the Trunk Controller gains to Kp=" +
-                      str(kp) + " and Kd=" + str(kd) + " !")
-                self.tc_z_i += 1
-
-            if self.tc_z_i >= len(self.tc_z_gain):
-                self.physics.trunk_cont_stopped = True
-
-            self.tc_it += 1
 
     def debug_step(self, curr_state, pred_action, tgt_action, mix_action):
 
@@ -666,20 +442,8 @@ class Simulation(object):
                                                      self.noise_it_max)
 
                 # Choose execution mode
-                if self.network is not None:
-                    if self.network.__class__.__name__ == "NN":
-                        if self.sm:
-                            self.train_run_sm_step_keras()
-                        else:
-                            if self.t < self.t_train:
-                                self.train_step_keras()
-                            else:
-                                self.step()
-                    else:
-                        if self.t < self.t_train:
-                            self.force_step()
-                        else:
-                            self.step()
+                if self.t < self.t_train:
+                    self.train_step()
                 else:
                     self.step()
 
@@ -1005,109 +769,10 @@ class Simulation(object):
         self.pub_loss.publish(Float64(self.loss))
         self.pub_acc.publish(Float64(self.accuracy))
 
-    def _sm_transition(self, msg):
-
-        ack = None
-        if self.train_sm_mode == "Training":
-            self.train_sm_mode = "Training_running_transition"
-            ack = "Switched to Running Mode!"
-        elif self.train_sm_mode == "Running":
-            self.train_sm_mode = "Running_training_transition"
-            ack = "Switched to Training Mode!"
-
-        if ack is not None:
-            return TriggerResponse(success=True, message=ack)
-        else:
-            return TriggerResponse(success=False, message="Cannot trigger transition, please check the NN process!")
-
     def printv(self, txt):
 
         if self.verbose >= 1:
             print(txt)
-
-
-class CPGSimulation(Simulation):
-
-    def __init__(self, folder=None):
-
-        super(CPGSimulation, self).__init__(folder=folder)
-        self.cpg_config = {"params": [{'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                                       'phase_offset': 0, 'o': 0, 'r': 1,
-                                       'coupling': [0, -1, -1, 1]},
-                                      {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                                       'phase_offset': 1, 'o': 0, 'r': 1,
-                                       'coupling': [-1, 0, 1, -1]},
-                                      {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                                       'phase_offset': 3, 'o': 0, 'r': 1,
-                                       'coupling': [-1, 1, 0, -1]},
-                                      {'mu': 1, 'omega': 6.35, 'duty_factor': 0.5,
-                                       'phase_offset': 0, 'o': 0, 'r': 1,
-                                       'coupling': [1, -1, -1, 0]}],
-                           "integ_time": 0.001}
-        self.cpg = None
-
-    def start(self):
-
-        # Create and start the handle thread to the physics simulation
-        self.physics = physics.HyQSim(view=self.view, verbose=self.verbose)
-        self.physics.start()
-        self.physics.register_node()
-
-        # Create and load the trained network
-        self.cpg = control.CPG(self.cpg_config)
-
-        # Create the ROS topics to debug simulation
-        if self.publish_actions:
-            self.pub_pred = ros.Publisher(self.pred_pub_name,
-                                          Float64MultiArray,
-                                          queue_size=50)
-            self.pub_target = ros.Publisher(self.target_pub_name,
-                                            Float64MultiArray,
-                                            queue_size=50)
-            self.pub_mix = ros.Publisher(self.mix_pub_name,
-                                         Float64MultiArray,
-                                         queue_size=50)
-
-        # Create history arrays
-        self.save_ctrl_state = []
-        self.save_ctrl_action = []
-
-    def step(self):
-
-        # Get time
-        self.t = self.physics.get_sim_time()
-
-        if self.t > 1:
-
-            # Fill time history
-            self.t_hist.append(self.t)
-
-            # Get last state
-            state = self.physics.get_hyq_state()
-
-            # Get CPG motor action
-            action = np.zeros(13)
-            r = np.sin(2*np.pi*2*self.t)
-            # , a in enumerate(self.cpg.step(self.t
-            action[2] = r
-            action[5] = r
-            action[8] = -r
-            action[11] = -r
-            predicted = None
-            target = action
-
-            # Send action
-            self.physics.set_hyq_action(action)
-            self.physics.send_hyq_traj()
-
-            # Publish data on ROS topic to debug
-            self._publish_states(state, state)
-            self._publish_actions(predicted, target, action)
-
-            # Save states and actions
-            if self.save_ctrl:
-                self.save_ctrl_state.append(state.tolist()[0])
-                self.save_ctrl_action.append(action.tolist())
 
 
 if __name__ == '__main__':

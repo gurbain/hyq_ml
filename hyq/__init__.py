@@ -11,7 +11,7 @@ __author__ = "Gabriel Urbain"
 __copyright__ = "Copyright 2018, Human Brain Projet, SP10"
 
 __license__ = "MIT"
-__version__ = "1.1"
+__version__ = "2.0"
 __maintainer__ = "Gabriel Urbain"
 __email__ = "gabriel.urbain@ugent.be"
 __status__ = "Research"
