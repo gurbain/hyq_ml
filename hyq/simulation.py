@@ -84,6 +84,8 @@ class Simulation(object):
         self.save_states_phi = []
         self.save_states_theta = []
         self.save_states_psi = []
+        self.save_states_pow = []
+        self.save_cont_time = []
         self.save_states_t_trot = 0
         self.save_metrics = False
         self.save_action_target = []
@@ -102,7 +104,10 @@ class Simulation(object):
 
         # Execution variables
         self.t = 0
+        self.t_init = 0
         self.it = 0
+        self.last_debug_it = 0
+        self.last_debug_t = 0
         self.last_action_it = 0
         self.last_state_it = 0
         self.train_it = 0
@@ -237,6 +242,12 @@ class Simulation(object):
         elif "Force" in self.config:
             self.network = training.FORCE(regularization=float(self.config["Force"]["regularization"]),
                                           elm=eval(self.config["Force"]["elm"]),
+                                          elm_fct=self.config["Force"]["elm_fct"],
+                                          elm_n=int(self.config["Force"]["elm_n"]),
+                                          lpf=eval(self.config["Force"]["lpf"]),
+                                          lpf_fc=float(self.config["Force"]["lpc_fc"]),
+                                          lpf_ts=float(self.config["Force"]["lpf_ts"]),
+                                          lpf_ord=int(self.config["Force"]["lpf_ord"]),
                                           err_window=int(self.config["Force"]["err_window"]),
                                           x_scaling=eval(self.config["Force"]["x_scaling"]),
                                           y_scaling=eval(self.config["Force"]["y_scaling"]),
@@ -283,8 +294,9 @@ class Simulation(object):
 
         # If we need the prediction
         if pred:
+            pred_time_init = time.time()
             # Predict network action
-            if len(state) == 24:
+            if len(state) == 13:
                 if self.network is not None:
                     if self.network.__class__.__name__ == "NN":
                         predicted = self.network.predict(np.mat(state)).tolist()[0]
@@ -298,7 +310,12 @@ class Simulation(object):
             else:
                 predicted = []
 
+            if self.save_states or self.save_metrics:
+                self.save_cont_time.append(time.time() - pred_time_init)
+
         else:
+            if self.save_states or self.save_metrics:
+                self.save_cont_time.append(0)
             predicted = []
 
         return predicted, target_lst
@@ -337,7 +354,7 @@ class Simulation(object):
 
             if self.train:
                 # Record states and action in a buffer
-                if len(curr_state) == 24 and len(tgt_action) == 8:
+                if len(curr_state) == 13 and len(tgt_action) == 8:
                     self.x_train_step.append(curr_state)
                     self.y_train_step.append(tgt_action)
 
@@ -570,17 +587,53 @@ class Simulation(object):
             else:
                 self.save_action_pred.append(tgt_action)
 
+        # Save physics states and metrics
+        self.t_hist.append(self.t)
+        if self.save_states or self.save_metrics:
+            curr_x, curr_y, curr_z = self.physics.get_hyq_x_y_z()
+            curr_phi, curr_theta, curr_psi = self.physics.get_hyq_phi_theta_psi()
+            curr_power = self.physics.get_hyq_power()
+            self.save_states_t_real.append(time.time() - self.t_init)
+            self.save_states_x.append(curr_x)
+            self.save_states_y.append(curr_y)
+            self.save_states_z.append(curr_z)
+            self.save_states_phi.append(curr_phi)
+            self.save_states_theta.append(curr_theta)
+            self.save_states_psi.append(curr_psi)
+            self.save_states_pow.append(curr_power)
+            self.save_index += 1
+            if self.nn_weight > 0 and self.save_stop_train_i == 0:
+                self.save_stop_train_i = self.save_index
+            if self.nn_weight >= 1.0 and self.save_start_test_i == 0:
+                self.save_start_test_i = self.save_index
+
+        # Display simulation progress
+        if self.last_debug_it == 0:
+            self.last_debug_it = self.it
+        if self.it % 500 == 0 and self.verbose >= 1:
+            tp = (self.t - self.last_debug_t)
+            if tp != 0:
+                f = (self.it - self.last_debug_it) / tp
+                print(" [Execution] It: " + str(self.it) +
+                      "\tSim Time: " + "{:.2f}".format(self.t) + " s" +
+                      "\tNN Freq: " + "{:.2f}".format(f) + " Hz" +
+                      " / Weight: " + "{:.2f}".format(self.nn_weight) +
+                      "\tRobot dist: {:.2f} m".format(math.sqrt(sum([float(i) ** 2
+                                                                     for i in self.physics.get_hyq_x_y_z()]))))
+        self.last_debug_it = self.it
+        self.last_debug_t = self.t
+
     def run(self):
 
         self.start()
 
         self.printv("\n ===== Running the Simulation Loop =====\n")
 
-        last_it = 0
-        last_t = 0
+        self.last_debug_it = 0
+        self.last_debug_t = 0
         step_it = 0
         step_t = 0
-        t_init = time.time()
+        self.t_init = time.time()
         trot_flag = False
         while not ros.is_shutdown() and self.t < self.t_sim and not self.finished:
 
@@ -630,40 +683,6 @@ class Simulation(object):
                 else:
                     self.step()
 
-                # Display simulation progress
-                if last_it == 0:
-                    last_it = self.it
-                if self.it % 500 == 0 and self.verbose >= 1:
-                    tp = (self.t - last_t)
-                    if tp != 0:
-                        f = (self.it - last_it) / tp
-                        print(" [Execution] It: " + str(self.it) +
-                              "\tSim Time: " + "{:.2f}".format(self.t) + " s" +
-                              "\tNN Freq: " + "{:.2f}".format(f) + " Hz" +
-                              " / Weight: "+"{:.2f}".format(self.nn_weight) +
-                              "\tRobot dist: {:.2f} m".format(math.sqrt(sum([float(i)**2
-                                                                             for i in self.physics.get_hyq_x_y_z()]))))
-                        last_it = self.it
-                        last_t = self.t
-
-                # Save physics states and metrics
-                self.t_hist.append(self.t)
-                if self.save_states or self.save_metrics:
-                    curr_x, curr_y, curr_z = self.physics.get_hyq_x_y_z()
-                    curr_phi, curr_theta, curr_psi = self.physics.get_hyq_phi_theta_psi()
-                    self.save_states_t_real.append(time.time() - t_init)
-                    self.save_states_x.append(curr_x)
-                    self.save_states_y.append(curr_y)
-                    self.save_states_z.append(curr_z)
-                    self.save_states_phi.append(curr_phi)
-                    self.save_states_theta.append(curr_theta)
-                    self.save_states_psi.append(curr_psi)
-                    self.save_index += 1
-                    if self.nn_weight > 0 and self.save_stop_train_i == 0:
-                        self.save_stop_train_i = self.save_index
-                    if self.nn_weight >= 1.0 and self.save_start_test_i == 0:
-                        self.save_start_test_i = self.save_index
-
             # Pause
             self.it += 1
             step_it += 1
@@ -671,6 +690,7 @@ class Simulation(object):
             while self.physics.get_sim_time() < step_t + step_it * self.time_step:
                 ik += 1
                 time.sleep(0.0001)
+
         self.printv(" ===== Final robot distance: "
                     "{:.2f} m =====\n".format(math.sqrt(sum([float(i)**2 for i in self.physics.get_hyq_x_y_z()]))))
         self.stop()
@@ -746,13 +766,26 @@ class Simulation(object):
                                                                                    self.save_states_phi[self.save_trot_i:],
                                                                                    self.save_stop_train_i,
                                                                                    self.save_start_test_i)
+                train_dist = math.sqrt((self.save_states_x[self.save_stop_train_i] -
+                                        self.save_states_x[self.save_trot_i])**2 +
+                                       (self.save_states_y[self.save_stop_train_i] -
+                                        self.save_states_y[self.save_trot_i])**2)
+                cl_dist = math.sqrt((self.save_states_x[self.save_start_test_i] -
+                                     self.save_states_x[self.save_stop_train_i])**2 +
+                                    (self.save_states_y[self.save_start_test_i] -
+                                     self.save_states_y[self.save_stop_train_i])**2)
+                test_dist = math.sqrt((self.save_states_x[-1] -
+                                       self.save_states_x[self.save_start_test_i])**2 +
+                                      (self.save_states_y[-1] -
+                                       self.save_states_y[self.save_start_test_i])**2)
+
                 to_save = {"train_roll_range": max(self.save_states_phi[self.save_trot_i:self.save_stop_train_i]) -
                                                min(self.save_states_phi[self.save_trot_i:self.save_stop_train_i]),
                            "train_pitch_range": max(self.save_states_psi[self.save_trot_i:self.save_stop_train_i]) -
                                                 min(self.save_states_psi[self.save_trot_i:self.save_stop_train_i]),
-                           "train_x_range": self.save_states_x[self.save_stop_train_i] -
+                           "train_x_dist": self.save_states_x[self.save_stop_train_i] -
                                             self.save_states_x[self.save_trot_i],
-                           "train_y_range": abs(self.save_states_y[self.save_stop_train_i] -
+                           "train_y_dist": abs(self.save_states_y[self.save_stop_train_i] -
                                                 self.save_states_y[self.save_trot_i]),
                            "train_x_speed": (self.save_states_x[self.save_stop_train_i] -
                                              self.save_states_x[self.save_trot_i]) /
@@ -762,29 +795,28 @@ class Simulation(object):
                                              self.save_states_y[self.save_trot_i]) /
                                             (self.t_hist[self.save_stop_train_i] -
                                              self.t_hist[self.save_trot_i]),
-                           "train_dist": math.sqrt((self.save_states_x[self.save_stop_train_i] -
-                                                    self.save_states_x[self.save_trot_i])**2 +
-                                                   (self.save_states_y[self.save_stop_train_i] -
-                                                    self.save_states_y[self.save_trot_i])**2),
-                           "train_speed": math.sqrt((self.save_states_x[self.save_stop_train_i] -
-                                                     self.save_states_x[self.save_trot_i])**2 +
-                                                    (self.save_states_y[self.save_stop_train_i] -
-                                                     self.save_states_y[self.save_trot_i])**2) /
-                                          (self.t_hist[self.save_stop_train_i] -
-                                           self.t_hist[self.save_trot_i]),
+                           "train_dist": train_dist,
+                           "train_speed": train_dist / (self.t_hist[self.save_stop_train_i] -
+                                                        self.t_hist[self.save_trot_i]),
+                           "train_power": sum(self.save_states_pow[self.save_trot_i:self.save_stop_train_i]) /
+                                          len(self.save_states_pow[self.save_trot_i:self.save_stop_train_i]),
+                           "train_COT": sum(self.save_states_pow[self.save_trot_i:self.save_stop_train_i]) *
+                                        self.time_step / (train_dist * 750),
                            "train_z_range": max(self.save_states_z[self.save_trot_i:self.save_stop_train_i]) -
                                             min(self.save_states_z[self.save_trot_i:self.save_stop_train_i]),
                            "train_nrmse" : utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:
                                                                                       self.save_stop_train_i]),
                                                        np.mat(self.save_action_pred[self.save_trot_i:
                                                                                     self.save_stop_train_i])),
+                           "train_average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:
+                                                                                         self.save_stop_train_i]),
                            "cl_roll_range": max(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]) -
                                             min(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]),
                            "cl_pitch_range": max(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]) -
                                              min(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]),
-                           "cl_x_range": self.save_states_x[self.save_start_test_i] -
+                           "cl_x_dist": self.save_states_x[self.save_start_test_i] -
                                          self.save_states_x[self.save_stop_train_i],
-                           "cl_y_range": abs(self.save_states_y[self.save_start_test_i] -
+                           "cl_y_dist": abs(self.save_states_y[self.save_start_test_i] -
                                              self.save_states_y[self.save_stop_train_i]),
                            "cl_x_speed": (self.save_states_x[self.save_start_test_i] -
                                           self.save_states_x[self.save_stop_train_i]) /
@@ -794,15 +826,15 @@ class Simulation(object):
                                           self.save_states_y[self.save_stop_train_i]) /
                                          (self.t_hist[self.save_start_test_i] -
                                           self.t_hist[self.save_stop_train_i]),
-                           "cl_dist": math.sqrt((self.save_states_x[self.save_start_test_i] -
-                                                 self.save_states_x[self.save_stop_train_i])**2 +
-                                                (self.save_states_y[self.save_start_test_i] -
-                                                 self.save_states_y[self.save_stop_train_i])**2),
-                           "cl_speed": math.sqrt((self.save_states_x[self.save_start_test_i] -
-                                                  self.save_states_x[self.save_stop_train_i])**2 +
-                                                 (self.save_states_y[self.save_start_test_i] -
-                                                  self.save_states_y[self.save_stop_train_i])**2) /
-                                       (self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i]),
+                           "cl_dist": cl_dist,
+                           "cl_speed": cl_dist / (self.t_hist[self.save_start_test_i] -
+                                                  self.t_hist[self.save_stop_train_i]),
+                           "cl_power": sum(self.save_states_pow[self.save_stop_train_i:self.save_start_test_i]) /
+                                       len(self.save_states_pow[self.save_stop_train_i:self.save_start_test_i]),
+                           "cl_COT": sum(self.save_states_pow[self.save_stop_train_i:self.save_start_test_i]) *
+                                     self.time_step / (cl_dist * 750),
+                           "cl_average_computation_time": np.mean(self.save_cont_time[self.save_stop_train_i:
+                                                                                      self.save_start_test_i]),
                            "cl_z_range": max(self.save_states_z[self.save_stop_train_i:self.save_start_test_i]) -
                                          min(self.save_states_z[self.save_stop_train_i:self.save_start_test_i]),
                            "cl_nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_stop_train_i:
@@ -813,47 +845,66 @@ class Simulation(object):
                                               min(self.save_states_phi[self.save_start_test_i:]),
                            "test_pitch_range": max(self.save_states_psi[self.save_start_test_i:]) -
                                                min(self.save_states_psi[self.save_start_test_i:]),
-                           "test_x_range": self.save_states_x[-1] - self.save_states_x[self.save_start_test_i],
-                           "test_y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]),
+                           "test_x_dist": self.save_states_x[-1] - self.save_states_x[self.save_start_test_i],
+                           "test_y_dist": abs(self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]),
                            "test_x_speed": (self.save_states_x[-1] - self.save_states_x[self.save_start_test_i]) /
                                            (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
                            "test_y_speed": (self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]) /
                                            (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
-                           "test_dist": math.sqrt((self.save_states_x[-1] -
-                                                   self.save_states_x[self.save_start_test_i])**2 +
-                                                  (self.save_states_y[-1] -
-                                                   self.save_states_y[self.save_start_test_i])**2),
-                           "test_speed": math.sqrt((self.save_states_x[-1] -
-                                                    self.save_states_x[self.save_start_test_i])**2 +
-                                                   (self.save_states_y[-1] -
-                                                    self.save_states_y[self.save_start_test_i])**2) /
-                                        (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
+                           "test_dist": test_dist,
+                           "test_speed": test_dist / (self.t_hist[-1] -
+                                                      self.t_hist[self.save_start_test_i]),
+                           "test_power": sum(self.save_states_pow[self.save_start_test_i:]) /
+                                         len(self.save_states_pow[self.save_start_test_i:]),
+                           "test_COT": sum(self.save_states_pow[self.save_start_test_i:]) *
+                                       self.time_step / (test_dist * 750),
                            "test_z_range": max(self.save_states_z[self.save_start_test_i:]) -
                                            min(self.save_states_z[self.save_start_test_i:]),
                            "test_nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_start_test_i:]),
                                                      np.mat(self.save_action_pred[self.save_start_test_i:])),
+                           "test_average_computation_time": np.mean(self.save_cont_time[self.save_start_test_i:]),
                            "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms,
                            "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
-                           "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i]
+                           "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i],
+                           "fallen": self.physics.hyq_has_fallen
                            }
             else:
                 if len(self.save_states_phi[self.save_trot_i:]) > 0:
+                    dist = math.sqrt((self.save_states_x[-1] -
+                                      self.save_states_x[self.save_trot_i]) ** 2 +
+                                     (self.save_states_y[-1] -
+                                      self.save_states_y[self.save_trot_i]) ** 2)
                     to_save = {"roll_range": max(self.save_states_phi[self.save_trot_i:]) -
                                              min(self.save_states_phi[self.save_trot_i:]),
                                "pitch_range": max(self.save_states_psi[self.save_trot_i:]) -
                                               min(self.save_states_psi[self.save_trot_i:]),
-                               "x_range": self.save_states_x[-1] - self.save_states_x[self.save_trot_i],
-                               "y_range": abs(self.save_states_y[-1] - self.save_states_y[self.save_trot_i]),
+                               "x_dist": self.save_states_x[-1] - self.save_states_x[self.save_trot_i],
+                               "y_dist": abs(self.save_states_y[-1] - self.save_states_y[self.save_trot_i]),
                                "z_range": max(self.save_states_z[self.save_trot_i:]) -
                                           min(self.save_states_z[self.save_trot_i:]),
                                "nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_trot_i:]),
                                                     np.mat(self.save_action_pred[self.save_trot_i:])),
-                               "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i]
+                               "x_speed": (self.save_states_x[-1] - self.save_states_x[self.save_trot_i]) /
+                                               (self.t_hist[-1] - self.t_hist[self.save_trot_i]),
+                               "y_speed": (self.save_states_y[-1] - self.save_states_y[self.save_trot_i]) /
+                                               (self.t_hist[-1] - self.t_hist[self.save_trot_i]),
+                               "dist": dist,
+                               "speed": dist / (self.t_hist[-1] - self.t_hist[self.save_trot_i]),
+                               "power": sum(self.save_states_pow[self.save_trot_i:]) /
+                                        len(self.save_states_pow[self.save_trot_i:]),
+                               "COT": sum(self.save_states_pow[self.save_trot_i:]) *
+                                      self.time_step / (dist * 750),
+                               "average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:]),
+                               "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i],
+                               "fallen": self.physics.hyq_has_fallen
                                }
                 else:
                     to_save = {"roll_range": np.nan, "pitch_range": np.nan, "nrmse": np.nan,
-                               "x_range": np.nan, "y_range": np.nan, "z_range": np.nan, "t_sim": np.nan
+                               "x_dist": np.nan, "y_dist": np.nan, "z_range": np.nan, "t_sim": np.nan,
+                               "x_speed": np.nan, "y_speed": np.nan, "dist": np.nan, "speed": np.nan,
+                               "power": np.nan, "COT": np.nan, "average_computation_time": np.nan,
+                               "fallen": self.physics.hyq_has_fallen
                                }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
 
@@ -1035,7 +1086,7 @@ class CPGSimulation(Simulation):
             state = self.physics.get_hyq_state()
 
             # Get CPG motor action
-            action = np.zeros(24)
+            action = np.zeros(13)
             r = np.sin(2*np.pi*2*self.t)
             # , a in enumerate(self.cpg.step(self.t
             action[2] = r

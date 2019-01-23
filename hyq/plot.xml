@@ -1,543 +1,537 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <root>
  <tabbed_widget name="Main Window" parent="main_window">
-  <plotmatrix rows="4" tab_name="Sim" columns="1">
+  <plotmatrix columns="1" rows="3" tab_name="Sim">
    <plot col="0" row="0">
-    <range bottom="0.097201" left="0.033000" top="0.119118" right="5.146000"/>
+    <range bottom="0.900000" top="1.100000" left="7.746000" right="12.745000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/nn_weight/data" R="128"/>
+    <curve R="128" name="/hyq/nn_weight/data" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-0.851400" left="0.000000" top="34.907400" right="5.144000"/>
+    <range bottom="-0.823700" top="33.771700" left="7.746000" right="12.746000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/des_joint_states/header/stamp" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/header/stamp" R="0"/>
-    <curve G="160" B="164" name="/hyq/robot_states/header/stamp" R="160"/>
+    <curve R="255" name="/hyq/des_joint_states/header/stamp" B="255" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/header/stamp" B="255" G="0"/>
+    <curve R="160" name="/hyq/robot_states/header/stamp" B="164" G="160"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="0.900000" left="0.068000" top="1.100000" right="5.147000"/>
+    <range bottom="-579.371877" top="1313.314198" left="7.746000" right="12.746000"/>
     <limitY/>
-    <curve G="128" B="0" name="/sim_debug/prediction_loss/data" R="128"/>
-    <transform value="noTransform"/>
-   </plot>
-   <plot col="0" row="3">
-    <range bottom="-0.100000" left="0.072000" top="0.100000" right="5.147000"/>
-    <limitY/>
-    <curve G="160" B="164" name="/sim_debug/prediction_acc/data" R="160"/>
+    <curve R="0" name="/hyq/power/data" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="4" tab_name="Lissajous Pos" columns="2">
+  <plotmatrix columns="2" rows="4" tab_name="Lissajous Pos">
    <plot col="0" row="0">
-    <range bottom="0.675196" left="-1.908794" top="0.963542" right="-1.486169"/>
+    <range bottom="0.635717" top="0.990200" left="-1.962032" right="-1.390809"/>
     <limitY/>
-    <curve G="96" B="22" name="/hyq/des_nn_joint_states/position.1" R="255"/>
-    <transform axisX="/hyq/des_nn_joint_states/position.2" value="XYPlot"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.1" B="22" G="96"/>
+    <transform value="XYPlot" axisX="/hyq/des_nn_joint_states/position.2"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="0.668467" left="-1.861645" top="0.929516" right="-1.487361"/>
+    <range bottom="0.637115" top="1.003347" left="-1.932628" right="-1.454178"/>
     <limitY/>
-    <curve G="147" B="145" name="/hyq/des_nn_joint_states/position.4" R="2"/>
-    <transform axisX="/hyq/des_nn_joint_states/position.5" value="XYPlot"/>
+    <curve R="2" name="/hyq/des_nn_joint_states/position.4" B="145" G="147"/>
+    <transform value="XYPlot" axisX="/hyq/des_nn_joint_states/position.5"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.966355" left="1.457792" top="-0.687228" right="1.837033"/>
+    <range bottom="-0.999971" top="-0.685735" left="1.353947" right="1.909320"/>
     <limitY/>
-    <curve G="216" B="133" name="/hyq/des_nn_joint_states/position.7" R="90"/>
-    <transform axisX="/hyq/des_nn_joint_states/position.8" value="XYPlot"/>
+    <curve R="90" name="/hyq/des_nn_joint_states/position.7" B="133" G="216"/>
+    <transform value="XYPlot" axisX="/hyq/des_nn_joint_states/position.8"/>
    </plot>
    <plot col="0" row="3">
-    <range bottom="-0.978318" left="1.430616" top="-0.674052" right="1.898408"/>
+    <range bottom="-0.989583" top="-0.683379" left="1.349127" right="1.911635"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.10" R="128"/>
-    <transform axisX="/hyq/des_nn_joint_states/position.11" value="XYPlot"/>
+    <curve R="128" name="/hyq/des_nn_joint_states/position.10" B="0" G="0"/>
+    <transform value="XYPlot" axisX="/hyq/des_nn_joint_states/position.11"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="0.669210" left="-1.907756" top="0.960791" right="-1.487619"/>
+    <range bottom="0.661578" top="0.969810" left="-1.920320" right="-1.481619"/>
     <limitY/>
-    <curve G="93" B="0" name="/hyq/des_rcf_joint_states/position.1" R="240"/>
-    <transform axisX="/hyq/des_rcf_joint_states/position.2" value="XYPlot"/>
+    <curve R="240" name="/hyq/des_rcf_joint_states/position.1" B="0" G="93"/>
+    <transform value="XYPlot" axisX="/hyq/des_rcf_joint_states/position.2"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="0.669043" left="-1.907614" top="0.961546" right="-1.486860"/>
+    <range bottom="0.660019" top="0.965302" left="-1.913228" right="-1.478909"/>
     <limitY/>
-    <curve G="146" B="148" name="/hyq/des_rcf_joint_states/position.4" R="0"/>
-    <transform axisX="/hyq/des_rcf_joint_states/position.5" value="XYPlot"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.4" B="148" G="146"/>
+    <transform value="XYPlot" axisX="/hyq/des_rcf_joint_states/position.5"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="-0.976054" left="1.455525" top="-0.675186" right="1.894727"/>
+    <range bottom="-0.987632" top="-0.666237" left="1.432631" right="1.897814"/>
     <limitY/>
-    <curve G="201" B="125" name="/hyq/des_rcf_joint_states/position.7" R="95"/>
-    <transform axisX="/hyq/des_rcf_joint_states/position.8" value="XYPlot"/>
+    <curve R="95" name="/hyq/des_rcf_joint_states/position.7" B="125" G="201"/>
+    <transform value="XYPlot" axisX="/hyq/des_rcf_joint_states/position.8"/>
    </plot>
    <plot col="1" row="3">
-    <range bottom="-0.976010" left="1.456378" top="-0.675815" right="1.895023"/>
+    <range bottom="-0.983735" top="-0.665587" left="1.426707" right="1.896934"/>
     <limitY/>
-    <curve G="0" B="3" name="/hyq/des_rcf_joint_states/position.10" R="143"/>
-    <transform axisX="/hyq/des_rcf_joint_states/position.11" value="XYPlot"/>
+    <curve R="143" name="/hyq/des_rcf_joint_states/position.10" B="3" G="0"/>
+    <transform value="XYPlot" axisX="/hyq/des_rcf_joint_states/position.11"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="4" tab_name="Joint Pos Action" columns="2">
+  <plotmatrix columns="2" rows="4" tab_name="Joint Pos Action">
    <plot col="0" row="0">
-    <range bottom="0.660140" left="4.820000" top="0.963753" right="14.824000"/>
+    <range bottom="0.635717" top="0.990200" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.1" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.1" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.0" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.1" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.1" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.0" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="0.667673" left="4.820000" top="0.962093" right="14.824000"/>
+    <range bottom="0.637115" top="1.003347" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.4" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.4" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.2" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.4" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.4" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.2" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.976054" left="4.820000" top="-0.675186" right="14.824000"/>
+    <range bottom="-1.000455" top="-0.665925" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.7" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.7" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.4" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.7" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.7" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.4" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="3">
-    <range bottom="-0.978324" left="4.820000" top="-0.673823" right="14.824000"/>
+    <range bottom="-0.990021" top="-0.665433" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.10" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.10" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.6" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.10" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.10" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.6" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="-1.939632" left="4.820000" top="-1.485416" right="14.824000"/>
+    <range bottom="-1.962032" top="-1.390809" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.2" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.2" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.1" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.2" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.2" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.1" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="-1.907839" left="4.820000" top="-1.474634" right="14.824000"/>
+    <range bottom="-1.932628" top="-1.454178" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.5" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.5" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.3" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.5" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.5" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.3" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="1.453242" left="4.820000" top="1.894959" right="14.824000"/>
+    <range bottom="1.353947" top="1.909320" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.8" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.8" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.5" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.8" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.8" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.5" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="3">
-    <range bottom="1.430616" left="4.820000" top="1.898408" right="14.824000"/>
+    <range bottom="1.349127" top="1.911635" left="0.178000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/des_nn_joint_states/position.11" R="255"/>
-    <curve G="0" B="255" name="/hyq/des_rcf_joint_states/position.11" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.7" R="0"/>
+    <curve R="255" name="/hyq/des_nn_joint_states/position.11" B="0" G="0"/>
+    <curve R="0" name="/hyq/des_rcf_joint_states/position.11" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.7" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="3" tab_name="Base Pos State" columns="2">
+  <plotmatrix columns="2" rows="3" tab_name="Base Pos State">
    <plot col="0" row="0">
-    <range bottom="-0.010904" left="0.032000" top="0.011110" right="1.904000"/>
+    <range bottom="-0.032395" top="0.024517" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="128" B="0" name="/hyq/robot_states/base.0/position" R="128"/>
+    <curve R="128" name="/hyq/robot_states/base.0/position" B="0" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="0.007489" left="0.032000" top="0.011603" right="1.904000"/>
+    <range bottom="0.002430" top="0.023057" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/robot_states/base.1/position" R="128"/>
+    <curve R="128" name="/hyq/robot_states/base.1/position" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.004734" left="0.032000" top="0.007878" right="1.904000"/>
+    <range bottom="-0.028412" top="0.035552" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/base.2/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/base.2/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="7.277018" left="0.032000" top="7.818488" right="1.904000"/>
+    <range bottom="4.249422" top="5.468107" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="128" B="0" name="/hyq/robot_states/base.3/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/base.3/position" B="0" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="0.038297" left="0.032000" top="0.044954" right="1.904000"/>
+    <range bottom="-0.613074" top="-0.492744" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/robot_states/base.4/position" R="255"/>
+    <curve R="255" name="/hyq/robot_states/base.4/position" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="0.587850" left="0.032000" top="0.590331" right="1.904000"/>
+    <range bottom="0.558083" top="0.603321" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/base.5/position" R="255"/>
+    <curve R="255" name="/hyq/robot_states/base.5/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="2" tab_name="Feet State" columns="2">
+  <plotmatrix columns="2" rows="2" tab_name="Feet State">
    <plot col="0" row="0">
-    <range bottom="-367.573776" left="0.032000" top="470.418020" right="1.904000"/>
+    <range bottom="-264.953375" top="778.169305" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/contacts.0/wrench/force/x" R="0"/>
-    <curve G="128" B="0" name="/hyq/robot_states/contacts.0/wrench/force/y" R="0"/>
-    <curve G="0" B="0" name="/hyq/robot_states/contacts.0/wrench/force/z" R="255"/>
+    <curve R="0" name="/hyq/robot_states/contacts.0/wrench/force/x" B="255" G="0"/>
+    <curve R="0" name="/hyq/robot_states/contacts.0/wrench/force/y" B="0" G="128"/>
+    <curve R="255" name="/hyq/robot_states/contacts.0/wrench/force/z" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-83.529862" left="0.032000" top="437.105410" right="1.904000"/>
+    <range bottom="-124.887644" top="627.181330" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="160" B="164" name="/hyq/robot_states/contacts.2/wrench/force/x" R="160"/>
-    <curve G="128" B="0" name="/hyq/robot_states/contacts.2/wrench/force/y" R="128"/>
-    <curve G="0" B="0" name="/hyq/robot_states/contacts.2/wrench/force/z" R="128"/>
+    <curve R="160" name="/hyq/robot_states/contacts.2/wrench/force/x" B="164" G="160"/>
+    <curve R="128" name="/hyq/robot_states/contacts.2/wrench/force/y" B="0" G="128"/>
+    <curve R="128" name="/hyq/robot_states/contacts.2/wrench/force/z" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="-359.426030" left="0.032000" top="472.323416" right="1.904000"/>
+    <range bottom="-233.436715" top="642.337132" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/contacts.1/wrench/force/x" R="255"/>
-    <curve G="0" B="128" name="/hyq/robot_states/contacts.1/wrench/force/y" R="0"/>
-    <curve G="128" B="128" name="/hyq/robot_states/contacts.1/wrench/force/z" R="0"/>
+    <curve R="255" name="/hyq/robot_states/contacts.1/wrench/force/x" B="255" G="0"/>
+    <curve R="0" name="/hyq/robot_states/contacts.1/wrench/force/y" B="128" G="0"/>
+    <curve R="0" name="/hyq/robot_states/contacts.1/wrench/force/z" B="128" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="-53.759671" left="0.032000" top="437.286283" right="1.904000"/>
+    <range bottom="-75.525617" top="889.536449" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/contacts.3/wrench/force/x" R="0"/>
-    <curve G="128" B="0" name="/hyq/robot_states/contacts.3/wrench/force/y" R="0"/>
-    <curve G="0" B="0" name="/hyq/robot_states/contacts.3/wrench/force/z" R="255"/>
+    <curve R="0" name="/hyq/robot_states/contacts.3/wrench/force/x" B="255" G="0"/>
+    <curve R="0" name="/hyq/robot_states/contacts.3/wrench/force/y" B="0" G="128"/>
+    <curve R="255" name="/hyq/robot_states/contacts.3/wrench/force/z" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="3" tab_name="Base Vel State" columns="2">
+  <plotmatrix columns="2" rows="3" tab_name="Base Vel State">
    <plot col="0" row="0">
-    <range bottom="-0.142381" left="0.032000" top="0.141030" right="1.904000"/>
+    <range bottom="-0.800959" top="0.276538" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/base.0/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/base.0/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-0.036591" left="0.032000" top="0.053449" right="1.904000"/>
+    <range bottom="-0.094825" top="0.226085" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="128" B="0" name="/hyq/robot_states/base.1/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/base.1/velocity" B="0" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.059552" left="0.032000" top="0.060807" right="1.904000"/>
+    <range bottom="-0.090065" top="0.122255" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/robot_states/base.2/velocity" R="255"/>
+    <curve R="255" name="/hyq/robot_states/base.2/velocity" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="0.262068" left="0.032000" top="0.303701" right="1.904000"/>
+    <range bottom="0.140587" top="0.296706" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/base.3/velocity" R="255"/>
+    <curve R="255" name="/hyq/robot_states/base.3/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="-0.031251" left="0.032000" top="0.032533" right="1.904000"/>
+    <range bottom="-0.095311" top="0.094070" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="128" name="/hyq/robot_states/base.4/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/base.4/velocity" B="128" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="-0.027569" left="0.032000" top="0.018657" right="1.904000"/>
+    <range bottom="-0.372145" top="0.240481" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="128" B="128" name="/hyq/robot_states/base.5/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/base.5/velocity" B="128" G="128"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="4" tab_name="Joints Pos State" columns="3">
+  <plotmatrix columns="3" rows="4" tab_name="Joints Pos State">
    <plot col="0" row="0">
-    <range bottom="-0.228521" left="0.032000" top="-0.174624" right="1.904000"/>
+    <range bottom="-0.239161" top="-0.164373" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.0/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.0/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-0.228383" left="0.032000" top="-0.175349" right="1.904000"/>
+    <range bottom="-0.226931" top="-0.157894" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.3/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.3/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.239607" left="0.032000" top="-0.182270" right="1.904000"/>
+    <range bottom="-0.246800" top="-0.170636" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.6/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.6/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="3">
-    <range bottom="-0.239575" left="0.032000" top="-0.182412" right="1.904000"/>
+    <range bottom="-0.249230" top="-0.153913" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.9/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.9/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="0.667577" left="0.032000" top="0.960014" right="1.904000"/>
+    <range bottom="0.660321" top="0.986671" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.1/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.1/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="0.665666" left="0.032000" top="0.956435" right="1.904000"/>
+    <range bottom="0.648926" top="0.945419" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.4/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.4/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="-0.974840" left="0.032000" top="-0.671527" right="1.904000"/>
+    <range bottom="-0.974829" top="-0.628445" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.7/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.7/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="3">
-    <range bottom="-0.975780" left="0.032000" top="-0.671122" right="1.904000"/>
+    <range bottom="-1.005660" top="-0.664924" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.10/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.10/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="0">
-    <range bottom="-1.904562" left="0.032000" top="-1.518667" right="1.904000"/>
+    <range bottom="-1.947807" top="-1.539023" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.2/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.2/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="1">
-    <range bottom="-1.900061" left="0.032000" top="-1.519936" right="1.904000"/>
+    <range bottom="-1.909648" top="-1.464486" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.5/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.5/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="2">
-    <range bottom="1.482401" left="0.032000" top="1.885221" right="1.904000"/>
+    <range bottom="1.426364" top="1.874225" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.8/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.8/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="3">
-    <range bottom="1.485739" left="0.032000" top="1.891243" right="1.904000"/>
+    <range bottom="1.463751" top="1.923407" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.11/position" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.11/position" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="4" tab_name="Joint Vel State" columns="3">
+  <plotmatrix columns="3" rows="4" tab_name="Joint Vel State">
    <plot col="0" row="0">
-    <range bottom="-0.523710" left="0.032000" top="0.306702" right="1.904000"/>
+    <range bottom="-0.888092" top="0.401369" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.0/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.0/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-0.533209" left="0.032000" top="0.307472" right="1.904000"/>
+    <range bottom="-0.747472" top="0.401400" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.3/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.3/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.302531" left="0.032000" top="0.535936" right="1.904000"/>
+    <range bottom="-0.933702" top="0.518933" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.6/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.6/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="3">
-    <range bottom="-0.304897" left="0.032000" top="0.533729" right="1.904000"/>
+    <range bottom="-0.556836" top="0.779712" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.9/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.9/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="-2.073528" left="0.032000" top="1.706346" right="1.904000"/>
+    <range bottom="-2.178358" top="3.046574" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.1/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.1/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="-2.041216" left="0.032000" top="1.687619" right="1.904000"/>
+    <range bottom="-2.479414" top="2.990238" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.4/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.4/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="-2.836386" left="0.032000" top="2.439944" right="1.904000"/>
+    <range bottom="-4.976241" top="1.911977" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.7/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.7/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="3">
-    <range bottom="-2.851424" left="0.032000" top="2.452742" right="1.904000"/>
+    <range bottom="-4.138626" top="1.794996" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.10/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.10/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="0">
-    <range bottom="-5.459444" left="0.032000" top="4.371749" right="1.904000"/>
+    <range bottom="-11.985857" top="12.989104" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.2/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.2/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="1">
-    <range bottom="-5.637249" left="0.032000" top="4.374679" right="1.904000"/>
+    <range bottom="-12.704578" top="11.644962" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.5/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.5/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="2">
-    <range bottom="-4.829780" left="0.032000" top="6.383595" right="1.904000"/>
+    <range bottom="-10.079597" top="12.261654" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.8/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.8/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="2" row="3">
-    <range bottom="-4.878339" left="0.032000" top="6.385981" right="1.904000"/>
+    <range bottom="-7.111114" top="11.219668" left="0.174000" right="5.174000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.11/velocity" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.11/velocity" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="4" tab_name="State-Action" columns="2">
+  <plotmatrix columns="2" rows="4" tab_name="State-Action">
    <plot col="0" row="0">
-    <range bottom="0.667841" left="1.716000" top="0.961030" right="11.716000"/>
+    <range bottom="0.635717" top="0.990200" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.1/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.0" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.1/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.0" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="0.664068" left="1.716000" top="0.957579" right="11.716000"/>
+    <range bottom="0.637115" top="1.003347" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.4/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.2" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.4/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.2" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.974918" left="1.716000" top="-0.670265" right="11.716000"/>
+    <range bottom="-1.001384" top="-0.627797" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.7/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.4" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.7/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.4" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="3">
-    <range bottom="-0.976236" left="1.716000" top="-0.670205" right="11.716000"/>
+    <range bottom="-1.005660" top="-0.664924" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.10/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.10" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.6" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.10/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.10" B="0" G="255"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.6" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="-1.907852" left="1.716000" top="-1.488355" right="11.716000"/>
+    <range bottom="-1.962032" top="-1.390809" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.2/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.1" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.2/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.1" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="-1.902544" left="1.716000" top="-1.487192" right="11.716000"/>
+    <range bottom="-1.932628" top="-1.454178" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.5/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.3" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.5/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.3" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="1.456245" left="1.716000" top="1.887816" right="11.716000"/>
+    <range bottom="1.353947" top="1.909320" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.8/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.5" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.8/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.5" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="3">
-    <range bottom="1.454727" left="1.716000" top="1.895202" right="11.716000"/>
+    <range bottom="1.348772" top="1.926212" left="0.174000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/robot_states/joints.11/position" R="0"/>
-    <curve G="255" B="0" name="/sim_debug/mix_cl/data.7" R="0"/>
+    <curve R="0" name="/hyq/robot_states/joints.11/position" B="255" G="0"/>
+    <curve R="0" name="/sim_debug/mix_cl/data.7" B="0" G="255"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="4" tab_name="Pos Error" columns="2">
+  <plotmatrix columns="2" rows="4" tab_name="Pos Error">
    <plot col="0" row="0">
-    <range bottom="-0.034199" left="0.002000" top="0.007193" right="1.904000"/>
+    <range bottom="-0.110786" top="0.073734" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/nn_rcf_js_error/position.1" R="0"/>
+    <curve R="0" name="/hyq/nn_rcf_js_error/position.1" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-0.024498" left="0.002000" top="0.047387" right="1.904000"/>
+    <range bottom="-0.066449" top="0.115365" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/nn_rcf_js_error/position.4" R="255"/>
+    <curve R="255" name="/hyq/nn_rcf_js_error/position.4" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="2">
-    <range bottom="-0.023508" left="0.002000" top="0.021756" right="1.904000"/>
+    <range bottom="-0.111146" top="0.110895" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="160" B="164" name="/hyq/nn_rcf_js_error/position.7" R="160"/>
+    <curve R="160" name="/hyq/nn_rcf_js_error/position.7" B="164" G="160"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="3">
-    <range bottom="-0.016279" left="0.002000" top="0.032939" right="1.904000"/>
+    <range bottom="-0.077017" top="0.112811" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/nn_rcf_js_error/position.10" R="0"/>
+    <curve R="0" name="/hyq/nn_rcf_js_error/position.10" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="-0.020458" left="0.002000" top="0.042167" right="1.904000"/>
+    <range bottom="-0.111202" top="0.215936" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="128" B="0" name="/hyq/nn_rcf_js_error/position.2" R="0"/>
+    <curve R="0" name="/hyq/nn_rcf_js_error/position.2" B="0" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="-0.053009" left="0.002000" top="0.012877" right="1.904000"/>
+    <range bottom="-0.175913" top="0.150639" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="0" B="128" name="/hyq/nn_rcf_js_error/position.5" R="0"/>
+    <curve R="0" name="/hyq/nn_rcf_js_error/position.5" B="128" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="2">
-    <range bottom="-0.010901" left="0.002000" top="0.073965" right="1.904000"/>
+    <range bottom="-0.146075" top="0.219607" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="128" B="0" name="/hyq/nn_rcf_js_error/position.8" R="128"/>
+    <curve R="128" name="/hyq/nn_rcf_js_error/position.8" B="0" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="3">
-    <range bottom="-0.035573" left="0.002000" top="0.029808" right="1.904000"/>
+    <range bottom="-0.172542" top="0.136601" left="0.182000" right="5.180000"/>
     <limitY/>
-    <curve G="128" B="0" name="/hyq/nn_rcf_js_error/position.11" R="0"/>
+    <curve R="0" name="/hyq/nn_rcf_js_error/position.11" B="0" G="128"/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <plotmatrix rows="2" tab_name="Error" columns="2">
+  <plotmatrix columns="2" rows="2" tab_name="Error">
    <plot col="0" row="0">
-    <range bottom="-0.003299" left="0.036000" top="0.006545" right="1.877000"/>
+    <range bottom="-0.009514" top="0.010119" left="0.000000" right="4.999000"/>
     <limitY/>
-    <curve G="0" B="255" name="/hyq/nn_rcf_hfe_pos_error/data" R="255"/>
+    <curve R="255" name="/hyq/nn_rcf_hfe_pos_error/data" B="255" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="0" row="1">
-    <range bottom="-0.002720" left="0.036000" top="0.009349" right="1.878000"/>
+    <range bottom="-0.005043" top="0.015099" left="0.000000" right="4.999000"/>
     <limitY/>
-    <curve G="0" B="0" name="/hyq/nn_rcf_tot_error/data" R="128"/>
+    <curve R="128" name="/hyq/nn_rcf_tot_error/data" B="0" G="0"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="0">
-    <range bottom="-0.003021" left="0.106000" top="0.010101" right="4.998000"/>
+    <range bottom="-0.005443" top="0.020198" left="0.000000" right="4.999000"/>
     <limitY/>
-    <curve G="128" B="128" name="/hyq/nn_rcf_kfe_pos_error/data" R="0"/>
+    <curve R="0" name="/hyq/nn_rcf_kfe_pos_error/data" B="128" G="128"/>
     <transform value="noTransform"/>
    </plot>
    <plot col="1" row="1">
-    <range bottom="0.000000" left="0.000000" top="1.000000" right="1.000000"/>
+    <range bottom="0.000000" top="1.000000" left="0.000000" right="1.000000"/>
     <limitY/>
     <transform value="noTransform"/>
    </plot>
   </plotmatrix>
-  <currentPlotMatrix index="2"/>
+  <currentPlotMatrix index="0"/>
  </tabbed_widget>
  <use_relative_time_offset enabled="1"/>
  <Plugins>
@@ -548,7 +542,7 @@
    <selected_topics list=""/>
   </DataLoad_ROS_bags>
   <ROS_Topic_Streamer>
-   <selected_topics list="/hyq/des_joint_states;/hyq/des_nn_joint_states;/hyq/des_rcf_joint_states;/hyq/nn_rcf_haa_pos_error;/hyq/nn_rcf_haa_vel_error;/hyq/nn_rcf_hfe_pos_error;/hyq/nn_rcf_hfe_vel_error;/hyq/nn_rcf_js_error;/hyq/nn_rcf_kfe_pos_error;/hyq/nn_rcf_kfe_vel_error;/hyq/nn_rcf_tot_error;/hyq/nn_weight;/hyq/robot_states;/sim_debug/mix_cl;/sim_debug/prediction_acc;/sim_debug/prediction_loss"/>
+   <selected_topics list="/hyq/des_joint_states;/hyq/des_nn_joint_states;/hyq/des_rcf_joint_states;/hyq/nn_rcf_haa_pos_error;/hyq/nn_rcf_haa_vel_error;/hyq/nn_rcf_hfe_pos_error;/hyq/nn_rcf_hfe_vel_error;/hyq/nn_rcf_js_error;/hyq/nn_rcf_kfe_pos_error;/hyq/nn_rcf_kfe_vel_error;/hyq/nn_rcf_tot_error;/hyq/nn_weight;/hyq/robot_states;/sim_debug/mix_cl;/sim_debug/prediction_acc;/sim_debug/prediction_loss;/hyq/power"/>
   </ROS_Topic_Streamer>
   <RosoutPublisherROS/>
   <TopicPublisherROS/>

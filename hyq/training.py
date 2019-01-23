@@ -4,15 +4,19 @@ from random import random
 from scipy import signal
 from sklearn.preprocessing import MinMaxScaler
 import time
+import rospy as ros
+from std_msgs.msg import Float32
 
 import processing
 
 
 class FORCE(object):
 
-    def __init__(self, regularization=0.0, elm=False,  err_window=10,
+    def __init__(self, regularization=0.0, err_window=10,
                  x_scaling=True, y_scaling=True, in_fct='lin', out_fct='lin',
                  delay_line_n=20, delay_line_step=2, train_dropout_period=50,
+                 lpf=True, lpf_fc=5, lpf_ord=5, lpf_ts=0.04,
+                 elm=True, elm_n=50, elm_fct='tanh',
                  save_folder="", verbose=2, random_state=12):
 
         # META PARAMETERS
@@ -31,6 +35,12 @@ class FORCE(object):
         # DATA PROCESSING
         self.x_scaling = x_scaling
         self.y_scaling = y_scaling
+        self.elm = elm
+        self.elm_in = None
+        if self.elm:
+            self.elm_n = elm_n
+            self.elm_fct = elm_fct
+            self.x_scaling = True
         if self.x_scaling:
             if self.in_fct == 'tanh':
                 self.x_scaler = MinMaxScaler((-1.5, 1.5))
@@ -43,16 +53,21 @@ class FORCE(object):
                 self.y_scaler = MinMaxScaler((-0.5, 1.5))
         self.dl_n = delay_line_n
         self.dl_s = delay_line_step
-        self.elm = elm
-        self.err_window = err_window
-        self.td = None
         if self.dl_n > 1:
             self.td = processing.TimeDelay(num=self.dl_n, step=self.dl_s)
+        self.lpf = lpf
+        if self.lpf:
+            self.lpf_out = processing.LowPassFilter(fc=lpf_fc, ts=lpf_ts, ord=lpf_ord)
+        self.err_window = err_window
+        self.td = None
 
         # ALGO DATA
         self.w = None
         self.p = None
         self.e = 1
+
+        self.pub = ros.Publisher("avant", Float32, queue_size=1)
+        self.pub2 = ros.Publisher("apres", Float32, queue_size=1)
 
     def printv(self, txt):
 
@@ -71,6 +86,11 @@ class FORCE(object):
         return x
     
     def non_linearities(self, x=None):
+
+        if self.elm:
+            if self.elm_in is None:
+                self.elm_in = processing.ELM(n_in=x.shape[1], n_elm=self.elm_n, fct=self.elm_fct)
+            x = self.elm_in.transform(x)
 
         return x
 
@@ -143,6 +163,12 @@ class FORCE(object):
 
     def transform_out(self, y):
 
+        # Low pass filtering
+        if self.lpf:
+            self.pub.publish(y[0, 0])
+            y = self.lpf_out.transform(np.array(y))
+            self.pub2.publish(y[0,0])
+
         # Neuronal function
         y = self.inv_neuron_fct(y, self.out_fct)
 
@@ -203,6 +229,7 @@ class TestFORCE(object):
         self.reg = reg
         self.t = np.linspace(0, self.t_max, self.n_length)
         self.fs = self.n_length / self.t_max
+        self.ts = 1.0 / self.fs
         
         self.force = None
         self.x = self.create_in()
@@ -236,7 +263,7 @@ class TestFORCE(object):
         return y
 
     def run(self):
-        
+
         self.force = FORCE(regularization=self.reg)
 
         last_t = time.time()

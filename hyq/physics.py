@@ -25,6 +25,7 @@ from std_msgs.msg import Float32, Header
 from std_srvs.srv import Empty
 
 
+import processing
 import utils
 
 # Remove stupid a,d annoying ROS Launch stderr redirection
@@ -48,7 +49,7 @@ class HyQSim(threading.Thread):
         self.sim_package = "dls_supervisor"
         self.sim_node = "operator.launch"
         self.sim_to_kill = ["ros", "gzserver", "gzclient"]
-        self.sim_not_kill = ["PlotJuggler", "rosmaster", "rosout", "roscore"]
+        self.sim_not_kill = ["PlotJuggler", "rosmaster", "rosout", "roscore", "rosbag"]
         self.sim_params = "gazebo:=True osc:=False"
         if view is False:
             self.sim_params += " gui:=False"
@@ -65,6 +66,7 @@ class HyQSim(threading.Thread):
         self.hyq_tgt_action_sub_name = "/hyq/des_rcf_joint_states"
         self.hyq_nn_pub_name = "/hyq/des_nn_joint_states"
         self.hyq_nn_w_pub_name = "/hyq/nn_weight"
+        self.hyq_pow_pub_name = "/hyq/power"
         self.hyq_js_err_name = "/hyq/nn_rcf_js_error"
         self.hyq_haa_err_name = "/hyq/nn_rcf_haa_pos_error"
         self.hyq_hfe_err_name = "/hyq/nn_rcf_hfe_pos_error"
@@ -75,9 +77,11 @@ class HyQSim(threading.Thread):
         self.hyq_tot_err_name = "/hyq/nn_rcf_tot_error"
         self.sub_clock = None
         self.sub_state = None
+        self.sub_power_state = None
         self.sub_tgt_action = None
         self.pub_nn = None
         self.pub_nn_w = None
+        self.pub_power = None
         self.pub_js_err = None
         self.pub_haa_err = None
         self.pub_hfe_err = None
@@ -98,7 +102,10 @@ class HyQSim(threading.Thread):
         self.hyq_z = 0
         self.hyq_phi = 0
         self.hyq_theta = 0
-        self.hyq_psi= 0
+        self.hyq_psi = 0
+        self.hyq_has_fallen = False
+        self.hyq_power = 0
+        self.lpf_power = None
         self.hyq_state_it = 0
         self.hyq_action_it = 0
         self.tc_kp = 5000
@@ -110,6 +117,7 @@ class HyQSim(threading.Thread):
         self.rt = rt
         self.t_init = time.time()
         self.controller_started = False
+        self.trot_started = False
         self.trunk_cont_stopped = False
         self.sim_started = False
         self.publish_error = publish_error
@@ -141,6 +149,13 @@ class HyQSim(threading.Thread):
                                             buff_size=2**20,
                                             tcp_nodelay=True)
 
+            self.sub_power_state = ros.Subscriber(self.hyq_state_sub_name,
+                                                  WholeBodyState,
+                                                  callback=self._reg_hyq_power,
+                                                  queue_size=2,
+                                                  buff_size=2**20,
+                                                  tcp_nodelay=True)
+
             # Create ROS Publishers
             self.pub_nn = ros.Publisher(self.hyq_nn_pub_name,
                                         JointState,
@@ -148,6 +163,9 @@ class HyQSim(threading.Thread):
             self.pub_nn_w = ros.Publisher(self.hyq_nn_w_pub_name,
                                           Float32,
                                           queue_size=1)
+            self.pub_power = ros.Publisher(self.hyq_pow_pub_name,
+                                           Float32,
+                                           queue_size=1)
 
             if self.publish_error:
 
@@ -321,6 +339,7 @@ class HyQSim(threading.Thread):
             for i in range(8):
                 self.send_controller_cmd("", ":")
             self.send_controller_cmd("", "RCFController>>")
+            self.trot_started = True
             return True
 
         else:
@@ -470,6 +489,10 @@ class HyQSim(threading.Thread):
                copy.deepcopy(self.hyq_y), \
                copy.deepcopy(self.hyq_z)
 
+    def get_hyq_power(self):
+
+        return copy.deepcopy(self.hyq_power)
+
     def get_hyq_phi_theta_psi(self):
 
         return copy.deepcopy(self.hyq_phi), \
@@ -582,23 +605,12 @@ class HyQSim(threading.Thread):
 
     def _reg_hyq_state(self, msg):
 
-        # Robot State (length = 24)
+        # Robot State (length = 13)
         inp = [0.5]                              # Bias
-        inp += [msg.base[5].position]            # Base Z
-        inp += [msg.base[0].position]            # Base Roll
-        inp += [msg.base[1].position]            # Base Pitch
 
-        inp += [msg.contacts[0].wrench.force.x]  # LF Foot X Force
-        inp += [msg.contacts[0].wrench.force.y]  # LF Foot Y Force
         inp += [msg.contacts[0].wrench.force.z]  # LF Foot Z Force
-        inp += [msg.contacts[1].wrench.force.x]  # RF Foot X Force
-        inp += [msg.contacts[1].wrench.force.y]  # RF Foot Y Force
         inp += [msg.contacts[1].wrench.force.z]  # RF Foot Z Force
-        inp += [msg.contacts[2].wrench.force.x]  # LH Foot X Force
-        inp += [msg.contacts[2].wrench.force.y]  # LH Foot Y Force
         inp += [msg.contacts[2].wrench.force.z]  # LH Foot Z Force
-        inp += [msg.contacts[3].wrench.force.x]  # RH Foot X Force
-        inp += [msg.contacts[3].wrench.force.y]  # RH Foot Y Force
         inp += [msg.contacts[3].wrench.force.z]  # RH Foot Z Force
 
         inp += [msg.joints[1].position]          # LF Hip FE Joint
@@ -618,10 +630,23 @@ class HyQSim(threading.Thread):
             self.hyq_x = msg.base[3].position
             self.hyq_y = msg.base[4].position
             self.hyq_z = msg.base[5].position
+            if (self.hyq_z < 0.4 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0) and self.trot_started:
+                print "\nThe robot has fallen because of Z=" + str(self.hyq_z) + \
+                      " or PHI=" + str(self.hyq_phi) + " or PSI=" + str(self.hyq_psi)
+                self.hyq_has_fallen = True
             self.hyq_state = inp
             self.hyq_state_it += 1
         finally:
             self.process_state_flag.release()
+
+    def _reg_hyq_power(self, msg):
+
+        power = 0.0
+        for i, j in enumerate(msg.joints):
+            power += j.velocity * j.effort
+
+        self.hyq_power = power
+        self.pub_power.publish(power)
 
     def _reg_hyq_tgt_action(self, msg):
 

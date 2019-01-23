@@ -1,6 +1,7 @@
 import collections
 import math
 import numpy as np
+from scipy import signal
 from statsmodels.tsa.seasonal import seasonal_decompose
 import sys
 import time
@@ -192,6 +193,40 @@ class HyQJointScaler(BaseEstimator, TransformerMixin):
         return x_unscaled
 
 
+class ELM(BaseEstimator, TransformerMixin):
+
+    def __init__(self, n_in, n_elm=20, fct="tanh"):
+
+        self.n_in = n_in
+        self.n_elm = n_elm
+        self.fct = fct
+
+        self.w = np.random.rand(self.n_elm, self.n_in) - 0.5
+
+    def fit(self):
+
+        return self
+
+    def fit_transform(self, x, y=None, **kwargs):
+
+        y = self.transform(x)
+        return y
+
+    def transform(self, x):
+
+        y = (self.w * x.T).T
+
+        if self.fct == "tanh":
+            return np.mat(np.tanh(y))
+
+        if self.fct == "relu":
+            return np.maximum(y, 0)
+
+        plt.plot(y)
+        plt.show()
+        return np.mat(y)
+
+
 class TimeDelay(BaseEstimator, TransformerMixin):
 
     def __init__(self, num=5, step=1):
@@ -243,6 +278,49 @@ class TimeDelay(BaseEstimator, TransformerMixin):
             else:
                 x_row = x_row.tolist()[0]
             y[i, :] = self.transform_it(x_row)
+
+        return np.mat(y)
+
+
+class LowPassFilter(BaseEstimator, TransformerMixin):
+
+    def __init__(self, fc=80, ts=0.004, ord=5):
+
+        self.fc = fc                 # Hz
+        self.ord = ord               # Filter order
+        self.ts = ts
+
+        self.nyq = 0.5 / self.ts
+        self.norm_fc = self.fc / self.nyq
+
+        self.filt_b = signal.firwin(self.ord, self.norm_fc)
+        self.filt_a = [1]
+        self.zi = None
+
+    def fit(self):
+
+        return self
+
+    def fit_transform(self, x, y=None, **kwargs):
+
+        y = self.transform(x)
+        return y
+
+    def transform(self, x):
+
+        n = x.shape[0]
+        dim = x.shape[1]
+        y = np.zeros((n, dim))
+
+        if self.zi is None:
+            self.zi = []
+            for i in range(dim):
+                self.zi.append(signal.lfilter_zi(self.filt_b, self.filt_a) * 0.0)
+
+        for i in range(n):
+            for j in range(dim):
+                y[i, j], self.zi[j] = signal.lfilter(self.filt_b, self.filt_a,
+                                                     np.array([x[i, j]]), zi=np.array(self.zi[j]))
 
         return np.mat(y)
 
@@ -409,3 +487,22 @@ if __name__ == "__main__":
             print("First cells of Y in block: " + str(y2[0:5, :]))
             print("Running time: Iteratively: {0:.4f}".format(t_f1 - t_i) + \
                   "s \tBlock: {0:.4f}".format(t_f - t_f1) + "s")
+
+        if sys.argv[1] == "lpf":
+
+            # Create a noisy input
+            t = np.arange(0, 4, 0.004).reshape(1000, 1)
+            x1 = np.sin(2 * np.pi * 1 * t)
+            x2 = 0.2 * np.cos(2 * np.pi * 50 * t)
+            x3 = np.random.normal(0.0, 0.1, 1000).reshape(1000, 1)
+            x = x1 + x2 # + x3
+
+            # SKLearn DUT
+            print t[0:10]
+            e = LowPassFilter(fc=40, ts=0.004, ord=10)
+            y = e.transform(x)
+
+            # Plot results
+            plt.plot(t, x)
+            plt.plot(t, y)
+            plt.show()
