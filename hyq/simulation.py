@@ -314,8 +314,8 @@ class Simulation(object):
 
         # Send the NN prediction to the RCF controller
         if len(pred_action) == 8:
-            self.physics.send_hyq_nn_pred(pred_action, 1,
-                                          np.array(tgt_action) - np.array(pred_action))
+            self.physics.send_hyq_nn_pred(mix_action, 1,
+                                          np.array(tgt_action) - np.array(mix_action))
 
         # DEBUG AND LOGGING
         self.debug_step(curr_state, pred_action, tgt_action, mix_action)
