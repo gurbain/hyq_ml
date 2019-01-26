@@ -396,8 +396,8 @@ class Simulation(object):
                       " / Weight: " + "{:.2f}".format(self.nn_weight) +
                       "\tRobot dist: {:.2f} m".format(math.sqrt(sum([float(i) ** 2
                                                                      for i in self.physics.get_hyq_x_y_z()]))))
-        self.last_debug_it = self.it
-        self.last_debug_t = self.t
+            self.last_debug_it = self.it
+            self.last_debug_t = self.t
 
     def run(self):
 

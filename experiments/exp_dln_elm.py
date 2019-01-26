@@ -24,7 +24,7 @@ if __name__ == '__main__':
                 config.set("Force", "delay_line_n", str(t))
                 config.set("Force", "delay_line_step", "1")
                 config.set("Force", "elm", "True")
-                config.set("Force", "elm_n", str(r))
+                config.set("Force", "elm_n", str(l))
                 config.set("Force", "elm_fct", "tanh")
                 config.set("Physics", "noise", "0.0")
                 config.set("Force", "regularization", "0.0001")
