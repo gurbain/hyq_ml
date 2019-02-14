@@ -82,7 +82,10 @@ def get_data(folder):
 
     # Find changing parameter in config
     changing_config = []
-    for a, b in itertools.combinations(config_data, 2):
+    i = 0
+    for a, b in tqdm(itertools.combinations(config_data, 2)):
+        if i > 10000000:
+            break
         for key, value in a.iteritems():
             if key in b:
                 if a[key] != b[key]:
@@ -92,12 +95,17 @@ def get_data(folder):
                 print " === ERROR: All the configuration files of the experiment " \
                       " directories must have the same fields!"
                 return -1
+        i += 1
 
     # Mix all in a big dictionary
     data = metrics_data
     for i, d in enumerate(data):
         for key in changing_config:
-            d[key] = float(config_data[i][key])
+            c = config_data[i][key]
+            if c.isdigit():
+                d[key] = float(c)
+            else:
+                d[key] = str(c)
 
     return data, changing_config
 
@@ -161,7 +169,6 @@ def get_fields(data, config_fields, conf):
 
 def get_graph_data(data, field_x, field_y, field_z):
 
-    print field_x, field_y, field_z
     if field_z != "No Field":
         x_list = [d[field_x] for d in data]
         x_set = sorted(list(set(x_list)))
@@ -169,8 +176,8 @@ def get_graph_data(data, field_x, field_y, field_z):
         z_set = sorted(list(set(z_list)))
         n_sample = max(max([x_list.count(e) for e in x_set]),
                        max([z_list.count(e) for e in z_set]))
-
         y_val = np.empty((len(x_set), len(z_set), n_sample))
+        y_val[:, :, :] = np.nan
         sampling_index = np.zeros((len(x_set), len(z_set)), dtype=np.int8)
 
         for d in data:
@@ -190,6 +197,7 @@ def get_graph_data(data, field_x, field_y, field_z):
         n_sample = max([x_list.count(e) for e in x_set])
 
         y_val = np.empty((len(x_set), n_sample))
+        y_val[:, :] = np.nan
         sampling_index = np.zeros((len(x_set)), dtype=np.int8)
 
         for d in data:
