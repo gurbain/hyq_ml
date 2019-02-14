@@ -631,7 +631,8 @@ class Simulation(object):
                            "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
                            "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i],
-                           "fallen": self.physics.hyq_has_fallen
+                           "ground_fall": self.physics.hyq_touch_ground,
+                           "tilt_fall": self.physics.hyq_has_tilted
                            }
             else:
                 if len(self.save_states_phi[self.save_trot_i:]) > 0:
@@ -661,14 +662,16 @@ class Simulation(object):
                                       self.time_step / (dist * 750),
                                "average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:]),
                                "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i],
-                               "fallen": self.physics.hyq_has_fallen
+                               "ground_fall": self.physics.hyq_touch_ground,
+                               "tilt_fall": self.physics.hyq_has_tilted
                                }
                 else:
                     to_save = {"roll_range": np.nan, "pitch_range": np.nan, "nrmse": np.nan,
                                "x_dist": np.nan, "y_dist": np.nan, "z_range": np.nan, "t_sim": np.nan,
                                "x_speed": np.nan, "y_speed": np.nan, "dist": np.nan, "speed": np.nan,
                                "power": np.nan, "COT": np.nan, "average_computation_time": np.nan,
-                               "fallen": self.physics.hyq_has_fallen
+                               "ground_fall": self.physics.hyq_touch_ground,
+                               "tilt_fall": self.physics.hyq_has_tilted
                                }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
 
