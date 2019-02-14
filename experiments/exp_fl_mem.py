@@ -14,7 +14,7 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(2):
+    for i in range(3):
         for t in range(1, 20, 1):
             for l in range(0, 80, 5):
                 for kp in [10, 50, 100, 250, 500]:
