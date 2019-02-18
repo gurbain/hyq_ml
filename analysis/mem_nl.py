@@ -20,10 +20,11 @@ plt.rc('figure', autolayout=True)
 
 MIN_DL = 0
 MAX_DL = 20
-MIN_ELM = 5
-MAX_ELM = 50
-REG = 0.00001
+MIN_ELM = 0
+MAX_ELM = 80
+PHYS_REG = 50
 COMPLIANCE = 100
+
 
 def get_compliance_vals(data):
 
@@ -38,15 +39,21 @@ def sort_data(data):
 
     new_data = []
     for d in data:
-        if float(d['force_regularization']) == REG:
+        if float(d['physics_noise']) == PHYS_REG:
             if MIN_DL < int(d['force_delay_line_n']) < MAX_DL and MIN_ELM < int(d['force_elm_n']) < MAX_ELM:
                 if eval(d['physics_init_impedance'])[0] == COMPLIANCE:
-                    new_data.append(d)
+                    if not bool(d["ground_fall"]):
+                        if not bool(d['tilt_fall']):
+                            new_data.append(d)
 
+    print "Sorted data length = " + str(len(new_data))
+    if len(new_data) == 0:
+        print "Not enough data to print anything! Exiting!"
+        exit(0)
     return new_data
 
 
-def get_nl_mem_vals(data):
+def get_mem_nl_vals(data):
 
     x = []
     y = []
@@ -77,12 +84,6 @@ def get_data(data, field):
                 z_av_tab[i, j] = 1 - abs(0.25 - z_av_tab[i, j]) / 0.25
             if field == 'test_y_speed':
                 z_av_tab[i, j] = abs(z_av_tab[i, j])
-            if field == 'test_COT':
-                if z_av_tab[i, j] > 2:
-                    z_av_tab[i, j] = 2
-            if field == 'test_power':
-                if z_av_tab[i, j] > 500:
-                    z_av_tab[i, j] = 500
             if field == 'test_pitch_range':
                 if z_av_tab[i, j] > 0.25:
                     z_av_tab[i, j] = 0.25
@@ -96,12 +97,14 @@ def get_data(data, field):
     return x, y, z_av, z_std
 
 
-def plot_nl_mem(data):
+def plot_mem_nl(data):
 
     data = sort_data(data)
 
     plt.figure(figsize=(12, 45), dpi=80)
     gridspec.GridSpec(4, 6)
+    current_cmap = cm.get_cmap()
+    current_cmap.set_bad(color='darkred')
 
     plt.subplot2grid((4, 6), (0, 0), colspan=3, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_x_speed")
@@ -109,26 +112,30 @@ def plot_nl_mem(data):
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("PERFORMANCE: Normalized Longitudinal Speed")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (0, 3), colspan=3, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_y_speed")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("DEVIATION: Lateral Speed")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
 
     plt.subplot2grid((4, 6), (1, 0), colspan=3, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_COT")
@@ -136,26 +143,32 @@ def plot_nl_mem(data):
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto',
+               norm=cols.LogNorm(vmin=max(0.0001, min(z_av)), vmax=max(z_av)))
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("PERFORMANCE: Cost of Transport")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (1, 3), colspan=3, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_power")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto',
+               norm=cols.LogNorm(vmin=max(0.0001, min(z_av)), vmax=max(z_av)))
     plt.plot(x, y, 'k.')
     plt.colorbar()
-    plt.title("PERFORMANCE: Poower Consumption")
+    plt.title("PERFORMANCE: Power Consumption")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
 
     plt.subplot2grid((4, 6), (2, 0), colspan=3, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_nrmse")
@@ -163,26 +176,30 @@ def plot_nl_mem(data):
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("ACCURACY: Normalized RMS Error")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (2, 3), colspan=3, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_average_computation_time")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("COMPLEXITY: Average Network Computation Time")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
 
     plt.subplot2grid((4, 6), (3, 0), colspan=2, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_z_range")
@@ -190,39 +207,45 @@ def plot_nl_mem(data):
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("STABILITY: Height Oscillation range")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (3, 2), colspan=2, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_pitch_range")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("STABILITY: Pitch Oscillation Range")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (3, 4), colspan=2, rowspan=1)
     x, y, z_av, z_std = get_data(data, "test_roll_range")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
     zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    plt.contourf(xi, yi, zi)
+    plt.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
     plt.plot(x, y, 'k.')
     plt.colorbar()
     plt.title("STABILITY: Roll Oscillation Range")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
-    plt.axis([MIN_DL, MAX_DL, MIN_ELM, MAX_ELM])
+    plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.show()
 
 
@@ -232,9 +255,9 @@ if __name__ == "__main__":
         if sys.argv[1] == "process":
             folder, default_conf = plot_metrics.get_folder()
             data, data_config_fields = plot_metrics.get_data(folder)
-            with open(os.path.join(os.path.dirname(folder), "pareto.pkl"), "wb") as f:
+            with open(os.path.join(os.path.dirname(folder), "mem_nl.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()
 
     [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "mem_nl.pkl", "rb"))
-    plot_nl_mem(data)
+    plot_mem_nl(data)

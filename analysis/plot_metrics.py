@@ -16,7 +16,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-EXP_FOLDER = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/docker_sim/"
+EXP_FOLDER = "/home/gabs48/src/quadruped/hyq/hyq_ml/data/"
 
 
 def get_cols(i):

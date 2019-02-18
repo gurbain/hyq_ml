@@ -31,7 +31,7 @@ if __name__ == '__main__':
                             config.set("Force", "elm_fct", "tanh")
                             config.set("Physics", "noise", "0.0")
                             config.set("Force", "regularization", str(r))
-                            config.set("Physics", "init_impedance", str([kp, kp/10, kp, kp/10, kp, kp/10]))
+                            config.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
 
                             # Add it to the experiment list
                             exp_list.append(config)
