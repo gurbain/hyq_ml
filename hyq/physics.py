@@ -37,7 +37,8 @@ sys.stderr = stderr
 class HyQSim(threading.Thread):
 
     def __init__(self, view=False, rviz=False, rt=True, remote=False, fast=False,
-                 init_impedance=None, verbose=1, publish_error=False):
+                 init_impedance=None, verbose=1, publish_error=False,
+                 inputs=None):
 
         threading.Thread.__init__(self)
 
@@ -94,6 +95,16 @@ class HyQSim(threading.Thread):
 
         # Simulation state
         self.sim_time = 0
+        self.hyq_inputs = inputs
+        self.inputs_len = 0
+        if 'bias' in inputs:
+            self.inputs_len += 1
+        if 'imu' in inputs:
+            self.inputs_len += 3
+        if 'grf' in inputs:
+            self.inputs_len += 4
+        if 'joints' in inputs:
+            self.inputs_len += 8
         self.hyq_state = None
         self.hyq_tgt_action = None
         self.hyq_full_tgt_action = None
@@ -606,21 +617,30 @@ class HyQSim(threading.Thread):
     def _reg_hyq_state(self, msg):
 
         # Robot State (length = 13)
-        inp = [0.5]                              # Bias
+        inp = []
+        if "bias" in self.hyq_inputs:
+            inp += [0.5]                              # Bias
 
-        inp += [msg.contacts[0].wrench.force.z]  # LF Foot Z Force
-        inp += [msg.contacts[1].wrench.force.z]  # RF Foot Z Force
-        inp += [msg.contacts[2].wrench.force.z]  # LH Foot Z Force
-        inp += [msg.contacts[3].wrench.force.z]  # RH Foot Z Force
+        if "grf" in self.hyq_inputs:
+            inp += [msg.contacts[0].wrench.force.z]  # LF Foot Z Force
+            inp += [msg.contacts[1].wrench.force.z]  # RF Foot Z Force
+            inp += [msg.contacts[2].wrench.force.z]  # LH Foot Z Force
+            inp += [msg.contacts[3].wrench.force.z]  # RH Foot Z Force
 
-        inp += [msg.joints[1].position]          # LF Hip FE Joint
-        inp += [msg.joints[2].position]          # LF Knee FE Joint
-        inp += [msg.joints[4].position]          # RF Hip FE Joint
-        inp += [msg.joints[5].position]          # RF Knee FE Joint
-        inp += [msg.joints[7].position]          # LH Hip FE Joint
-        inp += [msg.joints[8].position]          # LH Knee FE Joint
-        inp += [msg.joints[10].position]         # RH Hip FE Joint
-        inp += [msg.joints[11].position]         # RH Knee FE Joint
+        if "joints" in self.hyq_inputs:
+            inp += [msg.joints[1].position]          # LF Hip FE Joint
+            inp += [msg.joints[2].position]          # LF Knee FE Joint
+            inp += [msg.joints[4].position]          # RF Hip FE Joint
+            inp += [msg.joints[5].position]          # RF Knee FE Joint
+            inp += [msg.joints[7].position]          # LH Hip FE Joint
+            inp += [msg.joints[8].position]          # LH Knee FE Joint
+            inp += [msg.joints[10].position]         # RH Hip FE Joint
+            inp += [msg.joints[11].position]         # RH Knee FE Joint
+
+        if "imu" in self.hyq_inputs:
+            inp += [msg.base[5].position]            # Base Z
+            inp += [msg.base[0].position]            # Base Roll
+            inp += [msg.base[1].position]            # Base Pitch
 
         self.process_state_flag.acquire()
         try:
@@ -632,7 +652,7 @@ class HyQSim(threading.Thread):
             self.hyq_z = msg.base[5].position
             if not self.hyq_fall and self.trot_started:
                 if self.hyq_z < 0.35 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
-                    print "[Physics]   The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
+                    print " [Physics]   The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
                           " or PHI={0:.2f}".format(self.hyq_phi) + " or PSI={0:.2f}".format(self.hyq_psi)
                     self.hyq_fall = True
             self.hyq_state = inp

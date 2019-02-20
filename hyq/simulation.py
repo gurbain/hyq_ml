@@ -184,6 +184,7 @@ class Simulation(object):
         self.time_step = float(self.config["Simulation"]["time_step"])
         self.sim_file = self.config["Simulation"]["sim_file"]
         self.train = eval(self.config["Simulation"]["train"])
+        self.inputs = eval(self.config["Simulation"]["inputs"])
 
         self.init_impedance = eval(self.config["Physics"]["init_impedance"])
         self.remote = eval(self.config["Physics"]["remote_server"])
@@ -200,7 +201,8 @@ class Simulation(object):
                                       remote=self.remote,
                                       verbose=self.verbose,
                                       rt=self.real_time,
-                                      publish_error=self.publish_error,)
+                                      publish_error=self.publish_error,
+                                      inputs=self.inputs)
         ros.init_node("simulation", anonymous=True)
         signal.signal(signal.SIGINT, self.stop)
         self.physics.start()
@@ -262,7 +264,7 @@ class Simulation(object):
         if pred:
             pred_time_init = time.time()
             # Predict network action
-            if len(state) == 13:
+            if len(state) == self.physics.inputs_len:
                 if self.network is not None:
                     if self.network.__class__.__name__ == "NN":
                         predicted = self.network.predict(np.mat(state)).tolist()[0]

@@ -16,6 +16,7 @@ t_stop_cl = 31
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
+inputs = ["bias", "grf", "joints", "imu"]
 time_step = 0.004
 trunk_cont_gains = []
 trunk_cont_it_period = 350

@@ -16,7 +16,7 @@ if __name__ == '__main__':
     exp_list = []
     for i in range(10):
         for t in range(1, 18, 1):
-            for n in range(0, 200, 5):
+            for n in range(0, 200, 40):
 
                 # Open the config file and retrieve the data
                 config = ConfigParser.ConfigParser()

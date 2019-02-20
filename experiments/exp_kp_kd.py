@@ -14,9 +14,9 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(5):
-        for kp in np.logspace(1, 3, 40):
-            for kd in np.logspace(-1, 1.4, 10):
+    for i in range(3):
+        for kp in np.logspace(1, 3, 20):
+            for kd in np.logspace(-1, 1.4, 5):
 
                 # Open the config file and retrieve the data
                 config = ConfigParser.ConfigParser()
