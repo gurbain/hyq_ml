@@ -103,8 +103,7 @@ class HyQSim(threading.Thread):
         self.hyq_phi = 0
         self.hyq_theta = 0
         self.hyq_psi = 0
-        self.hyq_has_tilted = False
-        self.hyq_touch_ground = False
+        self.hyq_fall = False
         self.hyq_power = 0
         self.lpf_power = None
         self.hyq_state_it = 0
@@ -631,14 +630,11 @@ class HyQSim(threading.Thread):
             self.hyq_x = msg.base[3].position
             self.hyq_y = msg.base[4].position
             self.hyq_z = msg.base[5].position
-            if self.hyq_z < 0.4 and self.trot_started and (not self.hyq_touch_ground):
-                print "\nThe robot has touched the ground because of Z=" + str(self.hyq_z)
-                self.hyq_touch_ground = True
-            if (abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0) and self.trot_started:
-                if not self.hyq_has_tilted:
-                    print "\nThe robot has tilted because of PHI=" + str(self.hyq_phi) + \
-                          " or PSI=" + str(self.hyq_psi)
-                    self.hyq_has_tilted = True
+            if not self.hyq_fall and self.trot_started:
+                if self.hyq_z < 0.35 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
+                    print "[Physics]   The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
+                          " or PHI={0:.2f}".format(self.hyq_phi) + " or PSI={0:.2f}".format(self.hyq_psi)
+                    self.hyq_fall = True
             self.hyq_state = inp
             self.hyq_state_it += 1
         finally:

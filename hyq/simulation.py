@@ -42,6 +42,7 @@ class Simulation(object):
         self.t_start_cl = 0
         self.t_stop_cl = 0
         self.t_cl = 0
+        self.t_fall = 0
         self.plot = None
         self.verbose = None
         self.publish_actions = None
@@ -382,6 +383,8 @@ class Simulation(object):
                 self.save_stop_train_i = self.save_index
             if self.nn_weight >= 1.0 and self.save_start_test_i == 0:
                 self.save_start_test_i = self.save_index
+            if self.physics.hyq_fall and self.t_fall == 0:
+                self.t_fall = self.t
 
         # Display simulation progress
         if self.last_debug_it == 0:
@@ -574,6 +577,7 @@ class Simulation(object):
                                                                                     self.save_stop_train_i])),
                            "train_average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:
                                                                                          self.save_stop_train_i]),
+                           "train_fall": 0 < self.t_fall < self.t_start_cl and self.physics.hyq_fall,
                            "cl_roll_range": max(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]) -
                                             min(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]),
                            "cl_pitch_range": max(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]) -
@@ -605,6 +609,7 @@ class Simulation(object):
                                                                                   self.save_start_test_i]),
                                                     np.mat(self.save_action_pred[self.save_stop_train_i:
                                                                                  self.save_start_test_i])),
+                           "cl_fall": self.t_start_cl < self.t_fall < self.t_stop_cl and self.physics.hyq_fall,
                            "test_roll_range": max(self.save_states_phi[self.save_start_test_i:]) -
                                               min(self.save_states_phi[self.save_start_test_i:]),
                            "test_pitch_range": max(self.save_states_psi[self.save_start_test_i:]) -
@@ -627,12 +632,12 @@ class Simulation(object):
                            "test_nrmse": utils.nrmse(np.mat(self.save_action_target[self.save_start_test_i:]),
                                                      np.mat(self.save_action_pred[self.save_start_test_i:])),
                            "test_average_computation_time": np.mean(self.save_cont_time[self.save_start_test_i:]),
+                           "test_fall": self.t_train < self.t_fall < self.t_sim and self.physics.hyq_fall,
                            "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms,
                            "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
                            "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i],
-                           "ground_fall": self.physics.hyq_touch_ground,
-                           "tilt_fall": self.physics.hyq_has_tilted
+                           "t_fall": self.t_fall
                            }
             else:
                 if len(self.save_states_phi[self.save_trot_i:]) > 0:
@@ -662,16 +667,15 @@ class Simulation(object):
                                       self.time_step / (dist * 750),
                                "average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:]),
                                "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i],
-                               "ground_fall": self.physics.hyq_touch_ground,
-                               "tilt_fall": self.physics.hyq_has_tilted
+                               "fall": self.physics.hyq_fall,
+                               "t_fall": self.t_fall
                                }
                 else:
                     to_save = {"roll_range": np.nan, "pitch_range": np.nan, "nrmse": np.nan,
                                "x_dist": np.nan, "y_dist": np.nan, "z_range": np.nan, "t_sim": np.nan,
                                "x_speed": np.nan, "y_speed": np.nan, "dist": np.nan, "speed": np.nan,
                                "power": np.nan, "COT": np.nan, "average_computation_time": np.nan,
-                               "ground_fall": self.physics.hyq_touch_ground,
-                               "tilt_fall": self.physics.hyq_has_tilted
+                               "fall": self.physics.hyq_fall, "t_fall": self.t_fall
                                }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
 

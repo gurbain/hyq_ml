@@ -97,7 +97,7 @@ def get_data(data, field):
     return x, y, z_av, z_std
 
 
-def plot_mem_nl(data):
+def plot_mem_nl(data, phase="test"):
 
     data = sort_data(data)
 
@@ -107,7 +107,7 @@ def plot_mem_nl(data):
     current_cmap.set_bad(color='darkred')
 
     plt.subplot2grid((4, 6), (0, 0), colspan=3, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_x_speed")
+    x, y, z_av, z_std = get_data(data, phase + "_x_speed")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -122,7 +122,7 @@ def plot_mem_nl(data):
     plt.ylabel('ELM Size')
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (0, 3), colspan=3, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_y_speed")
+    x, y, z_av, z_std = get_data(data, phase + "_y_speed")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -138,7 +138,7 @@ def plot_mem_nl(data):
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
 
     plt.subplot2grid((4, 6), (1, 0), colspan=3, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_COT")
+    x, y, z_av, z_std = get_data(data, phase + "_COT")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -154,7 +154,7 @@ def plot_mem_nl(data):
     plt.ylabel('ELM Size')
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (1, 3), colspan=3, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_power")
+    x, y, z_av, z_std = get_data(data, phase + "_power")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -171,7 +171,7 @@ def plot_mem_nl(data):
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
 
     plt.subplot2grid((4, 6), (2, 0), colspan=3, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_nrmse")
+    x, y, z_av, z_std = get_data(data, phase + "_nrmse")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -186,7 +186,7 @@ def plot_mem_nl(data):
     plt.ylabel('ELM Size')
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (2, 3), colspan=3, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_average_computation_time")
+    x, y, z_av, z_std = get_data(data, phase + "_average_computation_time")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -202,7 +202,7 @@ def plot_mem_nl(data):
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
 
     plt.subplot2grid((4, 6), (3, 0), colspan=2, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_z_range")
+    x, y, z_av, z_std = get_data(data, phase + "_z_range")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -217,7 +217,7 @@ def plot_mem_nl(data):
     plt.ylabel('ELM Size')
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (3, 2), colspan=2, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_pitch_range")
+    x, y, z_av, z_std = get_data(data, phase + "_pitch_range")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -232,7 +232,7 @@ def plot_mem_nl(data):
     plt.ylabel('ELM Size')
     plt.axis([np.min(x), np.max(x), np.min(y), np.max(y)])
     plt.subplot2grid((4, 6), (3, 4), colspan=2, rowspan=1)
-    x, y, z_av, z_std = get_data(data, "test_roll_range")
+    x, y, z_av, z_std = get_data(data, phase + "_roll_range")
     xi = np.arange(MIN_DL, MAX_DL, 0.1)
     yi = np.arange(MIN_ELM, MAX_ELM, 0.1)
     xi, yi = np.meshgrid(xi, yi)
@@ -257,6 +257,11 @@ if __name__ == "__main__":
             data, data_config_fields = plot_metrics.get_data(folder)
             with open(os.path.join(os.path.dirname(folder), "mem_nl.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
+            exit()
+
+        if sys.argv[1] == "target":
+            [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "mem_nl.pkl", "rb"))
+            plot_mem_nl(data, phase="train")
             exit()
 
     [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "mem_nl.pkl", "rb"))

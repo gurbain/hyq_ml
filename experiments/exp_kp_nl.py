@@ -29,7 +29,5 @@ if __name__ == '__main__':
                         # Add it to the experiment list
                         exp_list.append(config)
 
-    print len(exp_list)
-
     # Process all in parallel
     exp_res_dirs = task_manager.process(exp_list)

@@ -15,19 +15,13 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(5):
-        for t in range(1, 21, 1):
-            for l in range(1, 100, 5):
+        for kp in np.logspace(1, 3, 40):
+            for kd in np.logspace(-1, 1.4, 10):
 
                 # Open the config file and retrieve the data
                 config = ConfigParser.ConfigParser()
                 config.read(DEF_CONFIG)
-                config.set("Force", "delay_line_n", str(t))
-                config.set("Force", "delay_line_step", "1")
-                config.set("Force", "elm", "True")
-                config.set("Force", "elm_n", str(l))
-                config.set("Force", "elm_fct", "tanh")
-                config.set("Physics", "noise", "0.0")
-                config.set("Force", "regularization", "0.0001")
+                config.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
 
                 # Add it to the experiment list
                 exp_list.append(config)

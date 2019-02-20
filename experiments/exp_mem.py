@@ -14,18 +14,15 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(5):
-        for t in range(1, 18, 3):
-            for s in range(1, t, 1):
-
-                print " ----->> i=" + str(i) + " t=" + str(t) + \
-                          " s=" + str(s)
+    for i in range(10):
+        for t in range(1, 18, 1):
+            for n in range(0, 200, 5):
 
                 # Open the config file and retrieve the data
                 config = ConfigParser.ConfigParser()
                 config.read(DEF_CONFIG)
                 config.set("Force", "delay_line_n", str(t))
-                config.set("Force", "delay_line_step", str(s))
+                config.set("Physics", "noise", str(n))
 
                 # Add it to the experiment list
                 exp_list.append(config)
