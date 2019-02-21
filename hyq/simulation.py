@@ -10,18 +10,23 @@ import ConfigParser
 import copy
 import datetime
 import math
-#  import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+from parabolic import parabolic
 import numpy as np
 import pexpect
 import pickle
+import pprint
 import psutil
 import rospy as ros
 import rosbag
 import signal
 from scipy.interpolate import interp1d
+from scipy import signal as ssig
 import sys
 import threading
 import time
+
+
 
 from std_msgs.msg import Bool, Float64, Float64MultiArray, MultiArrayLayout, Header
 from std_srvs.srv import Trigger, TriggerResponse
@@ -82,6 +87,10 @@ class Simulation(object):
         self.save_states_theta = []
         self.save_states_psi = []
         self.save_states_pow = []
+        self.save_states_lh_grf = []
+        self.save_states_rh_grf = []
+        self.save_states_lf_grf = []
+        self.save_states_rf_grf = []
         self.save_cont_time = []
         self.save_states_t_trot = 0
         self.save_metrics = False
@@ -371,6 +380,7 @@ class Simulation(object):
         if self.save_states or self.save_metrics:
             curr_x, curr_y, curr_z = self.physics.get_hyq_x_y_z()
             curr_phi, curr_theta, curr_psi = self.physics.get_hyq_phi_theta_psi()
+            curr_lh, curr_lf, curr_rh, curr_rf = self.physics.get_hyq_grf()
             curr_power = self.physics.get_hyq_power()
             self.save_states_t_real.append(time.time() - self.t_init)
             self.save_states_x.append(curr_x)
@@ -380,6 +390,10 @@ class Simulation(object):
             self.save_states_theta.append(curr_theta)
             self.save_states_psi.append(curr_psi)
             self.save_states_pow.append(curr_power)
+            self.save_states_lh_grf.append(curr_lh)
+            self.save_states_rh_grf.append(curr_rh)
+            self.save_states_lf_grf.append(curr_lf)
+            self.save_states_rf_grf.append(curr_rf)
             self.save_index += 1
             if self.nn_weight > 0 and self.save_stop_train_i == 0:
                 self.save_stop_train_i = self.save_index
@@ -641,6 +655,10 @@ class Simulation(object):
                            "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i],
                            "t_fall": self.t_fall
                            }
+
+                # Add GRF stats
+                to_save.update(self._compute_grf_stats(train_dist, cl_dist, test_dist))
+
             else:
                 if len(self.save_states_phi[self.save_trot_i:]) > 0:
                     dist = math.sqrt((self.save_states_x[-1] -
@@ -670,6 +688,10 @@ class Simulation(object):
                                "average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:]),
                                "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i],
                                "fall": self.physics.hyq_fall,
+                               "max_grf": max(max(abs(self.save_states_lh_grf[self.save_trot_i:])),
+                                              max(abs(self.save_states_lf_grf[self.save_trot_i:])),
+                                              max(abs(self.save_states_rh_grf[self.save_trot_i:])),
+                                              max(abs(self.save_states_rf_grf[self.save_trot_i:]))),
                                "t_fall": self.t_fall
                                }
                 else:
@@ -677,7 +699,7 @@ class Simulation(object):
                                "x_dist": np.nan, "y_dist": np.nan, "z_range": np.nan, "t_sim": np.nan,
                                "x_speed": np.nan, "y_speed": np.nan, "dist": np.nan, "speed": np.nan,
                                "power": np.nan, "COT": np.nan, "average_computation_time": np.nan,
-                               "fall": self.physics.hyq_fall, "t_fall": self.t_fall
+                               "fall": np.nan, "t_fall": np.nan, "max_grf": np.nan
                                }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
 
@@ -724,6 +746,120 @@ class Simulation(object):
                 abs(sig1_fft[0:f_max_eval]),
                 abs(sig2_fft[0:f_max_eval]),
                 math.sqrt(fft_rms_diff / len(sig1_fft[0:f_max_eval])))
+
+    def _compute_grf_stats(self, train_dist, cl_dist, test_dist):
+
+        # Segment
+        lh_train_sig = self.save_states_lh_grf[self.save_trot_i:self.save_stop_train_i]
+        lf_train_sig = self.save_states_lf_grf[self.save_trot_i:self.save_stop_train_i]
+        rh_train_sig = self.save_states_rh_grf[self.save_trot_i:self.save_stop_train_i]
+        rf_train_sig = self.save_states_rf_grf[self.save_trot_i:self.save_stop_train_i]
+        lh_cl_sig = self.save_states_lh_grf[self.save_stop_train_i:self.save_start_test_i]
+        lf_cl_sig = self.save_states_lf_grf[self.save_stop_train_i:self.save_start_test_i]
+        rh_cl_sig = self.save_states_rh_grf[self.save_stop_train_i:self.save_start_test_i]
+        rf_cl_sig = self.save_states_rf_grf[self.save_stop_train_i:self.save_start_test_i]
+        lh_test_sig = self.save_states_lh_grf[self.save_start_test_i:]
+        lf_test_sig = self.save_states_lf_grf[self.save_start_test_i:]
+        rh_test_sig = self.save_states_rh_grf[self.save_start_test_i:]
+        rf_test_sig = self.save_states_rf_grf[self.save_start_test_i:]
+
+        # Maxs
+        max_lh_train = np.max(np.abs(lh_train_sig))
+        max_lf_train = np.max(np.abs(lf_train_sig))
+        max_rh_train = np.max(np.abs(rh_train_sig))
+        max_rf_train = np.max(np.abs(rf_train_sig))
+        max_lh_cl = np.max(np.abs(lh_cl_sig))
+        max_lf_cl = np.max(np.abs(lf_cl_sig))
+        max_rh_cl = np.max(np.abs(rh_cl_sig))
+        max_rf_cl = np.max(np.abs(rf_cl_sig))
+        max_lh_test = np.max(np.abs(lh_test_sig))
+        max_lf_test = np.max(np.abs(lf_test_sig))
+        max_rh_test = np.max(np.abs(rh_test_sig))
+        max_rf_test = np.max(np.abs(rf_test_sig))
+        max_train = max(max_lh_train, max_lf_train, max_rh_train, max_rf_train)
+        max_cl = max(max_lh_cl, max_lf_cl, max_rh_cl, max_rf_cl)
+        max_test = max(max_lh_test, max_lf_test, max_rh_test, max_rf_test)
+
+        # Locomotion Freqs
+        lh_train_freq = self._get_freq(lh_train_sig)
+        lf_train_freq = self._get_freq(lf_train_sig)
+        rh_train_freq = self._get_freq(rh_train_sig)
+        rf_train_freq = self._get_freq(rf_train_sig)
+        lh_cl_freq = self._get_freq(lh_cl_sig)
+        lf_cl_freq = self._get_freq(lf_cl_sig)
+        rh_cl_freq = self._get_freq(rh_cl_sig)
+        rf_cl_freq = self._get_freq(rf_cl_sig)
+        lh_test_freq = self._get_freq(lh_test_sig)
+        lf_test_freq = self._get_freq(lf_test_sig)
+        rh_test_freq = self._get_freq(rh_test_sig)
+        rf_test_freq = self._get_freq(rf_test_sig)
+
+        # Steps number
+        lh_train_steps = lh_train_freq * (self.t_start_cl - self.save_states_t_trot)
+        lf_train_steps = lf_train_freq * (self.t_start_cl - self.save_states_t_trot)
+        rh_train_steps = rh_train_freq * (self.t_start_cl - self.save_states_t_trot)
+        rf_train_steps = rf_cl_freq * (self.t_start_cl - self.save_states_t_trot)
+        lh_cl_steps = lh_cl_freq * (self.t_stop_cl - self.t_start_cl)
+        lf_cl_steps = lf_cl_freq * (self.t_stop_cl - self.t_start_cl)
+        rh_cl_steps = rh_cl_freq * (self.t_stop_cl - self.t_start_cl)
+        rf_cl_steps = rf_cl_freq * (self.t_stop_cl - self.t_start_cl)
+        lh_test_steps = lh_test_freq * (self.t_sim - self.t_stop_cl)
+        lf_test_steps = lf_test_freq * (self.t_sim - self.t_stop_cl)
+        rh_test_steps = rh_test_freq * (self.t_sim - self.t_stop_cl)
+        rf_test_steps = rf_test_freq * (self.t_sim - self.t_stop_cl)
+
+        # Steps length
+        lh_train_step_len = train_dist / lh_train_steps
+        lf_train_step_len = train_dist / lf_train_steps
+        rh_train_step_len = train_dist / rh_train_steps
+        rf_train_step_len = train_dist / rf_train_steps
+        lh_cl_step_len = cl_dist / lh_cl_steps
+        lf_cl_step_len = cl_dist / lf_cl_steps
+        rh_cl_step_len = cl_dist / rh_cl_steps
+        rf_cl_step_len = cl_dist / rf_cl_steps
+        lh_test_step_len = test_dist / lh_test_steps
+        lf_test_step_len = test_dist / lf_test_steps
+        rh_test_step_len = test_dist / rh_test_steps
+        rf_test_step_len = test_dist / rf_test_steps
+
+        grf_stats = {"train_grf_max": max_train, "cl_grf_max": max_cl, "test_grf_max": max_test,
+                     "train_lh_grf_max": max_lh_train, "train_lf_grf_max": max_lf_train,
+                     "train_rh_grf_max": max_rh_train, "train_rf_grf_max": max_rf_train,
+                     "cl_lh_grf_max": max_lh_cl, "cl_lf_grf_max": max_lf_cl,
+                     "cl_rh_grf_max": max_rh_cl, "cl_rf_grf_max": max_rf_cl,
+                     "test_lh_grf_max": max_lh_test, "test_lf_grf_max": max_lf_test,
+                     "test_rh_grf_max": max_rh_test, "test_rf_grf_max": max_rf_test,
+                     "train_lh_grf_freq": lh_train_freq, "train_lf_grf_freq": lf_train_freq,
+                     "train_rh_grf_freq": rh_train_freq, "train_rf_grf_freq": rf_train_freq,
+                     "cl_lh_grf_freq": lh_cl_freq, "cl_lf_grf_freq": lf_cl_freq,
+                     "cl_rh_grf_freq": rh_cl_freq, "cl_rf_grf_freq": rf_cl_freq,
+                     "test_lh_grf_freq": lh_test_freq, "test_lf_grf_freq": lf_test_freq,
+                     "test_rh_grf_freq": rh_test_freq, "test_rf_grf_freq": rf_test_freq,
+                     "train_lh_grf_steps": lh_train_steps, "train_lf_grf_steps": lf_train_steps,
+                     "train_rh_grf_steps": rh_train_steps, "train_rf_grf_steps": rf_train_steps,
+                     "cl_lh_grf_steps": lh_cl_steps, "cl_lf_grf_steps": lf_cl_steps,
+                     "cl_rh_grf_steps": rh_cl_steps, "cl_rf_grf_steps": rf_cl_steps,
+                     "test_lh_grf_steps": lh_test_steps, "test_lf_grf_steps": lf_test_steps,
+                     "test_rh_grf_steps": rh_test_steps, "test_rf_grf_steps": rf_test_steps,
+                     "train_lh_grf_step_len": lh_train_step_len, "train_lf_grf_step_len": lf_train_step_len,
+                     "train_rh_grf_step_len": rh_train_step_len, "train_rf_grf_step_len": rf_train_step_len,
+                     "cl_lh_grf_step_len": lh_cl_step_len, "cl_lf_grf_step_len": lf_cl_step_len,
+                     "cl_rh_grf_step_len": rh_cl_step_len, "cl_rf_grf_step_len": rf_cl_step_len,
+                     "test_lh_grf_step_len": lh_test_step_len, "test_lf_grf_step_len": lf_test_step_len,
+                     "test_rh_grf_step_len": rh_test_step_len, "test_rf_grf_step_len": rf_test_step_len
+                    }
+
+        return grf_stats
+
+    def _get_freq(self, sig):
+
+        win = sig * ssig.blackmanharris(len(sig))
+        dc_bias = int(self.time_step * len(win))
+        f = np.fft.rfft(win)
+        f[0:dc_bias] = 0.01  # remove frequencies lower than 1Hz to remove DC
+        i = np.argmax(np.abs(f))
+        true_i = parabolic(np.log(np.abs(f)), i)[0]
+        return 1 / self.time_step * true_i / len(win)
 
     def _start_plotter(self):
 

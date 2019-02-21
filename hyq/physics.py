@@ -114,6 +114,10 @@ class HyQSim(threading.Thread):
         self.hyq_phi = 0
         self.hyq_theta = 0
         self.hyq_psi = 0
+        self.hyq_lf_grf = 0
+        self.hyq_rf_grf = 0
+        self.hyq_lh_grf = 0
+        self.hyq_rh_grf = 0
         self.hyq_fall = False
         self.hyq_power = 0
         self.lpf_power = None
@@ -504,6 +508,13 @@ class HyQSim(threading.Thread):
 
         return copy.deepcopy(self.hyq_power)
 
+    def get_hyq_grf(self):
+
+        return copy.deepcopy(self.hyq_lh_grf), \
+               copy.deepcopy(self.hyq_lf_grf), \
+               copy.deepcopy(self.hyq_rh_grf), \
+               copy.deepcopy(self.hyq_rf_grf)
+
     def get_hyq_phi_theta_psi(self):
 
         return copy.deepcopy(self.hyq_phi), \
@@ -650,6 +661,10 @@ class HyQSim(threading.Thread):
             self.hyq_x = msg.base[3].position
             self.hyq_y = msg.base[4].position
             self.hyq_z = msg.base[5].position
+            self.hyq_lf_grf = msg.contacts[0].wrench.force.z
+            self.hyq_rf_grf = msg.contacts[1].wrench.force.z
+            self.hyq_lh_grf = msg.contacts[2].wrench.force.z
+            self.hyq_rh_grf = msg.contacts[3].wrench.force.z
             if not self.hyq_fall and self.trot_started:
                 if self.hyq_z < 0.35 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
                     print " [Physics]   The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
