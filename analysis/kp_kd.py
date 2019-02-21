@@ -19,7 +19,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-def plot_mem(data):
+def plot_kpkd(data):
 
     # Get data
     field_x = 'physics_init_impedance'
@@ -30,14 +30,15 @@ def plot_mem(data):
     # Plot figure
     plt.figure(figsize=(10, 8), dpi=80)
     for j in range(len(data[3])):
-        plt.plot(data[0], data[1][:, j], linestyle=get_lines(j),
-                 linewidth=2, color=get_cols(j),
+        plt.plot(data[0], data[1][:, j], linestyle=plot_metrics.get_lines(j),
+                 linewidth=2, color=plot_metrics.get_cols(j),
                  label=str(field_z).replace("_", " ") + " = " +
                        str(data[3][j]))
         plt.fill_between(data[0],
                          data[1][:, j] - data[2][:, j] / 5.0,
                          data[1][:, j] + data[2][:, j] / 5.0,
-                         alpha=0.1, edgecolor=get_cols(j), facecolor=get_cols(j))
+                         alpha=0.1, edgecolor=plot_metrics.get_cols(j),
+                         facecolor=plot_metrics.get_cols(j))
         plt.title((str(field_y) + " depending on " + str(field_x) +
                    " with different " + str(field_z)).replace("_", " "))
     plt.legend()
@@ -46,5 +47,5 @@ def plot_mem(data):
 
 if __name__ == "__main__":
 
-    data, data_config_fields = plot_metrics.get_data("/home/gurbain/docker_sim/experiments/mem")
-    plot_mem_nl(data)
+    data, data_config_fields = plot_metrics.get_data("/home/gurbain/docker_sim/experiments/kpkd")
+    plot_kpkd(data)

@@ -10,7 +10,7 @@ DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
 if __name__ == '__main__':
 
     # Create a docker task manager
-    task_manager = cluster.Sequential(n_proc=1)
+    task_manager = cluster.Sequential(n_proc=10)
 
     # Create a list of experiments
     exp_list = []

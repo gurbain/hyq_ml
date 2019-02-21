@@ -2,7 +2,7 @@
 
 # HyQ
 sudo apt-get install -y git python-dateutil python-pip 
-sudo pip install docker
+sudo pip install docker numpy
 git clone http://github.com/gurbain/hyq_ml
 cd hyq_ml/docker/ && ./build.sh
 
