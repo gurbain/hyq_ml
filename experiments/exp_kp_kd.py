@@ -27,7 +27,7 @@ if __name__ == '__main__':
                 # Without proprioceptive
                 config2 = ConfigParser.ConfigParser()
                 config2.read(DEF_CONFIG)
-                config1.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
+                config2.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
                 config2.set("Simulation", "inputs", "['bias', 'grf']")
 
                 # Add it to the experiment list

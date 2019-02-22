@@ -59,7 +59,6 @@ class FORCE(object):
         if self.lpf:
             self.lpf_out = processing.LowPassFilter(fc=lpf_fc, ts=lpf_ts, ord=lpf_ord)
         self.err_window = err_window
-        self.td = None
 
         # ALGO DATA
         self.w = None

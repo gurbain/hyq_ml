@@ -84,7 +84,7 @@ def get_data(folder):
     changing_config = []
     i = 0
     for a, b in tqdm(itertools.combinations(config_data, 2)):
-        if i > 10000000:
+        if i > 300000:
             break
         for key, value in a.iteritems():
             if key in b:
@@ -106,6 +106,9 @@ def get_data(folder):
                 d[key] = float(c)
             else:
                 d[key] = str(c)
+
+    # Add missing fields and cleanup others
+    clean_data(data)
 
     return data, changing_config
 
@@ -167,6 +170,49 @@ def get_fields(data, config_fields, conf):
     return f_x, f_y, f_z
 
 
+def clean_data(data):
+
+    for d in data:
+        d["test_grf_steps"] = (d["test_lh_grf_steps"] + d["test_lf_grf_steps"] +
+                               d["test_rf_grf_steps"] + d["test_rh_grf_steps"]) / 4
+
+        d["test_grf_step_len"] = (d["test_lh_grf_step_len"] + d["test_lf_grf_step_len"] +
+                                  d["test_rf_grf_step_len"] + d["test_rh_grf_step_len"]) / 4
+
+        d["train_grf_steps"] = (d["train_lh_grf_steps"] + d["train_lf_grf_steps"] +
+                               d["train_rf_grf_steps"] + d["train_rh_grf_steps"]) / 4
+
+        d["train_grf_step_len"] = (d["train_lh_grf_step_len"] + d["train_lf_grf_step_len"] +
+                                  d["train_rf_grf_step_len"] + d["train_rh_grf_step_len"]) / 4
+
+        for k in d.keys():
+            if "roll_range" in k or "pitch_range" in k:
+                d[k] = float(d[k]) % (2 * np.pi)
+
+            if "physics_init_impedance" == k:
+                imp = eval(d["physics_init_impedance"])
+                if imp is None:
+                    d["physics_kp"] = np.nan
+                    d["physics_kd"] = np.nan
+                else:
+                    d["physics_kp"] = (imp[0] + imp[2] + imp[4]) / 3
+                    d["physics_kd"] = (imp[1] + imp[3] + imp[5]) / 3
+
+        d["diff_dist"] = abs(d["test_dist"] - d["train_dist"])
+        d["diff_speed"] = abs(d["test_speed"] - d["train_speed"])
+        d["diff_nrmse"] = abs(d["test_nrmse"] - d["train_nrmse"])
+        d["diff_x_speed"] = abs(d["test_x_speed"] - d["train_x_speed"])
+        d["diff_y_speed"] = abs(d["test_y_speed"] - d["train_y_speed"])
+        d["diff_power"] = abs(d["test_power"] - d["train_power"])
+        d["diff_COT"] = abs(d["test_power"] - d["train_power"])
+        d["diff_grf_step_len"] = abs(d["test_grf_step_len"] - d["train_grf_step_len"])
+        d["diff_grf_steps"] = abs(d["test_grf_steps"] - d["train_grf_steps"])
+        d["diff_grf_max"] = abs(d["test_grf_max"] - d["train_grf_max"])
+        d["diff_z_range"] = abs(d["test_z_range"] - d["train_z_range"])
+        d["diff_pitch_range"] = abs(d["test_pitch_range"] - d["train_pitch_range"])
+        d["diff_roll_range"] = abs(d["test_roll_range"] - d["train_roll_range"])
+
+
 def get_graph_data(data, field_x, field_y, field_z):
 
     if field_z != "No Field":
@@ -189,7 +235,7 @@ def get_graph_data(data, field_x, field_y, field_z):
         y_av = np.nanmean(y_val, axis=2)
         y_std = np.nanstd(y_val, axis=2)
 
-        return x_set, y_av, y_std, z_set
+        return np.array(x_set), y_av, y_std, z_set
 
     else:
         x_list = [d[field_x] for d in data]
