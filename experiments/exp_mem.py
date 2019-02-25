@@ -3,7 +3,7 @@ import numpy as np
 import random
 
 from hyq import cluster
-
+from hyq.utils import randomly
 
 DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
 
@@ -16,15 +16,15 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(10):
-        for n in random.shuffle(range(0, 100, 40)):
-            for t in radom.shuffle(range(1, 80, 1)):
+        for n in randomly(range(0, 100, 40)):
+            for t in radomly(range(1, 80, 1)):
 
                 config1 = ConfigParser.ConfigParser()
                 config1.read(DEF_CONFIG)
                 config1.set("Force", "delay_line_n", str(t))
                 config1.set("Force", "delay_line_step", "1")
                 config1.set("Physics", "noise", str(n))
-                config2.set("Simulation", "inputs", "['bias', 'grf']")
+                config1.set("Simulation", "inputs", "['bias', 'grf']")
 
                 config2 = ConfigParser.ConfigParser()
                 config2.read(DEF_CONFIG)

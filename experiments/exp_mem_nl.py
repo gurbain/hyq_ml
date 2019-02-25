@@ -3,6 +3,7 @@ import numpy as np
 import random
 
 from hyq import cluster
+from hyq.utils import randomly
 
 
 DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
@@ -16,9 +17,9 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(7):
-        for kp in random.shuffle([50, 100, 250]):
-            for l in random.shuffle(range(1, 100, 5)):
-                for t in random.shuffle(range(1, 60, 2)):
+        for kp in randomly([50, 100, 250]):
+            for l in randomly(range(1, 100, 5)):
+                for t in randomly(range(1, 60, 2)):
 
                     # Open the config file and retrieve the data
                     config1 = ConfigParser.ConfigParser()
@@ -26,7 +27,7 @@ if __name__ == '__main__':
                     config1.set("Force", "delay_line_n", str(t))
                     config1.set("Force", "delay_line_step", "1")
                     config1.set("Force", "elm_n", str(l))
-                    config2.set("Simulation", "inputs", "['bias', 'grf']")
+                    config1.set("Simulation", "inputs", "['bias', 'grf']")
                     config1.set("Physics", "init_impedance", str([kp, kp/10, kp, kp/10, kp, kp/10]))
 
                     config2 = ConfigParser.ConfigParser()
