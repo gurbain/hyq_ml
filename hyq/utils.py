@@ -99,11 +99,6 @@ def nrmse(arr1, arr2):
 
     return rmse / (max_val - min_val)
 
-def randomly(seq):
-    shuffled = list(seq)
-    random.shuffle(shuffled)
-    return iter(shuffled)
-
 class Timeout():
     """Timeout class using ALARM signal."""
 

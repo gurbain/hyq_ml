@@ -3,10 +3,15 @@ import numpy as np
 import random
 
 from hyq import cluster
-from hyq.utils import randomly
 
 
 DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
+
+
+def randomly(seq):
+    shuffled = list(seq)
+    random.shuffle(shuffled)
+    return iter(shuffled)
 
 
 if __name__ == '__main__':

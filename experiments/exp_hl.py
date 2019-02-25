@@ -1,10 +1,17 @@
 import ConfigParser
 import numpy as np
+import random
 
 from hyq import cluster
 
 
 DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
+
+
+def randomly(seq):
+    shuffled = list(seq)
+    random.shuffle(shuffled)
+    return iter(shuffled)
 
 
 if __name__ == '__main__':
@@ -15,7 +22,7 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(15):
-        for n in range(0, 400, 40):
+        for n in randomly(range(0, 400, 40)):
 
             # Without high-level inputs
             config1 = ConfigParser.ConfigParser()
