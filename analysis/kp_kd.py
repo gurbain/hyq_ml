@@ -22,7 +22,7 @@ plt.rc('figure', autolayout=True)
 FOLDER = "/home/gurbain/docker_sim/experiments/kpkd"
 
 
-def select_data(data, type_sel="with_joint"):
+def select_data(data, type_sel="no_joint"):
 
     new_data = []
     i = 0
@@ -68,13 +68,12 @@ def plot_mem(data):
 
     field_x = 'physics_kp'
     field_z = 'physics_kd'
-    fields_y = ["test_nrmse", "test_x_speed", "test_y_speed", "test_power",
+    fields_y = ["test_nrmse", "test_x_speed", "train_x_speed", "test_y_speed",
                 "test_z_range", "test_pitch_range", "test_roll_range", "test_COT",
                 "test_grf_step_len", "test_grf_max", "test_grf_steps", "train_average_computation_time",
                 "diff_nrmse",  "diff_x_speed", "diff_y_speed", "diff_power",
                 "diff_z_range", "diff_pitch_range", "diff_roll_range", "diff_COT",
-                "diff_grf_step_len", "diff_grf_max", "diff_grf_steps"
-
+                "diff_grf_step_len", "diff_grf_max", "diff_grf_steps", "test_power"
               ]
 
     # Plot figure

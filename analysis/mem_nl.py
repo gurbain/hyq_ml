@@ -19,11 +19,12 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 MIN_DL = 0
-MAX_DL = 20
+MAX_DL = 35
 MIN_ELM = 0
 MAX_ELM = 80
-PHYS_REG = 50
-COMPLIANCE = 100
+PHYS_REG = 0
+COMPLIANCE = 50
+FOLDER = "/home/gurbain/docker_sim/experiments/mem_nl"
 
 
 def get_compliance_vals(data):
@@ -35,16 +36,32 @@ def get_compliance_vals(data):
     return sorted(compliance_list)
 
 
-def sort_data(data):
+def select_data(data, type_sel="no_joint"):
 
     new_data = []
+    if type_sel == "with_joint":
+        for d in data:
+            if 'joints' in eval(d['simulation_inputs']):
+                new_data.append(d)
+
+    if type_sel == "no_joint":
+        for d in data:
+            if 'joints' not in eval(d['simulation_inputs']):
+                new_data.append(d)
+
+    return new_data
+
+
+def sort_data(data):
+
+    data = select_data(data)
+    new_data = []
     for d in data:
-        if float(d['physics_noise']) == PHYS_REG:
+        # if float(d['physics_noise']) == PHYS_REG:
             if MIN_DL < int(d['force_delay_line_n']) < MAX_DL and MIN_ELM < int(d['force_elm_n']) < MAX_ELM:
                 if eval(d['physics_init_impedance'])[0] == COMPLIANCE:
-                    if not bool(d["ground_fall"]):
-                        if not bool(d['tilt_fall']):
-                            new_data.append(d)
+                    if not bool(d["test_fall"]) or bool(d["cl_fall"]):
+                        new_data.append(d)
 
     print "Sorted data length = " + str(len(new_data))
     if len(new_data) == 0:
@@ -253,16 +270,11 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
-            folder, default_conf = plot_metrics.get_folder()
-            data, data_config_fields = plot_metrics.get_data(folder)
-            with open(os.path.join(os.path.dirname(folder), "mem_nl.pkl"), "wb") as f:
+            data, data_config_fields = plot_metrics.get_data(FOLDER)
+            with open(os.path.join(FOLDER, "mem_nl.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()
 
-        if sys.argv[1] == "target":
-            [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "mem_nl.pkl", "rb"))
-            plot_mem_nl(data, phase="train")
-            exit()
-
-    [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "mem_nl.pkl", "rb"))
+    [data, changing_config] = pickle.load(open(os.path.join(FOLDER, "mem_nl.pkl"), "rb"))
+    print changing_config
     plot_mem_nl(data)

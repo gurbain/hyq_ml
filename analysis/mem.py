@@ -22,14 +22,15 @@ plt.rc('figure', autolayout=True)
 FOLDER = "/home/gurbain/docker_sim/experiments/mem"
 
 
-def select_data(data, type_sel="with_joint"):
+def select_data(data, type_sel="no_joint"):
 
     new_data = []
     i = 0
     if type_sel == "with_joint":
         for d in data:
             if 'joints' in eval(d['simulation_inputs']):
-                if not bool(d["test_fall"]) or bool(d["cl_fall"]):
+                # if not bool(d["test_fall"]) or bool(d["cl_fall"]):
+                if 0 < d["physics_noise"] < 80:
                     i += 1
                     new_data.append(d)
 
@@ -91,9 +92,9 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
             data, data_config_fields = plot_metrics.get_data(FOLDER)
-            with open(os.path.join(os.path.dirname(FOLDER), "mem.pkl"), "wb") as f:
+            with open(os.path.join(FOLDER, "mem.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()
 
-    [data, changing_config] = pickle.load(open(os.path.join(os.path.dirname(FOLDER), "mem.pkl"), "rb"))
+    [data, changing_config] = pickle.load(open(os.path.join(FOLDER, "mem.pkl"), "rb"))
     plot_mem(data)
