@@ -15,26 +15,16 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(10):
-        for kp in np.logspace(1, 3, 20):
-            for kd in np.logspace(-1, 1.4, 5):
+        for kp in np.logspace(1, 3, 30):
+            for kd in np.logspace(-2, 2, 30):
 
                 # Open the config file and retrieve the data
                 config1 = ConfigParser.ConfigParser()
                 config1.read(DEF_CONFIG)
-                config1.set("Force", "delay_line_step", "1")
                 config1.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
-                config1.set("Simulation", "inputs", "['bias', 'grf']")
-
-                # Without proprioceptive
-                config2 = ConfigParser.ConfigParser()
-                config2.read(DEF_CONFIG)
-                config1.set("Force", "delay_line_step", "3")
-                config2.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
-                config2.set("Simulation", "inputs", "['bias', 'grf']")
 
                 # Add it to the experiment list
                 exp_list.append(config1)
-                exp_list.append(config2)
 
     # Process all in parallel
     exp_res_dirs = task_manager.process(exp_list)

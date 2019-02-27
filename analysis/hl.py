@@ -19,46 +19,36 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FOLDER = "/home/gurbain/docker_sim/experiments/mem"
+FOLDER = "/home/gurbain/docker_sim/experiments/hl"
 
 
-def select_data(data):
+def select_data(data, sel="grf"):
 
     new_data = []
     for d in data:
-        #if not bool(d["test_fall"]) or bool(d["cl_fall"]):
-            if d["force_delay_line_step"] == 1:
-                new_data.append(d)
-
-    print len(new_data)
+        if sel == "grf" and eval(d["simulation_inputs"]) == ["bias", "grf"]:
+            new_data.append(d)
+        if sel == 'grf + joints' and eval(d["simulation_inputs"]) == ["bias", "grf", "joints"]:
+            new_data.append(d)
+        if sel == 'grf + imu' and eval(d["simulation_inputs"]) == ["bias", "grf", "imu"]:
+            new_data.append(d)
+        if sel == "all" and eval(d["simulation_inputs"]) == ["bias", "grf", "joints", "imu"]:
+            new_data.append(d)
     return new_data
 
 
-def get_data_points(data):
-
-    return data
-
-
-def plot(ax, data, field_x, field_y, field_z):
+def plot(ax, data, field_x, field_y, field_z, label=None):
 
     data = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
-    for j in range(len(data[3])):
-        ax.plot(data[0], data[1][:, j], linestyle=plot_metrics.get_lines(j),
-                linewidth=2, color=plot_metrics.get_cols(j),
-                label=str(field_z).replace("_", " ") + " = " +
-                       str(data[3][j]))
-        ax.fill_between(data[0],
-                        data[1][:, j] - data[2][:, j] / 5.0,
-                        data[1][:, j] + data[2][:, j] / 5.0,
-                        alpha=0.1, edgecolor=plot_metrics.get_cols(j),
-                        facecolor=plot_metrics.get_cols(j))
-        ax.set_title(str(field_y))
+    ax.plot(data[0], data[1], linewidth=2, label=label)
+    ax.fill_between(data[0], data[1] - data[2] / 5.0, data[1] + data[2] / 5.0, alpha=0.1)
+    ax.set_title(str(field_y))
 
 
-def plot_mem(data):
+def plot_hl(data):
 
-    field_x = 'force_delay_line_n'
-    field_z = 'physics_noise'
+    field_x = 'physics_noise'
+    field_z = 'No Field'
     fields_y = ["test_nrmse", "test_speed", "test_x_speed", "test_y_speed",
                 "test_COT", "test_power", "train_average_computation_time", "test_grf_steps",
                 "test_z_range", "test_pitch_range", "test_roll_range", "test_grf_max",
@@ -68,11 +58,13 @@ def plot_mem(data):
               ]
 
     # Plot figure
-    fig_data = select_data(data)
     plt.figure(figsize=(80, 60), dpi=80)
     for i, f in enumerate(fields_y):
         ax = plt.subplot(6, 4, i+1)
-        plot(ax, fig_data, field_x, f, field_z)
+        #plot(ax, select_data(data, 'grf'), field_x, f, field_z, label='GRF')
+        plot(ax, select_data(data, 'grf + joints'), field_x, f, field_z, label='GRF + Joints')
+        #plot(ax, select_data(data, 'grf + imu'), field_x, f, field_z, label='GRF + IMU')
+        plot(ax, select_data(data, 'all'), field_x, f, field_z, label='GRF + Joint + IMU')
     plt.legend()
     plt.show()
 
@@ -83,9 +75,9 @@ if __name__ == "__main__":
         if sys.argv[1] == "process":
             data, data_config_fields = plot_metrics.get_data(FOLDER)
             print data_config_fields
-            with open(os.path.join(FOLDER, "mem.pkl"), "wb") as f:
+            with open(os.path.join(FOLDER, "hl.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()
 
-    [data, changing_config] = pickle.load(open(os.path.join(FOLDER, "mem.pkl"), "rb"))
-    plot_mem(data)
+    [data, changing_config] = pickle.load(open(os.path.join(FOLDER, "hl.pkl"), "rb"))
+    plot_hl(data)

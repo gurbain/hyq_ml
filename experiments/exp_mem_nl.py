@@ -24,7 +24,7 @@ if __name__ == '__main__':
     for i in range(7):
         for kp in randomly([50, 100, 250]):
             for l in randomly(range(1, 100, 5)):
-                for t in randomly(range(1, 60, 2)):
+                for t in randomly(range(1, 100, 2)):
 
                     # Open the config file and retrieve the data
                     config1 = ConfigParser.ConfigParser()
@@ -32,20 +32,10 @@ if __name__ == '__main__':
                     config1.set("Force", "delay_line_n", str(t))
                     config1.set("Force", "delay_line_step", "1")
                     config1.set("Force", "elm_n", str(l))
-                    config1.set("Simulation", "inputs", "['bias', 'grf']")
                     config1.set("Physics", "init_impedance", str([kp, kp/10, kp, kp/10, kp, kp/10]))
-
-                    config2 = ConfigParser.ConfigParser()
-                    config2.read(DEF_CONFIG)
-                    config2.set("Force", "delay_line_n", str(t))
-                    config2.set("Force", "delay_line_step", "3")
-                    config2.set("Force", "elm_n", str(l))
-                    config2.set("Simulation", "inputs", "['bias', 'grf']")
-                    config2.set("Physics", "init_impedance", str([kp, kp/10, kp, kp/10, kp, kp/10]))
 
                     # Add it to the experiment list
                     exp_list.append(config1)
-                    exp_list.append(config2)
 
     # Process all in parallel
     exp_res_dirs = task_manager.process(exp_list)

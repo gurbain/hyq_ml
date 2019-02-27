@@ -8,10 +8,10 @@
 ## This section includes all information about the simulation
 ## timeline
 [Timing]
-t_sim = 46
-t_train = 31
-t_start_cl = 16
-t_stop_cl = 31
+t_sim = 17
+t_train = 16
+t_start_cl = 15
+t_stop_cl = 16
 
 ## This section includes high-level parameters about the simulation
 ## execution
@@ -64,8 +64,8 @@ x_scaling = True
 y_scaling = False
 in_fct = lin
 out_fct = lin
-delay_line_n = 10
-delay_line_step = 3
+delay_line_n = 40
+delay_line_step = 1
 train_dropout_period = 10
 save_folder = None
 verbose = 2

@@ -22,39 +22,31 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(15):
-        for r in randomly(np.logspace(-5, 2, 16)):
+        for t in randomly(range(1, 100, 2)):
 
             # Without high-level inputs
             config1 = ConfigParser.ConfigParser()
             config1.read(DEF_CONFIG)
             config1.set("Simulation", "inputs", "['bias', 'grf', 'joints']")
-            config1.set("Force", "regularization", str(r))
-            config1.set("Force", "elm_n", "80")
-            config1.set("Force", "delay_line_n", "50")
+            config1.set("Force", "delay_line_n", str(t))
 
             # With high-level inputs
             config2 = ConfigParser.ConfigParser()
             config2.read(DEF_CONFIG)
             config2.set("Simulation", "inputs", "['bias', 'grf', 'joints', 'imu']")
-            config2.set("Force", "regularization", str(r))
-            config2.set("Force", "elm_n", "80")
-            config2.set("Force", "delay_line_n", "50")
+            config2.set("Force", "delay_line_n", str(t))
 
             # Without high-level inputs and joints
             config3 = ConfigParser.ConfigParser()
             config3.read(DEF_CONFIG)
             config3.set("Simulation", "inputs", "['bias', 'grf']")
-            config3.set("Force", "regularization", str(r))
-            config3.set("Force", "elm_n", "80")
-            config3.set("Force", "delay_line_n", "50")
+            config3.set("Force", "delay_line_n", str(t))
 
             # With high-level inputs and without joints
             config4 = ConfigParser.ConfigParser()
             config4.read(DEF_CONFIG)
             config4.set("Simulation", "inputs", "['bias', 'grf', 'imu']")
-            config4.set("Force", "regularization", str(r))
-            config4.set("Force", "elm_n", "80")
-            config4.set("Force", "delay_line_n", "50")
+            config4.set("Force", "delay_line_n", str(t))
 
             # Add it to the experiment list
             exp_list.append(config1)
