@@ -8,16 +8,15 @@
 ## This section includes all information about the simulation
 ## timeline
 [Timing]
-t_sim = 17
-t_train = 16
-t_start_cl = 15
-t_stop_cl = 16
+t_sim = 46
+t_train = 31
+t_start_cl = 16
+t_stop_cl = 31
 
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
 inputs = ["bias", "grf"]
-#, "joints", "imu"]
 time_step = 0.004
 trunk_cont_gains = []
 trunk_cont_it_period = 350

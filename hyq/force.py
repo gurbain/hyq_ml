@@ -55,6 +55,8 @@ class FORCE(object):
         self.dl_s = delay_line_step
         if self.dl_n > 1:
             self.td = processing.TimeDelay(num=self.dl_n, step=self.dl_s)
+        else:
+            self.td = None
         self.lpf = lpf
         if self.lpf:
             self.lpf_out = processing.LowPassFilter(fc=lpf_fc, ts=lpf_ts, ord=lpf_ord)
@@ -64,9 +66,6 @@ class FORCE(object):
         self.w = None
         self.p = None
         self.e = 1
-
-        self.pub = ros.Publisher("avant", Float32, queue_size=1)
-        self.pub2 = ros.Publisher("apres", Float32, queue_size=1)
 
     def printv(self, txt):
 
@@ -79,7 +78,7 @@ class FORCE(object):
 
     def delay_line(self, x=None):
         
-        if self.td:
+        if self.td is not None:
             x = self.td.transform(x)
         
         return x
@@ -164,9 +163,7 @@ class FORCE(object):
 
         # Low pass filtering
         if self.lpf:
-            self.pub.publish(y[0, 0])
             y = self.lpf_out.transform(np.array(y))
-            self.pub2.publish(y[0,0])
 
         # Neuronal function
         y = self.inv_neuron_fct(y, self.out_fct)
