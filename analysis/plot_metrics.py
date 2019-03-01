@@ -179,6 +179,12 @@ def clean_data(data):
         d["test_grf_step_len"] = (d["test_lh_grf_step_len"] + d["test_lf_grf_step_len"] +
                                   d["test_rf_grf_step_len"] + d["test_rh_grf_step_len"]) / 4
 
+        d["cl_grf_steps"] = (d["cl_lh_grf_steps"] + d["cl_lf_grf_steps"] +
+                               d["cl_rf_grf_steps"] + d["cl_rh_grf_steps"]) / 4
+
+        d["cl_grf_step_len"] = (d["cl_lh_grf_step_len"] + d["cl_lf_grf_step_len"] +
+                                  d["cl_rf_grf_step_len"] + d["cl_rh_grf_step_len"]) / 4
+
         d["train_grf_steps"] = (d["train_lh_grf_steps"] + d["train_lf_grf_steps"] +
                                d["train_rf_grf_steps"] + d["train_rh_grf_steps"]) / 4
 
@@ -186,6 +192,9 @@ def clean_data(data):
                                   d["train_rf_grf_step_len"] + d["train_rh_grf_step_len"]) / 4
 
         for k in d.keys():
+            if "y_speed" in k:
+                d[k] = abs(d[k])
+
             if "roll_range" in k or "pitch_range" in k:
                 d[k] = float(d[k]) % (2 * np.pi)
 

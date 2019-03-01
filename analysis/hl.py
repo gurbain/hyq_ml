@@ -19,7 +19,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FOLDER = "/home/gurbain/docker_sim/experiments/hl"
+FOLDER = "/home/gurbain/docker_sim/experiments/hl_mem"
 
 
 def select_data(data, sel="grf"):
@@ -47,7 +47,7 @@ def plot(ax, data, field_x, field_y, field_z, label=None):
 
 def plot_hl(data):
 
-    field_x = 'physics_noise'
+    field_x = 'force_delay_line_n'
     field_z = 'No Field'
     fields_y = ["test_nrmse", "test_speed", "test_x_speed", "test_y_speed",
                 "test_COT", "test_power", "train_average_computation_time", "test_grf_steps",
@@ -61,10 +61,10 @@ def plot_hl(data):
     plt.figure(figsize=(80, 60), dpi=80)
     for i, f in enumerate(fields_y):
         ax = plt.subplot(6, 4, i+1)
-        #plot(ax, select_data(data, 'grf'), field_x, f, field_z, label='GRF')
-        plot(ax, select_data(data, 'grf + joints'), field_x, f, field_z, label='GRF + Joints')
-        #plot(ax, select_data(data, 'grf + imu'), field_x, f, field_z, label='GRF + IMU')
-        plot(ax, select_data(data, 'all'), field_x, f, field_z, label='GRF + Joint + IMU')
+        plot(ax, select_data(data, 'grf'), field_x, f, field_z, label='GRF')
+        #plot(ax, select_data(data, 'grf + joints'), field_x, f, field_z, label='GRF + Joints')
+        plot(ax, select_data(data, 'grf + imu'), field_x, f, field_z, label='GRF + IMU')
+        #plot(ax, select_data(data, 'all'), field_x, f, field_z, label='GRF + Joint + IMU')
     plt.legend()
     plt.show()
 

@@ -21,9 +21,9 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(7):
+    for i in range(2):
         for kp in randomly([50, 100, 250]):
-            for l in randomly(range(1, 100, 5)):
+            for l in randomly(range(1, 120, 5)):
                 for t in randomly(range(1, 100, 2)):
 
                     # Open the config file and retrieve the data
