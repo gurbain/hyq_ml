@@ -21,11 +21,15 @@ plt.rc('figure', autolayout=True)
 
 class ELM(BaseEstimator, TransformerMixin):
 
-    def __init__(self, n_in, n_elm=20, fct="tanh"):
+    def __init__(self, n_in, n_elm=20, fct="tanh", scaling=True):
 
         self.n_in = n_in
         self.n_elm = n_elm
         self.fct = fct
+        self.scaling = scaling
+
+        if self.scaling:
+            self.scaler = MinMaxScaler((-1.5, 1.5))
 
         self.w = np.random.rand(self.n_elm, self.n_in) - 0.5
 
@@ -35,10 +39,18 @@ class ELM(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, x, y=None, **kwargs):
 
+        if self.scaling:
+            x = np.mat(x)
+            self.scaler.partial_fit(x)
+
         y = self.transform(x)
         return y
 
     def transform(self, x):
+
+        if self.scaling:
+            x = self.scaler.transform(x)
+            x = np.mat(x)
 
         y = (self.w * x.T).T
 

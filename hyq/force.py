@@ -16,7 +16,7 @@ class FORCE(object):
                  x_scaling=True, y_scaling=True, in_fct='lin', out_fct='lin',
                  delay_line_n=20, delay_line_step=2, train_dropout_period=50,
                  lpf=True, lpf_fc=5, lpf_ord=5, lpf_ts=0.04,
-                 elm=True, elm_n=50, elm_fct='tanh',
+                 elm=True, elm_n=50, elm_fct='tanh', elm_scaling=True,
                  save_folder="", verbose=2, random_state=12):
 
         # META PARAMETERS
@@ -35,6 +35,7 @@ class FORCE(object):
         # DATA PROCESSING
         self.x_scaling = x_scaling
         self.y_scaling = y_scaling
+        self.elm_scaling = elm_scaling
         self.elm = elm
         self.elm_in = None
         if self.elm:
@@ -83,12 +84,16 @@ class FORCE(object):
         
         return x
     
-    def non_linearities(self, x=None):
+    def non_linearities(self, x=None, fit=True):
 
         if self.elm:
             if self.elm_in is None:
-                self.elm_in = processing.ELM(n_in=x.shape[1], n_elm=self.elm_n, fct=self.elm_fct)
-            x = self.elm_in.transform(x)
+                self.elm_in = processing.ELM(n_in=x.shape[1], n_elm=self.elm_n,
+                                             fct=self.elm_fct, scaling=self.elm_scaling)
+            if fit:
+                x = self.elm_in.fit_transform(x)
+            else:
+                x = self.elm_in.transform(x)
 
         return x
 
@@ -127,19 +132,20 @@ class FORCE(object):
 
     def transform_ft(self, x=None, y=None):
 
+        # TRANSFORM
         if y is None:
             # Scaling
             if self.x_scaling:
                 x = np.mat(x)
-                self.x_scaler.partial_fit(x)
                 x = self.x_scaler.transform(x)
 
             # Processing
             x = np.mat(x)
             x = self.delay_line(x)
-            x = self.non_linearities(x)
+            x = self.non_linearities(x, fit=False)
             return self.neuron_fct(x, self.in_fct)
 
+        # FIT TRANSFORM
         # Scaling
         if self.x_scaling:
             x = np.mat(x)
@@ -154,7 +160,7 @@ class FORCE(object):
         x = np.mat(x)
         y = np.mat(y)
         x = self.delay_line(x)
-        x = self.non_linearities(x)
+        x = self.non_linearities(x, fit=True)
 
         # Neuronal function
         return self.neuron_fct(x, self.in_fct), self.neuron_fct(y, self.out_fct)

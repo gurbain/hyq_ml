@@ -221,13 +221,14 @@ class Simulation(object):
                                    elm=eval(self.config["Force"]["elm"]),
                                    elm_fct=self.config["Force"]["elm_fct"],
                                    elm_n=int(self.config["Force"]["elm_n"]),
+                                   elm_scaling=bool(self.config["Force"]["elm_scaling"]),
                                    lpf=eval(self.config["Force"]["lpf"]),
                                    lpf_fc=float(self.config["Force"]["lpc_fc"]),
                                    lpf_ts=float(self.config["Force"]["lpf_ts"]),
                                    lpf_ord=int(self.config["Force"]["lpf_ord"]),
                                    err_window=int(self.config["Force"]["err_window"]),
-                                   x_scaling=eval(self.config["Force"]["x_scaling"]),
-                                   y_scaling=eval(self.config["Force"]["y_scaling"]),
+                                   x_scaling=bool(self.config["Force"]["x_scaling"]),
+                                   y_scaling=bool(self.config["Force"]["y_scaling"]),
                                    in_fct=self.config["Force"]["in_fct"],
                                    out_fct=self.config["Force"]["out_fct"],
                                    delay_line_n=int(self.config["Force"]["delay_line_n"]),
@@ -368,7 +369,7 @@ class Simulation(object):
         if self.save_ctrl:
             self.save_ctrl_state.append(curr_state)
             self.save_ctrl_action.append(mix_action)
-        if self.save_metrics:
+        if self.save_states or self.save_metrics:
             self.save_action_target.append(tgt_action)
             if len(pred_action) == 8:
                 self.save_action_pred.append(pred_action)
@@ -541,14 +542,13 @@ class Simulation(object):
         if self.save_metrics:
             if self.t_train > 0 and not self.ol and self.t_start_cl < self.t_sim and \
                     self.save_start_test_i > self.save_stop_train_i > self.save_trot_i:
-                (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.t_hist[self.save_trot_i:],
-                                                                                   self.save_states_psi[self.save_trot_i:],
-                                                                                   self.save_stop_train_i,
-                                                                                   self.save_start_test_i)
-                (p_f, p_train_fft, p_test_fft, p_rms) = self._compute_diff_fft_sig(self.t_hist[self.save_trot_i:],
-                                                                                   self.save_states_phi[self.save_trot_i:],
-                                                                                   self.save_stop_train_i,
-                                                                                   self.save_start_test_i)
+                (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.save_states_psi)
+                (p_f, p_train_fft, p_test_fft, p_rms) = self._compute_diff_fft_sig(self.save_states_phi)
+                action_fft_rms = []
+                for h in range(len(self.save_action_pred[0])):
+                    res = self._compute_diff_fft_sig(np.array(self.save_action_pred)[:, h])
+                    action_fft_rms.append(res[3])
+
                 train_dist = math.sqrt((self.save_states_x[self.save_stop_train_i] -
                                         self.save_states_x[self.save_trot_i])**2 +
                                        (self.save_states_y[self.save_stop_train_i] -
@@ -649,7 +649,7 @@ class Simulation(object):
                                                      np.mat(self.save_action_pred[self.save_start_test_i:])),
                            "test_average_computation_time": np.mean(self.save_cont_time[self.save_start_test_i:]),
                            "test_fall": self.t_train < self.t_fall < self.t_sim and self.physics.hyq_fall,
-                           "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms,
+                           "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms, "action_fft_rms": action_fft_rms,
                            "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
                            "t_test": self.t_hist[-1] - self.t_hist[self.save_start_test_i],
@@ -703,13 +703,17 @@ class Simulation(object):
                                }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
 
-    def _compute_diff_fft_sig(self, t, sig, ind_stop_train, ind_start_test):
+    def _compute_diff_fft_sig(self, sig):
 
         # Find and interpolate vectors before and after training
-        sig1_fn = interp1d(t[0:ind_stop_train], sig[0:ind_stop_train])
+        ind_start_train = self.save_trot_i
+        ind_stop_train = self.save_stop_train_i
+        ind_start_test = self.save_start_test_i
+        t = self.t_hist
+        sig1_fn = interp1d(t[ind_start_train:ind_stop_train], sig[ind_start_train:ind_stop_train])
         sig2_fn = interp1d(t[ind_start_test:], sig[ind_start_test:])
-        t_max = min(t[ind_stop_train] - t[0], t[-1] - t[ind_start_test])
-        t_1 = np.linspace(t[20], t[0] + t_max - 1, 10000)
+        t_max = min(t[ind_stop_train] - t[ind_start_train], t[-1] - t[ind_start_test])
+        t_1 = np.linspace(t[20], t[ind_start_train] + t_max - 1, 10000)
         t_2 = np.linspace(t[ind_start_test+20], t[ind_start_test] + t_max - 1, 10000)
         sig1 = sig1_fn(t_1)
         sig2 = sig2_fn(t_2)
@@ -727,9 +731,10 @@ class Simulation(object):
         sig2_fft = np.fft.fft(sig2) / n
         sig2_fft = sig2_fft[range(n/2)]
 
-        f_max_eval = int(20 * period)  # 20 Hz
-        # plt.plot(frq[0:f_max_eval], abs(sig1_fft[0:f_max_eval]), label="RCF sig FFT")
-        # plt.plot(frq[0:f_max_eval], abs(sig2_fft[0:f_max_eval]), label="NN sig FFT")
+        f_max_eval = len(frq) - 1  # no limit
+        f_min_eval = int(0.2 * period)  # 0.2Hz to suppress DC component
+        # plt.plot(frq[f_min_eval:f_max_eval], abs(sig1_fft[f_min_eval:f_max_eval]), label="RCF sig FFT")
+        # plt.plot(frq[f_min_eval:f_max_eval], abs(sig2_fft[f_min_eval:f_max_eval]), label="NN sig FFT")
         # plt.xlabel('Freq (Hz)')
         # plt.ylabel('|Y(freq)|')
         # plt.legend()
@@ -737,15 +742,15 @@ class Simulation(object):
 
         # Compute RMS difference
         fft_rms_diff = 0
-        for (x, y) in zip(abs(sig1_fft[0:f_max_eval]), abs(sig2_fft[0:f_max_eval])):
+        for (x, y) in zip(abs(sig1_fft[f_min_eval:f_max_eval]), abs(sig2_fft[f_min_eval:f_max_eval])):
             fft_rms_diff += (x - y) ** 2
 
         # print "The RMS difference between the two FFT is: " + str(fft_rms_diff)
 
-        return (frq[0:f_max_eval],
-                abs(sig1_fft[0:f_max_eval]),
-                abs(sig2_fft[0:f_max_eval]),
-                math.sqrt(fft_rms_diff / len(sig1_fft[0:f_max_eval])))
+        return (frq[f_min_eval:f_max_eval],
+                abs(sig1_fft[f_min_eval:f_max_eval]),
+                abs(sig2_fft[f_min_eval:f_max_eval]),
+                math.sqrt(fft_rms_diff / len(sig1_fft[f_min_eval:f_max_eval])))
 
     def _compute_grf_stats(self, train_dist, cl_dist, test_dist):
 
