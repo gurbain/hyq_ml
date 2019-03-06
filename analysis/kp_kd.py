@@ -1,3 +1,4 @@
+import copy
 import os
 import numpy as np
 import pickle
@@ -8,6 +9,7 @@ import matplotlib.colors as cols
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 import plot_metrics
 
@@ -22,30 +24,66 @@ plt.rc('figure', autolayout=True)
 FOLDER = "/home/gurbain/docker_sim/experiments/kpkd"
 
 
-def select_data(data, type_sel="no_joint"):
+def select_data(data):
 
     new_data = []
-    i = 0
-    if type_sel == "with_joint":
-        for d in data:
-            if 'joints' in eval(d['simulation_inputs']):
-                if not bool(d["test_fall"]) or bool(d["cl_fall"]):
-                    i += 1
-                    new_data.append(d)
-
-    if type_sel == "no_joint":
-        for d in data:
-            if 'joints' not in eval(d['simulation_inputs']):
-                if not bool(d["test_fall"]) or bool(d["cl_fall"]):
-                    i += 1
-                    new_data.append(d)
+    for d in data:
+        if not bool(d["test_fall"]) or bool(d["cl_fall"]):
+            new_data.append(d)
 
     return new_data
 
 
-def get_data_points(data):
+def aggregate_falls(data):
 
-    return data
+    new_data = []
+    for d in data:
+        if bool(d["cl_fall"]):
+            d["test_fall"] = True
+        if bool(d["train_fall"]):
+            d["cl_fall"] = True
+            d["test_fall"] = True
+
+        new_data.append(d)
+
+    return new_data
+
+
+def get_fall_data(data, field_x, field_y, field_z):
+
+    data = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+
+    fall_x = []
+    fall_y = []
+    not_fall_x = []
+    not_fall_y = []
+    for i, x in enumerate(data[0]):
+        for j, y in enumerate(data[3]):
+            if data[1][i, j] > 0.5:
+                fall_x.append(x)
+                fall_y.append(y)
+            else:
+                not_fall_x.append(x)
+                not_fall_y.append(y)
+
+    return fall_x, fall_y, not_fall_x, not_fall_y
+
+
+def get_3d_data(data, field_x, field_y, field_z):
+
+    x_set, z_av_tab, z_std_tab, y_set = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    x = []
+    y = []
+    z_av = []
+    z_std = []
+    for i, xs in enumerate(x_set):
+        for j, ys in enumerate(y_set):
+            x.append(xs)
+            y.append(ys)
+            z_av.append(z_av_tab[i, j])
+            z_std.append(z_std_tab[i, j])
+
+    return x, y, z_av, z_std
 
 
 def plot(ax, data, field_x, field_y, field_z):
@@ -64,25 +102,79 @@ def plot(ax, data, field_x, field_y, field_z):
         ax.set_title(str(field_y))
 
 
-def plot_mem(data):
+def scatter_x_y(ax, data, field_x, field_y, field_z):
+
+    x, y, z_av, z_std = get_3d_data(data, field_x, field_y, field_z)
+    xi = np.logspace(1, 3, 1000)
+    yi = np.logspace(-2, 2, 1000)
+    xi, yi = np.meshgrid(xi, yi)
+    zi = griddata((x, y), z_av, (xi, yi), method='linear')
+    im = ax.imshow(zi, origin='lower',
+               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
+               interpolation='nearest', aspect='auto')
+    ax.set_xlabel('Stiffness [N.m/rad]')
+    ax.set_ylabel('Damping [N.m.s/rad]')
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_title(field_y.replace("_", " ").capitalize())
+
+    return im
+
+
+def plot_fall(ax, data, field_x, field_y, field_z):
+
+    xf, yf, xnf, ynf = get_fall_data(data, field_x, field_y, field_z)
+    ax.scatter(xf, yf, marker='x', facecolors=plot_metrics.get_red(), s=10)
+    ax.scatter(xnf, ynf, marker='o', facecolors=plot_metrics.get_green(), s=20)
+    ks = np.logspace(np.log10(min(min(xf), min(xnf))),
+                     np.log10(max(max(xf), max(xnf))), 100)
+    for j, kappa in enumerate([0.001, 0.01, 0.1, 1, 10]):
+        ax.plot(ks, kappa * np.sqrt(ks), linestyle=plot_metrics.get_lines(j),
+                linewidth=2, color=plot_metrics.get_cols(j),
+                label="Kappa = " + str(kappa))
+
+    ax.set_xlabel('Stiffness [N.m/rad]')
+    ax.set_ylabel('Damping [N.m.s/rad]')
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    if field_y == "train_fall":
+        ax.set_title("Training Falling Range")
+    elif field_y == "cl_fall":
+        ax.set_title("Closing Falling Range")
+    else:
+        ax.set_title("Test Falling Range")
+
+
+def plot_kpkd(data):
 
     field_x = 'physics_kp'
     field_z = 'physics_kd'
-    fields_y = ["test_nrmse", "test_x_speed", "train_x_speed", "test_y_speed",
-                "test_z_range", "test_pitch_range", "test_roll_range", "test_COT",
-                "test_grf_step_len", "test_grf_max", "test_grf_steps", "train_average_computation_time",
-                "diff_nrmse",  "diff_x_speed", "diff_y_speed", "diff_power",
-                "diff_z_range", "diff_pitch_range", "diff_roll_range", "diff_COT",
-                "diff_grf_step_len", "diff_grf_max", "diff_grf_steps", "test_power"
-              ]
+    fields_y_1 = ["fall", "speed", "z_range", "pitch_range", "roll_range"]
+    fields_y_2 = ["power", "COT", "grf_max", "grf_step_len", "grf_steps"]
 
-    # Plot figure
-    fig_data = select_data(data)
-    plt.figure(figsize=(80, 60), dpi=80)
-    for i, f in enumerate(fields_y):
-        ax = plt.subplot(6, 4, i+1)
-        plot(ax, fig_data, field_x, f, field_z)
-    plt.legend()
+    fig_data = aggregate_falls(data)
+    fig, axes = plt.subplots(nrows=len(fields_y_1), ncols=4, figsize=(12, 36), dpi=80,
+                             gridspec_kw={"width_ratios": [1, 1, 1, 0.05]})
+    for j, f in enumerate(fields_y_1):
+        for i, phase in enumerate(["train_", "cl_", "test_"]):
+            if f == "fall":
+                plot_fall(axes[j, i], fig_data, field_x, phase + f, field_z)
+            else:
+                im = scatter_x_y(axes[j, i], fig_data, field_x, phase + f, field_z)
+        if 'im' in locals():
+            fig.colorbar(im, cax=axes[j, 3])
+    plt.show()
+
+    fig, axes = plt.subplots(nrows=len(fields_y_2), ncols=4, figsize=(12, 36), dpi=60,
+                             gridspec_kw={"width_ratios": [1, 1, 1, 0.05]})
+    for j, f in enumerate(fields_y_2):
+        for i, phase in enumerate(["train_", "cl_", "test_"]):
+            if f == "fall":
+                plot_fall(axes[j, i], fig_data, field_x, phase + f, field_z)
+            else:
+                im = scatter_x_y(axes[j, i], fig_data, field_x, phase + f, field_z)
+        if 'im' in locals():
+            fig.colorbar(im, cax=axes[j, 3])
     plt.show()
 
 
@@ -96,4 +188,4 @@ if __name__ == "__main__":
             exit()
 
     [data, changing_config] = pickle.load(open(os.path.join(FOLDER, "kpkd.pkl"), "rb"))
-    plot_mem(data)
+    plot_kpkd(data)

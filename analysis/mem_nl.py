@@ -19,12 +19,12 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 MIN_DL = 1
-MAX_DL = 100
+MAX_DL = 120
 MIN_ELM = 0
-MAX_ELM = 100
+MAX_ELM = 120
 PHYS_REG = 0
-COMPLIANCE = 250
-FOLDER = "/home/gurbain/docker_sim/experiments/mem_nl_1"
+COMPLIANCE = 50
+FOLDER = "/home/gurbain/docker_sim/experiments/mem_nl"
 
 
 def get_compliance_vals(data):
@@ -58,7 +58,7 @@ def sort_data(data):
     new_data = []
     for d in data:
         # if float(d['physics_noise']) == PHYS_REG:
-            if MIN_DL < int(d['force_delay_line_n']) < MAX_DL and MIN_ELM < int(d['force_elm_n']) < MAX_ELM:
+            #if MIN_DL < int(d['force_delay_line_n']) < MAX_DL and MIN_ELM < int(d['force_elm_n']) < MAX_ELM:
                 if eval(d['physics_init_impedance'])[0] == COMPLIANCE:
                     #if not (bool(d["test_fall"]) or bool(d["cl_fall"]) or bool(d["train_fall"])):
                         new_data.append(d)
@@ -160,7 +160,7 @@ def plot_mem_nl(data, phase="test"):
                interpolation='nearest', aspect='auto',
                norm=cols.LogNorm(vmin=max(0.0001, min(z_av)), vmax=max(z_av)))
     # plt.plot(x, y, 'k.')
-    plt.colorbar()
+    #plt.colorbar()
     plt.title("STABILITY: Maximal Ground Force Reaction")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
@@ -177,7 +177,7 @@ def plot_mem_nl(data, phase="test"):
                interpolation='nearest', aspect='auto',
                norm=cols.LogNorm(vmin=max(0.0001, min(z_av)), vmax=max(z_av)))
     # plt.plot(x, y, 'k.')
-    plt.colorbar()
+    #plt.colorbar()
     plt.title("PERFORMANCE: Cost of Transport")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
@@ -194,7 +194,7 @@ def plot_mem_nl(data, phase="test"):
                interpolation='nearest', aspect='auto',
                norm=cols.LogNorm(vmin=max(0.0001, min(z_av)), vmax=max(z_av)))
     # plt.plot(x, y, 'k.')
-    plt.colorbar()
+    #plt.colorbar()
     plt.title("PERFORMANCE: Power Consumption")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')
@@ -211,7 +211,7 @@ def plot_mem_nl(data, phase="test"):
                interpolation='nearest', aspect='auto',
                norm=cols.LogNorm(vmin=max(0.0001, min(z_av)), vmax=max(z_av)))
     # plt.plot(x, y, 'k.')
-    plt.colorbar()
+    #plt.colorbar()
     plt.title("ACCURACY: Normalized RMS Error")
     plt.xlabel('Delay Line Size')
     plt.ylabel('ELM Size')

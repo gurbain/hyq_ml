@@ -7,6 +7,12 @@ from hyq import cluster
 DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
 
 
+def randomly(seq):
+    shuffled = list(seq)
+    random.shuffle(shuffled)
+    return iter(shuffled)
+
+
 if __name__ == '__main__':
 
     # Create a docker task manager
@@ -14,9 +20,9 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(10):
-        for kp in np.logspace(1, 3, 30):
-            for kd in np.logspace(-2, 2, 30):
+    for i in range(1):
+        for kp in randomly(np.logspace(0, 6, 28)):
+            for kd in randomly(np.logspace(-4, 4, 27)):
 
                 # Open the config file and retrieve the data
                 config1 = ConfigParser.ConfigParser()

@@ -28,6 +28,23 @@ def get_cols(i):
         return cols[i % len(cols)]
 
 
+def get_blue():
+
+    return get_cols(0)
+
+
+def get_red():
+    return get_cols(1)
+
+
+def get_green():
+    return get_cols(2)
+
+
+def get_yellow():
+    return get_cols(3)
+
+
 def get_lines(i):
 
     lines = ["-", "--", ":", "-."]
