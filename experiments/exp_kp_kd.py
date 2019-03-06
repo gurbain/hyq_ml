@@ -1,5 +1,6 @@
 import ConfigParser
 import numpy as np
+import random
 
 from hyq import cluster
 
