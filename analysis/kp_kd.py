@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pickle
 import sys
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, interp2d, interp1d
 
 import matplotlib.colors as cols
 import matplotlib.cm as cm
@@ -74,16 +74,14 @@ def get_3d_data(data, field_x, field_y, field_z):
     x_set, z_av_tab, z_std_tab, y_set = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
     x = []
     y = []
-    z_av = []
-    z_std = []
+    z = []
     for i, xs in enumerate(x_set):
         for j, ys in enumerate(y_set):
             x.append(xs)
             y.append(ys)
-            z_av.append(z_av_tab[i, j])
-            z_std.append(z_std_tab[i, j])
+            z.append(z_av_tab[i, j])
 
-    return x, y, z_av, z_std
+    return x, y, z
 
 
 def plot(ax, data, field_x, field_y, field_z):
@@ -104,18 +102,35 @@ def plot(ax, data, field_x, field_y, field_z):
 
 def scatter_x_y(ax, data, field_x, field_y, field_z):
 
-    x, y, z_av, z_std = get_3d_data(data, field_x, field_y, field_z)
-    xi = np.logspace(1, 3, 1000)
-    yi = np.logspace(-2, 2, 1000)
-    xi, yi = np.meshgrid(xi, yi)
-    zi = griddata((x, y), z_av, (xi, yi), method='linear')
-    im = ax.imshow(zi, origin='lower',
-               extent=[np.min(xi), np.max(xi), np.min(yi), np.max(yi)],
-               interpolation='nearest', aspect='auto')
+    x_set, z_av_tab, z_std_tab, y_set = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    if "grf_max" in field_y:
+        im = ax.pcolormesh(x_set, y_set, z_av_tab.T,
+                           norm=cols.LogNorm(vmin=z_av_tab.min(), vmax=z_av_tab.max()))
+    else:
+        im = ax.pcolormesh(x_set, y_set, z_av_tab.T)
+
+    # x, y, z = get_3d_data(data, field_x, field_y, field_z)
+    # logx = np.log10(x)
+    # logy = np.log10(y)
+    # logz = np.log10(z)
+    # f = interp2d(logx, logy, logz, kind="linear")
+    # xi = np.linspace(min(logx), max(logx), 100)
+    # yi = np.linspace(min(logy), max(logy), 100)
+    # zi = np.power(10, f(xi, yi))
+    # xi = np.power(10, xi)
+    # yi = np.power(10, yi)
+    # im = ax.pcolormesh(xi, yi, zi)
+    ks = np.logspace(np.log10(min(x_set)), np.log10(max(x_set)), 100)
+    for j, kappa in enumerate([0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1,
+                               1, 10, 100, 1000, 10000]):
+        ax.plot(ks, kappa * np.sqrt(ks), linestyle="--",
+                linewidth=1, color="k", label="Kappa = " + str(kappa))
+    ax.set_yscale('log')
+    ax.set_xscale('log')
+    ax.set_xlim([min(x_set), max(x_set)])
+    ax.set_ylim([min(y_set), max(y_set)])
     ax.set_xlabel('Stiffness [N.m/rad]')
     ax.set_ylabel('Damping [N.m.s/rad]')
-    ax.set_xscale("log")
-    ax.set_yscale("log")
     ax.set_title(field_y.replace("_", " ").capitalize())
 
     return im
@@ -128,15 +143,17 @@ def plot_fall(ax, data, field_x, field_y, field_z):
     ax.scatter(xnf, ynf, marker='o', facecolors=plot_metrics.get_green(), s=20)
     ks = np.logspace(np.log10(min(min(xf), min(xnf))),
                      np.log10(max(max(xf), max(xnf))), 100)
-    for j, kappa in enumerate([0.001, 0.01, 0.1, 1, 10]):
-        ax.plot(ks, kappa * np.sqrt(ks), linestyle=plot_metrics.get_lines(j),
-                linewidth=2, color=plot_metrics.get_cols(j),
-                label="Kappa = " + str(kappa))
+    for j, kappa in enumerate([0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1,
+                               1, 10, 100, 1000, 10000]):
+        ax.plot(ks, kappa * np.sqrt(ks), linestyle="--",
+                linewidth=1, color="k", label="Kappa = " + str(kappa))
 
     ax.set_xlabel('Stiffness [N.m/rad]')
     ax.set_ylabel('Damping [N.m.s/rad]')
     ax.set_xscale("log")
     ax.set_yscale("log")
+    ax.set_xlim([min(min(xf), min(xnf)), max(max(xf), max(xnf))])
+    ax.set_ylim([min(min(yf), min(ynf)), max(max(yf), max(ynf))])
     if field_y == "train_fall":
         ax.set_title("Training Falling Range")
     elif field_y == "cl_fall":
@@ -162,7 +179,8 @@ def plot_kpkd(data):
             else:
                 im = scatter_x_y(axes[j, i], fig_data, field_x, phase + f, field_z)
         if 'im' in locals():
-            fig.colorbar(im, cax=axes[j, 3])
+            if im is not None:
+                fig.colorbar(im, cax=axes[j, 3])
     plt.show()
 
     fig, axes = plt.subplots(nrows=len(fields_y_2), ncols=4, figsize=(12, 36), dpi=60,
@@ -174,7 +192,8 @@ def plot_kpkd(data):
             else:
                 im = scatter_x_y(axes[j, i], fig_data, field_x, phase + f, field_z)
         if 'im' in locals():
-            fig.colorbar(im, cax=axes[j, 3])
+            if im is not None:
+                fig.colorbar(im, cax=axes[j, 3])
     plt.show()
 
 

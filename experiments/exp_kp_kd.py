@@ -21,14 +21,14 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(1):
-        for kp in randomly(np.logspace(0, 6, 28)):
-            for kd in randomly(np.logspace(-4, 4, 27)):
+    for i in range(3):
+        for kp in randomly(np.logspace(0, 6, 60)):
+            for kd in randomly(np.logspace(-4, 4, 60)):
 
                 # Open the config file and retrieve the data
                 config1 = ConfigParser.ConfigParser()
                 config1.read(DEF_CONFIG)
-                config1.set("Physics", "init_impedance", str([kp, kd, kp, kd, kp, kd]))
+                config1.set("Physics", "init_impedance", str([150, 10, kp, kd, kp, kd]))
 
                 # Add it to the experiment list
                 exp_list.append(config1)
