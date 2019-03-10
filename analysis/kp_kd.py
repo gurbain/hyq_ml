@@ -1,17 +1,12 @@
-import copy
 import os
 import numpy as np
 import pickle
 import sys
-from scipy.interpolate import griddata, interp2d, interp1d
 
 import matplotlib.colors as cols
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
-from mpl_toolkits.axes_grid1 import ImageGrid
 
-import plot_metrics
+from hyq import analysis
 
 plt.style.use('fivethirtyeight')
 plt.rc('text', usetex=False)
@@ -24,11 +19,11 @@ plt.rc('figure', autolayout=True)
 FOLDER = "/home/gurbain/docker_sim/experiments/kpkd"
 
 
-def select_data(data):
+def select_data(data, phase="train_"):
 
     new_data = []
     for d in data:
-        if not bool(d["test_fall"]) or bool(d["cl_fall"]):
+        # if not bool(d[phase + "fall"]):
             new_data.append(d)
 
     return new_data
@@ -51,7 +46,7 @@ def aggregate_falls(data):
 
 def get_fall_data(data, field_x, field_y, field_z):
 
-    data = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    data = analysis.get_graph_data(data, field_x, field_y, field_z)
 
     fall_x = []
     fall_y = []
@@ -59,7 +54,7 @@ def get_fall_data(data, field_x, field_y, field_z):
     not_fall_y = []
     for i, x in enumerate(data[0]):
         for j, y in enumerate(data[3]):
-            if data[1][i, j] > 0.5:
+            if data[1][i, j] == 1.0:
                 fall_x.append(x)
                 fall_y.append(y)
             else:
@@ -71,7 +66,7 @@ def get_fall_data(data, field_x, field_y, field_z):
 
 def get_3d_data(data, field_x, field_y, field_z):
 
-    x_set, z_av_tab, z_std_tab, y_set = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    x_set, z_av_tab, z_std_tab, y_set = analysis.get_graph_data(data, field_x, field_y, field_z)
     x = []
     y = []
     z = []
@@ -86,26 +81,26 @@ def get_3d_data(data, field_x, field_y, field_z):
 
 def plot(ax, data, field_x, field_y, field_z):
 
-    data = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    data = analysis.get_graph_data(data, field_x, field_y, field_z)
     for j in range(len(data[3])):
-        ax.plot(data[0], data[1][:, j], linestyle=plot_metrics.get_lines(j),
-                linewidth=2, color=plot_metrics.get_cols(j),
+        ax.plot(data[0], data[1][:, j], linestyle=analysis.get_lines(j),
+                linewidth=2, color=analysis.get_cols(j),
                 label=str(field_z).replace("_", " ") + " = " +
                        str(data[3][j]))
         ax.fill_between(data[0],
                         data[1][:, j] - data[2][:, j] / 5.0,
                         data[1][:, j] + data[2][:, j] / 5.0,
-                        alpha=0.1, edgecolor=plot_metrics.get_cols(j),
-                        facecolor=plot_metrics.get_cols(j))
+                        alpha=0.1, edgecolor=analysis.get_cols(j),
+                        facecolor=analysis.get_cols(j))
         ax.set_title(str(field_y))
 
 
 def scatter_x_y(ax, data, field_x, field_y, field_z):
 
-    x_set, z_av_tab, z_std_tab, y_set = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
-    if "grf_max" in field_y:
+    x_set, z_av_tab, z_std_tab, y_set = analysis.get_graph_data(data, field_x, field_y, field_z)
+    if "grf_max" in field_y or "power" in field_y or "COT" in field_y:
         im = ax.pcolormesh(x_set, y_set, z_av_tab.T,
-                           norm=cols.LogNorm(vmin=z_av_tab.min(), vmax=z_av_tab.max()))
+                           norm=cols.LogNorm(vmin=max(0.0001, np.amin(z_av_tab)), vmax=np.amax(z_av_tab)))
     else:
         im = ax.pcolormesh(x_set, y_set, z_av_tab.T)
 
@@ -139,8 +134,8 @@ def scatter_x_y(ax, data, field_x, field_y, field_z):
 def plot_fall(ax, data, field_x, field_y, field_z):
 
     xf, yf, xnf, ynf = get_fall_data(data, field_x, field_y, field_z)
-    ax.scatter(xf, yf, marker='x', facecolors=plot_metrics.get_red(), s=10)
-    ax.scatter(xnf, ynf, marker='o', facecolors=plot_metrics.get_green(), s=20)
+    ax.scatter(xf, yf, marker='x', facecolors=analysis.get_red(), s=10)
+    ax.scatter(xnf, ynf, marker='o', facecolors=analysis.get_green(), s=20)
     ks = np.logspace(np.log10(min(min(xf), min(xnf))),
                      np.log10(max(max(xf), max(xnf))), 100)
     for j, kappa in enumerate([0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1,
@@ -154,6 +149,7 @@ def plot_fall(ax, data, field_x, field_y, field_z):
     ax.set_yscale("log")
     ax.set_xlim([min(min(xf), min(xnf)), max(max(xf), max(xnf))])
     ax.set_ylim([min(min(yf), min(ynf)), max(max(yf), max(ynf))])
+    ax.set_aspect('equal', 'datalim')
     if field_y == "train_fall":
         ax.set_title("Training Falling Range")
     elif field_y == "cl_fall":
@@ -177,7 +173,7 @@ def plot_kpkd(data):
             if f == "fall":
                 plot_fall(axes[j, i], fig_data, field_x, phase + f, field_z)
             else:
-                im = scatter_x_y(axes[j, i], fig_data, field_x, phase + f, field_z)
+                im = scatter_x_y(axes[j, i], select_data(fig_data, phase=phase), field_x, phase + f, field_z)
         if 'im' in locals():
             if im is not None:
                 fig.colorbar(im, cax=axes[j, 3])
@@ -190,7 +186,7 @@ def plot_kpkd(data):
             if f == "fall":
                 plot_fall(axes[j, i], fig_data, field_x, phase + f, field_z)
             else:
-                im = scatter_x_y(axes[j, i], fig_data, field_x, phase + f, field_z)
+                im = scatter_x_y(axes[j, i], select_data(fig_data, phase=phase), field_x, phase + f, field_z)
         if 'im' in locals():
             if im is not None:
                 fig.colorbar(im, cax=axes[j, 3])
@@ -201,7 +197,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
-            data, data_config_fields = plot_metrics.get_data(FOLDER)
+            data, data_config_fields = analysis.get_data(FOLDER)
             with open(os.path.join(FOLDER, "kpkd.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()

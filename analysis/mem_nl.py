@@ -9,7 +9,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
-import plot_metrics
+from hyq import analysis
 
 plt.style.use('fivethirtyeight')
 plt.rc('text', usetex=False)
@@ -87,8 +87,8 @@ def get_mem_nl_vals(data):
 
 def get_data(data, field):
 
-    x_set, z_av_tab, z_std_tab, y_set = plot_metrics.get_graph_data(data, 'force_delay_line_n',
-                                                                    field, 'force_elm_n')
+    x_set, z_av_tab, z_std_tab, y_set = analysis.get_graph_data(data, 'force_delay_line_n',
+                                                                field, 'force_elm_n')
     x = []
     y = []
     z_av = []
@@ -287,7 +287,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
-            data, data_config_fields = plot_metrics.get_data(FOLDER)
+            data, data_config_fields = analysis.get_data(FOLDER)
             with open(os.path.join(FOLDER, "mem_nl.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()

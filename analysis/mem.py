@@ -1,15 +1,10 @@
 import os
-import numpy as np
 import pickle
 import sys
-from scipy.interpolate import griddata
 
-import matplotlib.colors as cols
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 
-import plot_metrics
+from hyq import analysis
 
 plt.style.use('fivethirtyeight')
 plt.rc('text', usetex=False)
@@ -41,17 +36,17 @@ def get_data_points(data):
 
 def plot(ax, data, field_x, field_y, field_z):
 
-    data = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    data = analysis.get_graph_data(data, field_x, field_y, field_z)
     for j in range(len(data[3])):
-        ax.plot(data[0], data[1][:, j], linestyle=plot_metrics.get_lines(j),
-                linewidth=2, color=plot_metrics.get_cols(j),
+        ax.plot(data[0], data[1][:, j], linestyle=analysis.get_lines(j),
+                linewidth=2, color=analysis.get_cols(j),
                 label=str(field_z).replace("_", " ") + " = " +
                        str(data[3][j]))
         ax.fill_between(data[0],
                         data[1][:, j] - data[2][:, j] / 5.0,
                         data[1][:, j] + data[2][:, j] / 5.0,
-                        alpha=0.1, edgecolor=plot_metrics.get_cols(j),
-                        facecolor=plot_metrics.get_cols(j))
+                        alpha=0.1, edgecolor=analysis.get_cols(j),
+                        facecolor=analysis.get_cols(j))
         ax.set_title(str(field_y))
 
 
@@ -81,7 +76,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
-            data, data_config_fields = plot_metrics.get_data(FOLDER)
+            data, data_config_fields = analysis.get_data(FOLDER)
             print data_config_fields
             with open(os.path.join(FOLDER, "mem.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)

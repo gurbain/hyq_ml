@@ -196,6 +196,7 @@ class Simulation(object):
         self.inputs = eval(self.config["Simulation"]["inputs"])
 
         self.init_impedance = eval(self.config["Physics"]["init_impedance"])
+        print self.init_impedance, self.t_sim
         self.remote = eval(self.config["Physics"]["remote_server"])
         self.real_time = eval(self.config["Physics"]["real_time"])
         self.noise = float(self.config["Physics"]["noise"])

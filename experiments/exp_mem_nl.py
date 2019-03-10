@@ -21,10 +21,10 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(2):
-        for kp in randomly([50, 100, 250]):
-            for l in randomly(range(1, 120, 5)):
-                for t in randomly(range(1, 100, 2)):
+    for i in range(3):
+        for kp in randomly([75, 250, 4000]):
+            for l in randomly(range(1, 120, 6)):
+                for t in randomly(range(1, 100, 8)):
 
                     # Open the config file and retrieve the data
                     config1 = ConfigParser.ConfigParser()
@@ -32,7 +32,7 @@ if __name__ == '__main__':
                     config1.set("Force", "delay_line_n", str(t))
                     config1.set("Force", "delay_line_step", "1")
                     config1.set("Force", "elm_n", str(l))
-                    config1.set("Physics", "init_impedance", str([kp, kp/10, kp, kp/10, kp, kp/10]))
+                    config1.set("Physics", "init_impedance", str([150, 10, kp, 7.5, kp, 7.5]))
 
                     # Add it to the experiment list
                     exp_list.append(config1)

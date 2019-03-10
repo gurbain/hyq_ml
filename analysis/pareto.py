@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 import sys
 
-import plot_metrics
+from hyq import analysis
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
@@ -228,16 +228,16 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
-            folder, default_conf = plot_metrics.get_folder()
-            data, data_config_fields = plot_metrics.get_data(folder)
+            folder, default_conf = analysis.get_folder()
+            data, data_config_fields = analysis.get_data(folder)
             with open(os.path.join(os.path.dirname(folder), "pareto.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
             exit()
 
         else:
-            [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "pareto.pkl", "rb"))
+            [data, changing_config] = pickle.load(open(analysis.EXP_FOLDER + "pareto.pkl", "rb"))
             plot_pareto(data, phase=sys.argv[1])
             exit()
 
-    [data, changing_config] = pickle.load(open(plot_metrics.EXP_FOLDER + "pareto.pkl", "rb"))
+    [data, changing_config] = pickle.load(open(analysis.EXP_FOLDER + "pareto.pkl", "rb"))
     plot_pareto(data)

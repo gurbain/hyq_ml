@@ -1,15 +1,10 @@
 import os
-import numpy as np
 import pickle
 import sys
-from scipy.interpolate import griddata
 
-import matplotlib.colors as cols
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import matplotlib.gridspec as gridspec
 
-import plot_metrics
+from hyq import analysis
 
 plt.style.use('fivethirtyeight')
 plt.rc('text', usetex=False)
@@ -39,7 +34,7 @@ def select_data(data, sel="grf"):
 
 def plot(ax, data, field_x, field_y, field_z, label=None):
 
-    data = plot_metrics.get_graph_data(data, field_x, field_y, field_z)
+    data = analysis.get_graph_data(data, field_x, field_y, field_z)
     ax.plot(data[0], data[1], linewidth=2, label=label)
     ax.fill_between(data[0], data[1] - data[2] / 5.0, data[1] + data[2] / 5.0, alpha=0.1)
     ax.set_title(str(field_y))
@@ -73,7 +68,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1:
         if sys.argv[1] == "process":
-            data, data_config_fields = plot_metrics.get_data(FOLDER)
+            data, data_config_fields = analysis.get_data(FOLDER)
             print data_config_fields
             with open(os.path.join(FOLDER, "hl.pkl"), "wb") as f:
                 pickle.dump([data, data_config_fields], f, protocol=2)
