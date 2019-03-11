@@ -29,9 +29,9 @@ if __name__ == '__main__':
                     # Open the config file and retrieve the data
                     config1 = ConfigParser.ConfigParser()
                     config1.read(DEF_CONFIG)
-                    config1.set("Force", "delay_line_n", str(t))
+                    config1.set("Force", "delay_line_n", str(int(t)))
                     config1.set("Force", "delay_line_step", "1")
-                    config1.set("Force", "elm_n", str(l))
+                    config1.set("Force", "elm_n", str(int(l)))
                     config1.set("Physics", "init_impedance", str([150, 10, kp, 7.5, kp, 7.5]))
 
                     # Add it to the experiment list
