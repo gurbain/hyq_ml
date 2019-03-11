@@ -21,9 +21,9 @@ plt.rc('figure', autolayout=True)
 MIN_DL = 1
 MAX_DL = 120
 MIN_ELM = 0
-MAX_ELM = 120
+MAX_ELM = 100
 PHYS_REG = 0
-COMPLIANCE = 50
+COMPLIANCE = 75
 FOLDER = "/home/gurbain/docker_sim/experiments/mem_nl"
 
 
@@ -59,7 +59,7 @@ def sort_data(data):
     for d in data:
         # if float(d['physics_noise']) == PHYS_REG:
             #if MIN_DL < int(d['force_delay_line_n']) < MAX_DL and MIN_ELM < int(d['force_elm_n']) < MAX_ELM:
-                if eval(d['physics_init_impedance'])[0] == COMPLIANCE:
+                if eval(d['physics_init_impedance'])[2] == COMPLIANCE:
                     #if not (bool(d["test_fall"]) or bool(d["cl_fall"]) or bool(d["train_fall"])):
                         new_data.append(d)
 
@@ -97,9 +97,11 @@ def get_data(data, field):
         for j, ys in enumerate(y_set):
             x.append(xs)
             y.append(ys)
-            if field == 'test_x_speed':
+            if 'x_speed' in field:
                 z_av_tab[i, j] = 1 - abs(0.25 - z_av_tab[i, j]) / 0.25
-            if field == 'test_y_speed':
+                if z_av_tab[i, j] < 0:
+                    z_av_tab[i, j] = 0
+            if 'y_speed' in field:
                 z_av_tab[i, j] = abs(z_av_tab[i, j])
 
             z_av.append(z_av_tab[i, j])

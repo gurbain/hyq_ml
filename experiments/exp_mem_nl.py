@@ -21,10 +21,10 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(3):
-        for kp in randomly([75, 250, 4000]):
-            for l in randomly(range(1, 120, 6)):
-                for t in randomly(range(1, 100, 8)):
+    for i in range(2):
+        for kp in randomly([75, 250, 1000, 4000]):
+            for l in randomly(np.linspace(1, 120, 30)):
+                for t in randomly(np.linspace(1, 100, 30)):
 
                     # Open the config file and retrieve the data
                     config1 = ConfigParser.ConfigParser()

@@ -221,8 +221,8 @@ def clean_data(data):
                     d["physics_kp"] = np.nan
                     d["physics_kd"] = np.nan
                 else:
-                    d["physics_kp"] = (imp[0] + imp[2] + imp[4]) / 3
-                    d["physics_kd"] = (imp[1] + imp[3] + imp[5]) / 3
+                    d["physics_kp"] = (imp[2] + imp[4]) / 2
+                    d["physics_kd"] = (imp[3] + imp[5]) / 2
 
         d["diff_dist"] = abs(d["test_dist"] - d["train_dist"])
         d["diff_speed"] = abs(d["test_speed"] - d["train_speed"])

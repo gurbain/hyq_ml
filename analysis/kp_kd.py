@@ -162,7 +162,7 @@ def plot_kpkd(data):
 
     field_x = 'physics_kp'
     field_z = 'physics_kd'
-    fields_y_1 = ["fall", "speed", "z_range", "pitch_range", "roll_range"]
+    fields_y_1 = ["fall", "speed", "power", "grf_max"] #"z_range", "pitch_range", "roll_range"]
     fields_y_2 = ["power", "COT", "grf_max", "grf_step_len", "grf_steps"]
 
     fig_data = aggregate_falls(data)
@@ -177,20 +177,21 @@ def plot_kpkd(data):
         if 'im' in locals():
             if im is not None:
                 fig.colorbar(im, cax=axes[j, 3])
-    plt.show()
-
-    fig, axes = plt.subplots(nrows=len(fields_y_2), ncols=4, figsize=(12, 36), dpi=60,
-                             gridspec_kw={"width_ratios": [1, 1, 1, 0.05]})
-    for j, f in enumerate(fields_y_2):
-        for i, phase in enumerate(["train_", "cl_", "test_"]):
-            if f == "fall":
-                plot_fall(axes[j, i], fig_data, field_x, phase + f, field_z)
-            else:
-                im = scatter_x_y(axes[j, i], select_data(fig_data, phase=phase), field_x, phase + f, field_z)
-        if 'im' in locals():
-            if im is not None:
-                fig.colorbar(im, cax=axes[j, 3])
-    plt.show()
+    plt.savefig("/home/gurbain/a.png")
+    #plt.show()
+    #
+    # fig, axes = plt.subplots(nrows=len(fields_y_2), ncols=4, figsize=(12, 36), dpi=60,
+    #                          gridspec_kw={"width_ratios": [1, 1, 1, 0.05]})
+    # for j, f in enumerate(fields_y_2):
+    #     for i, phase in enumerate(["train_", "cl_", "test_"]):
+    #         if f == "fall":
+    #             plot_fall(axes[j, i], fig_data, field_x, phase + f, field_z)
+    #         else:
+    #             im = scatter_x_y(axes[j, i], select_data(fig_data, phase=phase), field_x, phase + f, field_z)
+    #     if 'im' in locals():
+    #         if im is not None:
+    #             fig.colorbar(im, cax=axes[j, 3])
+    # plt.show()
 
 
 if __name__ == "__main__":
