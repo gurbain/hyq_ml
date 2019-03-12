@@ -38,8 +38,8 @@ RUN sudo -H pip install keras tensorflow-gpu \
 #------------------------
 # Install Hyq_ml repository
 #------------------------
-RUN git clone https://github.com/gurbain/hyq_ml \
-    git checkout -B gym-rl
+RUN git clone https://github.com/gurbain/hyq_ml && \
+    cd hyq_ml && git pull origin gym-rl && git checkout gym-rl
 
 #------------------------
 # ROS Install
@@ -70,6 +70,3 @@ RUN sudo bash -c 'rm /opt/ros/dls-distro/share/rcf_controller/config/hyq_sim_opt
 COPY /resources/bin/entrypoint.sh /usr/local/bin/
 RUN sudo chmod a+x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
-
-
-

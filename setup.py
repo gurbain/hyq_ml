@@ -1,14 +1,14 @@
 """
-Install HyQ main libraries
+Install HyQ Gym
 """
 
 from setuptools import setup
 from setuptools import find_packages
 
 
-setup(name='hyq',
-      version='2.0',
-      description='Collection of Machine Learning methods for the HyQ Robot ',
+setup(name='gym_hyq',
+      version='1.0',
+      description='Gym Environments for the HyQ Robot',
       author='Gabriel Urbain',
       author_email='gabriel.urbain@ugent.be',
       url='https://github.com/gurbain/hyq_ml',
