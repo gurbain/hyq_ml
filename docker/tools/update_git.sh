@@ -3,7 +3,7 @@
 REMOTE="origin"
 BRANCH="master"
 
-DOCKER_IMG="hyq"
+DOCKER_IMG="gym_hyq"
 DOCKER_TAG="latest"
 
 

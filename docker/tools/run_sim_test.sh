@@ -1,6 +1,6 @@
 #!/bin/bash
 
-docker run -it --rm  hyq:latest /bin/bash -c 'source /opt/ros/dls-distro/setup.bash; \
+docker run -it --rm  gym_hyq:latest /bin/bash -c 'source /opt/ros/dls-distro/setup.bash; \
                                         cd /home/gurbain/hyq_ml/hyq; \
                                         mkdir /home/gurbain/a; \
                                         ln -s /home/gurbain/hyq_ml/config/sim_config_default.txt \
