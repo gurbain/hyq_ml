@@ -3,14 +3,21 @@ FROM nvidia/cuda:9.0-cudnn7-runtime-ubuntu16.04 as ubuntu_hyq
 #------------------------
 # General setup
 #------------------------
+
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y  --no-install-recommends \
     lsb-release build-essential \
     git sudo dialog apt-utils \
     wget software-properties-common \
     net-tools iputils-ping wget python-pip \
-    python-setuptools
-RUN apt-get install -y nmap nano htop ncdu tmux
+    python-setuptools pyqt5-dev-tools \
+    libbluetooth-dev libspnav-dev \
+    pyqt4-dev-tools libcwiid-dev \
+    cmake gcc g++ qt4-qmake libqt4-dev \
+    libusb-dev libftdi-dev \
+    python3-defusedxml python-skimage \
+    nmap nano htop ncdu tmux
 
 USER root
 RUN useradd -ms /bin/bash gurbain
@@ -20,18 +27,19 @@ USER gurbain
 WORKDIR /home/gurbain
 
 #------------------------
-# Dependencies
+# Python Libraries
 #------------------------
 RUN sudo -H pip install --upgrade travis pip \
          setuptools wheel virtualenv
 RUN sudo -H pip install keras tensorflow-gpu \
          tensorflow sklearn tqdm pexpect docker \
-         statsmodels mdp
+         statsmodels mdp gym h5py
 
 #------------------------
 # Install Hyq_ml repository
 #------------------------
-RUN git clone https://github.com/gurbain/hyq_ml
+RUN git clone https://github.com/gurbain/hyq_ml \
+    git checkout -B gym-rl
 
 #------------------------
 # ROS Install
