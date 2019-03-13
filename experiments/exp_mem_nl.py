@@ -21,7 +21,7 @@ if __name__ == '__main__':
 
     # Create a list of experiments
     exp_list = []
-    for i in range(2):
+    for i in range(1):
         for kp in randomly([75, 250, 1000, 4000]):
             for l in randomly(np.linspace(1, 120, 30)):
                 for t in randomly(np.linspace(1, 100, 30)):
@@ -37,5 +37,6 @@ if __name__ == '__main__':
                     # Add it to the experiment list
                     exp_list.append(config1)
 
+    print len(exp_list)
     # Process all in parallel
     exp_res_dirs = task_manager.process(exp_list)
