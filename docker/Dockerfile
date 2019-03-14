@@ -33,13 +33,13 @@ RUN sudo -H pip install --upgrade travis pip \
          setuptools wheel virtualenv
 RUN sudo -H pip install keras tensorflow-gpu \
          tensorflow sklearn tqdm pexpect docker \
-         statsmodels mdp gym h5py
+         statsmodels mdp gym h5py keras-rl
 
 #------------------------
 # Install Hyq_ml repository
 #------------------------
 RUN git clone https://github.com/gurbain/hyq_ml && \
-    cd hyq_ml && git pull origin gym-rl && git checkout gym-rl
+    cd hyq_ml && git checkout -B gym-rl && git pull origin gym-rl 
 
 #------------------------
 # ROS Install
