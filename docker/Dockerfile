@@ -38,8 +38,8 @@ RUN sudo -H pip install keras tensorflow-gpu \
 #------------------------
 # Install Hyq_ml repository
 #------------------------
-RUN git clone https://github.com/gurbain/hyq_ml && \
-    cd hyq_ml && git checkout -B gym-rl && git pull origin gym-rl 
+RUN git clone --single-branch --branch gym-rl \
+    http://github.com/gurbain/hyq_ml
 
 #------------------------
 # ROS Install
