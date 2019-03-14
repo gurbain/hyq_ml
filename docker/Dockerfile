@@ -61,7 +61,7 @@ RUN cd hyq_ml && sudo python setup.py develop
 # #------------------------
 # # HyQ Install Hack and Entrypoint
 # #------------------------
-RUN cd hyq_ml/docker/resources/install && git pull origin master
+RUN cd hyq_ml/docker/resources/install && git pull origin gym-rl
 RUN cd hyq_ml/docker/resources/install && \
     bash hack_me.sh
 RUN sudo bash -c 'rm /opt/ros/dls-distro/share/rcf_controller/config/hyq_sim_options.ini \
