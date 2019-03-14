@@ -1,7 +1,7 @@
 #!/bin/bash
 
 REMOTE="origin"
-BRANCH="master"
+BRANCH="gym-rl"
 
 DOCKER_IMG="gym_hyq"
 DOCKER_TAG="latest"

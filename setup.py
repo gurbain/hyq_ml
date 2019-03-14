@@ -13,4 +13,5 @@ setup(name='gym_hyq',
       author_email='gabriel.urbain@ugent.be',
       url='https://github.com/gurbain/hyq_ml',
       license='MIT',
+      install_requires=['gym'],
       packages=find_packages())

@@ -10,12 +10,14 @@ import re
 import rospy as ros
 import rosgraph
 import string
+import subprocess
 import sys
 import time
 import threading
 import traceback
 
-from gazebo_msgs.srv import ApplyBodyWrench
+from gazebo_msgs.srv import ApplyBodyWrench, SetPhysicsProperties
+from gazebo_msgs.msg import ODEPhysics
 from geometry_msgs.msg import Vector3, Wrench
 from rosgraph_msgs.msg import Clock
 from dls_msgs.msg import StringDoubleArray
@@ -24,8 +26,6 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Float32, Header
 from std_srvs.srv import Empty
 
-
-import processing
 import utils
 
 # Remove stupid a,d annoying ROS Launch stderr redirection
@@ -36,15 +36,16 @@ sys.stderr = stderr
 
 class HyQSim(threading.Thread):
 
-    def __init__(self, view=False, rviz=False, rt=True, remote=False, fast=False,
-                 init_impedance=None, verbose=1, publish_error=False,
-                 inputs=None):
+    def __init__(self, view=False, rviz=False, init_impedance=None, 
+                 verbose=1, inputs=None):
 
         threading.Thread.__init__(self)
 
         # Process information
         self.init_impedance = init_impedance
-        self.remote = remote
+        self.ros_port = "11311"
+        self.ros_ps_name = "roscore"
+        self.ros_ps = None
         self.sim_ps = None
         self.sim_ps_name = "roslaunch"
         self.sim_package = "dls_supervisor"
@@ -56,8 +57,6 @@ class HyQSim(threading.Thread):
             self.sim_params += " gui:=False"
         if rviz is False:
             self.sim_params += " rviz:=False"
-        if fast:
-            self.sim_params += " world_name:=empty_fast.world"
         self.rcf_config_file = os.path.dirname(os.path.realpath(__file__)) + \
                                "/../config/hyq_sim_options.ini"
 
@@ -68,14 +67,6 @@ class HyQSim(threading.Thread):
         self.hyq_nn_pub_name = "/hyq/des_nn_joint_states"
         self.hyq_nn_w_pub_name = "/hyq/nn_weight"
         self.hyq_pow_pub_name = "/hyq/power"
-        self.hyq_js_err_name = "/hyq/nn_rcf_js_error"
-        self.hyq_haa_err_name = "/hyq/nn_rcf_haa_pos_error"
-        self.hyq_hfe_err_name = "/hyq/nn_rcf_hfe_pos_error"
-        self.hyq_kfe_err_name = "/hyq/nn_rcf_kfe_pos_error"
-        self.hyq_haad_err_name = "/hyq/nn_rcf_haa_vel_error"
-        self.hyq_hfed_err_name = "/hyq/nn_rcf_hfe_vel_error"
-        self.hyq_kfed_err_name = "/hyq/nn_rcf_kfe_vel_error"
-        self.hyq_tot_err_name = "/hyq/nn_rcf_tot_error"
         self.sub_clock = None
         self.sub_state = None
         self.sub_power_state = None
@@ -83,28 +74,24 @@ class HyQSim(threading.Thread):
         self.pub_nn = None
         self.pub_nn_w = None
         self.pub_power = None
-        self.pub_js_err = None
-        self.pub_haa_err = None
-        self.pub_hfe_err = None
-        self.pub_kfe_err = None
-        self.pub_haad_err = None
-        self.pub_hfed_err = None
-        self.pub_kfed_err = None
-        self.pub_tot_err = None
         self.srv_noise = None
+        self.srv_phys_prop = None
 
         # Simulation state
         self.sim_time = 0
-        self.hyq_inputs = inputs
         self.inputs_len = 0
-        if 'bias' in inputs:
-            self.inputs_len += 1
-        if 'imu' in inputs:
-            self.inputs_len += 3
-        if 'grf' in inputs:
-            self.inputs_len += 4
-        if 'joints' in inputs:
-            self.inputs_len += 8
+        if inputs is None:
+            inputs = ['bias', 'imu', 'grf', 'joints']
+        if inputs is not None:
+            if 'bias' in inputs:
+                self.inputs_len += 1
+            if 'imu' in inputs:
+                self.inputs_len += 3
+            if 'grf' in inputs:
+                self.inputs_len += 4
+            if 'joints' in inputs:
+                self.inputs_len += 12
+        self.hyq_inputs = inputs
         self.hyq_state = None
         self.hyq_tgt_action = None
         self.hyq_full_tgt_action = None
@@ -129,34 +116,48 @@ class HyQSim(threading.Thread):
         self.process_action_flag = threading.Lock()
 
         # Class behaviour
-        self.rt = rt
         self.t_init = time.time()
         self.controller_started = False
         self.trot_started = False
         self.trunk_cont_stopped = False
         self.sim_started = False
-        self.publish_error = publish_error
-        self.error_it = 0
-        self.error_pos = np.array([])
         self.noise_it = 0
         self.next_noise_it = 0
         self.verbose = verbose
         self.daemon = True
         self.stopped = False
 
-    def start_ros(self,verbose):
-        if (self.get_status_ros() == True):
-            rospy.loginfo("Roscore was already running, restart Roscore")
-            self.stop_ros()
+    def start_ros(self, verbose):
 
-        proc = [self.ros_ps_name, "-p", self.ros_port]
-        ros_pid = subprocess.Popen(proc, shell=verbose)
-        time.sleep(2)
-        os.system("rosparam set /use_sim_time True")
-        time.sleep(0.1)
-        print ("Roscore launched!")
+        try:
+            if (self.get_ros_status() == True):
+                self.printv("[HyQ Gym] Restarting Roscore")
+                self.stop_ros()
+
+            proc = [self.ros_ps_name, "-p", self.ros_port]
+            self.ros_ps = pexpect.spawn(" ".join(proc))
+            if self.verbose == 2:
+                self.ros_ps.logfile_read = sys.stdout
+
+            time.sleep(2)
+            os.system("rosparam set /use_sim_time True")
+            time.sleep(0.1)
+            self.printv("[HyQ Gym] Roscore has started")
+
+        except Exception, e:
+            if self.verbose > 0:
+                print "Exception encountered during roscore init!" + str(e)
+                traceback.print_exc()
 
     def stop_ros(self):
+
+        # Try to kill correctly first
+        if self.ros_ps is not None:
+            if self.ros_ps.isalive():
+                self.ros_ps.sendcontrol("c")
+                self.ros_ps.sendcontrol("d")
+                self.ros_ps.sendcontrol("c")
+                time.sleep(2)
 
         # Kill gzclient, gzserver
         tmp = os.popen("ps -Af").read()
@@ -172,8 +173,8 @@ class HyQSim(threading.Thread):
             os.system("pkill -9 rosmaster")
 
         time.sleep(1)
-        while(self.get_status_ros()):
-            print("Waiting for stop ros")
+        while(self.get_ros_status()):
+            time.sleep(0.1)
 
     def get_ros_status(self):
 
@@ -225,47 +226,21 @@ class HyQSim(threading.Thread):
                                            Float32,
                                            queue_size=1)
 
-            if self.publish_error:
-
-                self.pub_js_err = ros.Publisher(self.hyq_js_err_name,
-                                                JointState,
-                                                queue_size=1)
-                self.pub_tot_err = ros.Publisher(self.hyq_tot_err_name,
-                                                 Float32,
-                                                 queue_size=1)
-                self.pub_haa_err = ros.Publisher(self.hyq_haa_err_name,
-                                                 Float32,
-                                                 queue_size=1)
-                self.pub_hfe_err = ros.Publisher(self.hyq_hfe_err_name,
-                                                 Float32,
-                                                 queue_size=1)
-                self.pub_kfe_err = ros.Publisher(self.hyq_kfe_err_name,
-                                                 Float32,
-                                                 queue_size=1)
-                self.pub_haad_err = ros.Publisher(self.hyq_haad_err_name,
-                                                  Float32,
-                                                  queue_size=1)
-                self.pub_hfed_err = ros.Publisher(self.hyq_hfed_err_name,
-                                                  Float32,
-                                                  queue_size=1)
-                self.pub_kfed_err = ros.Publisher(self.hyq_kfed_err_name,
-                                                  Float32,
-                                                  queue_size=1)
             # Start the physics
             self.start_sim()
 
             # Wait and start the controller
             self.start_controller()
 
+            # Create ROS proxy
+            self.srv_phys_prop = ros.ServiceProxy('/gazebo/set_physics_properties', SetPhysicsProperties)
+
+
             self.sim_started = True
 
         except Exception, e:
             if self.verbose > 0:
                 print "Exception encountered during simulation!" #+ str(e)
-                # traceback.print_exc()
-            if self.sim_ps is not None:
-                if self.sim_ps.isalive():
-                    self.stop_sim()
 
         while not self.stopped:
             time.sleep(0.1)
@@ -277,11 +252,6 @@ class HyQSim(threading.Thread):
 
     def start_sim(self):
 
-        # If the physics should not on this computer, just do not do anything
-        if self.remote:
-            self.printv(" ===== Physics should run on remote computer =====\n")
-            return
-
         try:
             # Init the config file
             self.set_init_impedances()
@@ -289,13 +259,13 @@ class HyQSim(threading.Thread):
             self.t_init = time.time()
             if self.sim_ps is not None:
                 if self.sim_ps.isalive():
-                    self.printv(" ===== Physics is Already Started =====\n")
+                    self.printv("[HyQ Gym] Physics is Already Started")
                     return
 
             proc = [self.sim_ps_name, self.sim_package,
                     self.sim_node, self.sim_params]
 
-            self.printv(" ===== Starting Physics =====\n")
+            self.printv("[HyQ Gym] Starting Physics")
 
             self.sim_ps = pexpect.spawn(" ".join(proc))
             if self.verbose == 2:
@@ -311,10 +281,7 @@ class HyQSim(threading.Thread):
     
     def stop_sim(self, clean_stop=False):
 
-        if self.remote:
-            return
-
-        self.printv(" ===== Stopping Physics =====")
+        self.printv("[HyQ Gym] Stopping Physics")
 
         if clean_stop:
             self.sim_ps.sendcontrol("c")
@@ -341,15 +308,6 @@ class HyQSim(threading.Thread):
                                     proc.kill()
                 except (psutil.ZombieProcess, psutil.AccessDenied, psutil.NoSuchProcess, IOError):
                     pass
-
-    def register_node(self):
-
-        # Create this python ROS node
-        # This method cannot be called from the class itself
-        # as it has to run on main thread
-        with utils.Capturing() as output:
-            ros.init_node("physics", anonymous=True, disable_signals=True)
-            print output
 
     def send_controller_cmd(self, cmd, rsp, timeout=1):
 
@@ -382,7 +340,7 @@ class HyQSim(threading.Thread):
         self.send_controller_cmd("", "RCFController>>")
         self.send_controller_cmd("kadj", "Kinematic adjustment ON!!!")
 
-        self.printv(" ===== RCF Controller is Set =====\n")
+        self.printv("[HyQ Gym] RCF Controller is Set")
         self.controller_started = True
 
     def start_rcf_trot(self):
@@ -405,11 +363,11 @@ class HyQSim(threading.Thread):
 
     def stop_trunk_cont(self):
 
-        self.printv(" ===== Stopping Trunk Controller =====\n")
+        self.printv("[HyQ Gym] Stopping Trunk Controller")
 
         if self.controller_started and not self.trunk_cont_stopped:
             self.send_controller_cmd("trunkCont", "Turning TrunkCont OFF")
-            self.printv(" ===== Trunk Controller Stopped =====\n")
+            self.printv("[HyQ Gym] Trunk Controller Stopped")
             self.trunk_cont_stopped = True
 
     def get_tc_z_gain(self):
@@ -512,10 +470,7 @@ class HyQSim(threading.Thread):
 
     def get_sim_time(self):
 
-        if not self.rt:
-            return self.sim_time
-        else:
-            return time.time() - self.t_init
+        return self.sim_time
 
     def get_hyq_state(self):
 
@@ -569,40 +524,37 @@ class HyQSim(threading.Thread):
         if type(prediction) is np.ndarray:
             prediction = prediction.tolist()
 
-        if len(prediction) != 8:
-                ros.logerr("This method is designed to receive 8 joint" +
+        if len(prediction) != 12:
+                ros.logerr("This method is designed to receive 12 joint" +
                            " position in a specific format!")
                 return
 
         # Create and fill a JointState object
         joints = JointState()
         joints.header = Header()
-        if self.rt:
-            joints.header.stamp = ros.get_rostime()
-        else:
-            joints.header.stamp = ros.Time(self.get_sim_time())
+        joints.header.stamp = ros.Time(self.get_sim_time())
 
         pos = list(self.hyq_full_tgt_action.position)
-        pos[1] = prediction[0]           # LF Hip FE Joint
-        pos[2] = prediction[1]           # LF Knee FE Joint
-        pos[4] = prediction[2]           # RF Hip FE Joint
-        pos[5] = prediction[3]           # RF Knee FE Joint
-        pos[7] = prediction[4]           # LH Hip FE Joint
-        pos[8] = prediction[5]           # LH Knee FE Joint
-        pos[10] = prediction[6]          # RH Hip FE Joint
-        pos[11] = prediction[7]          # RH Knee FE Joint
+        pos[0] = prediction[0]           # LF Hip AA Joint
+        pos[1] = prediction[1]           # LF Hip FE Joint
+        pos[2] = prediction[2]           # LF Knee FE Joint
+        pos[3] = prediction[3]           # RF Hip AA Joint
+        pos[4] = prediction[4]           # RF Hip FE Joint
+        pos[5] = prediction[5]           # RF Knee FE Joint
+        pos[6] = prediction[6]           # LH Hip AA Joint
+        pos[7] = prediction[7]           # LH Hip FE Joint
+        pos[8] = prediction[8]           # LH Knee FE Joint
+        pos[9] = prediction[9]           # RH Hip AA Joint
+        pos[10] = prediction[10]         # RH Hip FE Joint
+        pos[11] = prediction[11]         # RH Knee FE Joint
 
         joints.position = tuple(pos)
-        joints.velocity = self.hyq_full_tgt_action.velocity
-        joints.effort = self.hyq_full_tgt_action.effort
+        joints.velocity = tuple([0]*12)
+        joints.effort = tuple([0]*12)
 
         # Publish
         self.pub_nn.publish(joints)
         self.pub_nn_w.publish(Float32(weight))
-
-        # Create and fill a JointState object for the errors
-        if self.publish_error and error is not None:
-            self.publish_errs(error)
 
     def apply_noise(self, noise_val, noise_it_min, noise_it_max):
 
@@ -625,45 +577,6 @@ class HyQSim(threading.Thread):
 
         self.noise_it += 1
 
-    def publish_errs(self, error):
-
-        # Always publish the joint error
-        joints_err = JointState()
-        joints_err.header = Header()
-        joints_err.header.stamp = ros.Time(self.get_sim_time())
-        joints_err.position = [0.0] * 12
-        joints_err.velocity = [0.0] * 12
-        joints_err.effort = [0.0] * 12
-
-        joints_err.position[1] = error[0]           # LF Hip FE Joint
-        joints_err.position[2] = error[1]           # LF Knee FE Joint
-        joints_err.position[4] = error[2]           # RF Hip FE Joint
-        joints_err.position[5] = error[3]           # RF Knee FE Joint
-        joints_err.position[7] = error[4]           # LH Hip FE Joint
-        joints_err.position[8] = error[5]           # LH Knee FE Joint
-        joints_err.position[10] = error[6]          # RH Hip FE Joint
-        joints_err.position[11] = error[7]          # RH Knee FE Joint
-
-        self.pub_js_err.publish(joints_err)
-
-        # Average and publish error summaries
-        if self.error_it % 50 == 49:
-            hfe_err = np.average(error[0::2])
-            kfe_err = np.average(error[1::2])
-            tot_err = np.average(error)
-            self.pub_haa_err.publish(Float32(0))
-            self.pub_hfe_err.publish(Float32(hfe_err))
-            self.pub_kfe_err.publish(Float32(kfe_err))
-            self.pub_haad_err.publish(Float32(0))
-            self.pub_hfed_err.publish(Float32(0))
-            self.pub_kfed_err.publish(Float32(0))
-            self.pub_tot_err.publish(Float32(tot_err))
-            self.error_pos = error
-        else:
-            self.error_pos = np.concatenate([self.error_pos, error])
-
-        self.error_it += 1
-
     def _reg_sim_time(self, time):
 
         self.sim_time = time.clock.secs + time.clock.nsecs/1000000000.0
@@ -682,19 +595,26 @@ class HyQSim(threading.Thread):
             inp += [msg.contacts[3].wrench.force.z]  # RH Foot Z Force
 
         if "joints" in self.hyq_inputs:
+            inp += [msg.joints[0].position]          # LF Hip AA Joint
             inp += [msg.joints[1].position]          # LF Hip FE Joint
             inp += [msg.joints[2].position]          # LF Knee FE Joint
+            inp += [msg.joints[3].position]          # RF Hip AA Joint
             inp += [msg.joints[4].position]          # RF Hip FE Joint
             inp += [msg.joints[5].position]          # RF Knee FE Joint
+            inp += [msg.joints[6].position]          # LH Hip AA Joint
             inp += [msg.joints[7].position]          # LH Hip FE Joint
             inp += [msg.joints[8].position]          # LH Knee FE Joint
+            inp += [msg.joints[9].position]          # RH Hip AA Joint
             inp += [msg.joints[10].position]         # RH Hip FE Joint
             inp += [msg.joints[11].position]         # RH Knee FE Joint
 
         if "imu" in self.hyq_inputs:
-            inp += [msg.base[5].position]            # Base Z
             inp += [msg.base[0].position]            # Base Roll
-            inp += [msg.base[1].position]            # Base Pitch
+            inp += [msg.base[1].position]            # Base Yaw
+            inp += [msg.base[2].position]            # Base Pitch
+            inp += [msg.base[3].position]            # Base X
+            inp += [msg.base[4].position]            # Base Y
+            inp += [msg.base[5].position]            # Base Z
 
         self.process_state_flag.acquire()
         try:
@@ -710,7 +630,7 @@ class HyQSim(threading.Thread):
             self.hyq_rh_grf = msg.contacts[3].wrench.force.z
             if not self.hyq_fall and self.trot_started:
                 if self.hyq_z < 0.35 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
-                    print " [Physics]   The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
+                    print "[HyQ Gym] The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
                           " or PHI={0:.2f}".format(self.hyq_phi) + " or PSI={0:.2f}".format(self.hyq_psi)
                     self.hyq_fall = True
             self.hyq_state = inp
@@ -729,13 +649,17 @@ class HyQSim(threading.Thread):
 
     def _reg_hyq_tgt_action(self, msg):
 
-        # Robot Target Action (length = 8)
-        out = [msg.position[1]]           # LF Hip FE Joint
+        # Robot Target Action (length = 12)
+        out = [msg.position[0]]           # LF Hip AA Joint
+        out += [msg.position[1]]          # LF Hip FE Joint
         out += [msg.position[2]]          # LF Knee FE Joint
+        out += [msg.position[3]]          # RF Hip AA Joint
         out += [msg.position[4]]          # RF Hip FE Joint
         out += [msg.position[5]]          # RF Knee FE Joint
+        out += [msg.position[6]]          # LH Hip AA Joint
         out += [msg.position[7]]          # LH Hip FE Joint
         out += [msg.position[8]]          # LH Knee FE Joint
+        out += [msg.position[9]]          # RH Hip AA Joint
         out += [msg.position[10]]         # RH Hip FE Joint
         out += [msg.position[11]]         # RH Knee FE Joint
 
@@ -747,65 +671,28 @@ class HyQSim(threading.Thread):
         finally:
             self.process_action_flag.release()
 
+    def set_phys_prop(self, max_update_rate, time_step=0.001, gravity=(0, 0, -9.8)):
+        
+        gravity = Vector3(*gravity)
+        ode_config = ODEPhysics(auto_disable_bodies=False,
+                                sor_pgs_precon_iters=0, sor_pgs_iters=50,
+                                sor_pgs_w=1.3, sor_pgs_rms_error_tol=0.0,
+                                contact_surface_layer=0.001,
+                                contact_max_correcting_vel=100.0,
+                                cfm=0.0, erp=0.2, max_contacts=20)
+        ros.wait_for_service("/gazebo/set_physics_properties")
+        try:
+            return self.srv_phys_prop(time_step=time_step,
+                                      max_update_rate=max_update_rate,
+                                      gravity=gravity,
+                                      ode_config=ode_config)
+
+            self.printv("[HyQ Gym] Changing Gazebo Freq to: {}".format(max_update_rate))
+        except ros.ServiceException as e:
+            if self.verbose > 0:
+                print("Failed to set physics: %s", e)
+
     def printv(self, txt):
 
         if self.verbose >= 1:
             print(txt)
-
-
-if __name__ == '__main__':
-
-    # Create and start simulation
-    p = HyQSim(verbose=2)  # init_impedance=[150, 12, 250, 8, 250, 6])
-    p.start()
-    p.register_node()
-
-    if len(sys.argv) > 1:
-
-        if sys.argv[1] == "sine":
-            pose_init = np.array([-0.2, 0.76, -1.52,
-                                  -0.2, 0.76, -1.52,
-                                  -0.2, -0.76, 1.52,
-                                  -0.2, -0.76, 1.52])
-            while not ros.is_shutdown():
-                if p.sim_started:
-                    t = p.get_sim_time()
-                    move_sin = 20 * np.pi / 180 * np.sin(2 * np.pi * 0.5 * t)
-                    pose = pose_init + np.array([0, 0, move_sin, 0, 0, move_sin,
-                                                 0, 0, -move_sin, 0, 0, -move_sin])
-                    p.send_hyq_nn_pred(pose, 1)
-                else:
-                    time.sleep(0.01)
-
-        if sys.argv[1] == "rcf":
-            trot_flag = False
-            for i in range(40):
-
-                print("Time: " + str(i) + "s and Sim time: " +
-                      str(p.get_sim_time()) + "s and state (len= " +
-                      str(np.array(p.get_hyq_state()).shape) + "):\n" +
-                      str(np.array(p.get_hyq_state())) + "\nAnd (x, y, z) = " +
-                      str(p.get_hyq_x_y_z()))
-                if trot_flag is False:
-                    if p.sim_started:
-                        trot_flag = p.start_rcf_trot()
-                        if trot_flag:
-                            print " ===== Trotting Started ====="
-                if ros.is_shutdown():
-                    p.stop()
-                    exit(-1)
-                time.sleep(1)
-
-    else:
-        for i in range(120):
-            print("Time: " + str(i) + "s and Sim time: " +
-                  str(p.get_sim_time()) + "s and state (len= " +
-                  str(np.array(p.get_hyq_state()).shape) + "):\n" +
-                  str(np.array(p.get_hyq_state())))
-            if ros.is_shutdown():
-                p.stop()
-                exit(-1)
-            time.sleep(1)
-
-    # Stop simulation
-    p.stop()
