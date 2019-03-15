@@ -20,3 +20,11 @@ register(
     timestep_limit=200,
     nondeterministic = True,
 )
+
+
+register(
+    id='hyq-v2',
+    entry_point='gym_hyq.envs:hyq_x_dist_env.HyQXDistEnv',
+    timestep_limit=200,
+    nondeterministic = True,
+)

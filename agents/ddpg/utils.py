@@ -1,3 +1,7 @@
+"""
+Useful functions and classes to run DDPG agent
+"""
+
 import json
 import os
 import time
@@ -13,7 +17,7 @@ class Config():
     def set_default(self):
 
         # Environment variables
-        self.config['env_name'] = 'hyq-v1'
+        self.config['env_name'] = 'hyq-v2'
 
         # Neural Network variables
         self.config['model_type'] = 'basic'
