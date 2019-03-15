@@ -68,5 +68,7 @@ ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
 # HyQ Gym on top of HyQ ML
 #------------------------
 RUN sudo -H pip install numpy gym h5py keras-rl
+RUN git config --global user.name "Gabriel Urbain docker" && \
+    git config --global user.email "gabriel.urbain@domain.be"
 RUN cd hyq_ml && git checkout -B gym-rl && \
     git pull origin gym-rl && sudo python setup.py develop
