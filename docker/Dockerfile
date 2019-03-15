@@ -3,21 +3,14 @@ FROM nvidia/cuda:9.0-cudnn7-runtime-ubuntu16.04 as ubuntu_hyq
 #------------------------
 # General setup
 #------------------------
-
-ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y  --no-install-recommends \
     lsb-release build-essential \
     git sudo dialog apt-utils \
     wget software-properties-common \
     net-tools iputils-ping wget python-pip \
-    python-setuptools pyqt5-dev-tools \
-    libbluetooth-dev libspnav-dev \
-    pyqt4-dev-tools libcwiid-dev \
-    cmake gcc g++ qt4-qmake libqt4-dev \
-    libusb-dev libftdi-dev \
-    python3-defusedxml python-skimage \
-    nmap nano htop ncdu tmux
+    python-setuptools
+RUN apt-get install -y nmap nano htop ncdu tmux
 
 USER root
 RUN useradd -ms /bin/bash gurbain
@@ -27,19 +20,18 @@ USER gurbain
 WORKDIR /home/gurbain
 
 #------------------------
-# Python Libraries
+# Dependencies
 #------------------------
 RUN sudo -H pip install --upgrade travis pip \
          setuptools wheel virtualenv
 RUN sudo -H pip install keras tensorflow-gpu \
          tensorflow sklearn tqdm pexpect docker \
-         statsmodels mdp gym h5py keras-rl
+         statsmodels mdp
 
 #------------------------
 # Install Hyq_ml repository
 #------------------------
-RUN git clone --single-branch --branch gym-rl \
-    http://github.com/gurbain/hyq_ml
+RUN git clone https://github.com/gurbain/hyq_ml
 
 #------------------------
 # ROS Install
@@ -61,7 +53,7 @@ RUN cd hyq_ml && sudo python setup.py develop
 # #------------------------
 # # HyQ Install Hack and Entrypoint
 # #------------------------
-RUN cd hyq_ml/docker/resources/install && git pull origin gym-rl
+RUN cd hyq_ml/docker/resources/install && git pull origin master
 RUN cd hyq_ml/docker/resources/install && \
     bash hack_me.sh
 RUN sudo bash -c 'rm /opt/ros/dls-distro/share/rcf_controller/config/hyq_sim_options.ini \
@@ -70,3 +62,11 @@ RUN sudo bash -c 'rm /opt/ros/dls-distro/share/rcf_controller/config/hyq_sim_opt
 COPY /resources/bin/entrypoint.sh /usr/local/bin/
 RUN sudo chmod a+x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
+
+
+#------------------------
+# HyQ Gym on top of HyQ ML
+#------------------------
+RUN sudo -H pip install numpy gym h5py keras-rl
+RUN cd hyq_ml && git checkout -B gym-rl && \
+    git pull origin gym-rl && sudo python setup.py develop
