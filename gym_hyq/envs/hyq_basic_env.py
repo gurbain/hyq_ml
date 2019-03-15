@@ -25,7 +25,7 @@ class HyQBasicEnv(HyQEnv):
         sim_speed = 1000 if sim_speed is None else sim_speed
         sim_speed_adaptive = True if sim_speed_adaptive is None else sim_speed_adaptive
         sim_verbose = 1 if sim_verbose is None else sim_verbose
-        sim_view = True if sim_view is None else sim_view
+        sim_view = False if sim_view is None else sim_view
         sim_rviz = False if sim_rviz is None else sim_rviz
         sim_impedance = None if sim_impedance is None else sim_impedance
         sim_inputs = ['bias', 'joints', 'grf', 'imu']  if sim_inputs is None else sim_inputs
