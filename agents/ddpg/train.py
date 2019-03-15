@@ -14,6 +14,7 @@ from gym import wrappers
 from gym_hyq.callbacks import DataLogger
 
 from keras.optimizers import Adam
+from keras.callbacks import TensorBoard
 
 from rl.agents import DDPGAgent
 from rl.memory import SequentialMemory
@@ -65,11 +66,12 @@ agent.compile([Adam(lr=conf.get('lr1')), Adam(lr=conf.get('lr1'))], metrics=[con
 log_filename = exp_filename + 'ddpg_{}_log.json'.format(env_name)
 chk_filename = os.path.join(exp_filename,'ddpg_{}_weights_checkpoint.h5f'.format(env_name))
 wgt_filename = os.path.join(exp_filename,'ddpg_{}_weights.h5f'.format(env_name))
+log_dir = os.path.join(exp_filename,'tensorboard_{}'.format(env_name))
 
 callbacks = [FileLogger(log_filename, interval=1)]
 callbacks += [DataLogger(exp_filename, interval=100)]
 callbacks += [ModelIntervalCheckpoint(chk_filename, interval=10000, verbose=1)]
-
+callbacks += [TensorBoard(log_dir=log_dir, write_graph=True)]
 
 # TRAIN and save the weights
 agent.fit(env, nb_steps=conf.get('nb_steps'), visualize=False,

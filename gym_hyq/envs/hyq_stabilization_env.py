@@ -32,13 +32,17 @@ class HyQStabilizationEnv(HyQBasicEnv):
 
     def _get_reward(self):
 
-    	reward = 10 if not self.sim.hyq_fall else 0
+    	reward = 2 if not self.sim.hyq_fall else 0
 
         # Penalize position gap
         reward -= abs(self.sim.hyq_z - 0.5)
         reward -= abs(self.sim.hyq_phi - 0)
         reward -= abs(self.sim.hyq_theta - 0)
         reward -= abs(self.sim.hyq_psi - 0)
+
+        # Penalize too unstable solution
+        # The robot will receive a wrench of val 50 in the next 40 to 60 iterations
+        self.sim.apply_noise(50, 40, 60)
 
         return reward
 

@@ -629,8 +629,8 @@ class HyQSim(threading.Thread):
             self.hyq_rf_grf = msg.contacts[1].wrench.force.z
             self.hyq_lh_grf = msg.contacts[2].wrench.force.z
             self.hyq_rh_grf = msg.contacts[3].wrench.force.z
-            if not self.hyq_fall and self.controller_started:
-                if self.hyq_z < 0.25 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
+            if not self.hyq_fall and self.controller_started and self.hyq_state_it > 20:
+                if self.hyq_z < 0.25 or abs(self.hyq_phi) > 0.8 or abs(self.hyq_psi) > 1.0:
                     print "[HyQ Gym] The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
                           " or PHI={0:.2f}".format(self.hyq_phi) + " or PSI={0:.2f}".format(self.hyq_psi)
                     self.hyq_fall = True
