@@ -5,7 +5,7 @@ HOSTN="`hostname -f`"
 
 docker stop $IMAGE_NAME
 case $HOSTN in
-    *"laptop"*)
+    *"laptop"*|"kip"|"paard"|"hond"|"koe"|"geit"|"schaap"|"kat")
     echo " === Building on the IDLab LAN === "
     docker build \
         --add-host=koe:172.18.20.19 \
