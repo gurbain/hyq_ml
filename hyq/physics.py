@@ -656,8 +656,8 @@ class HyQSim(threading.Thread):
         self.process_state_flag.acquire()
         try:
             self.hyq_phi = msg.base[0].position
-            self.hyq_theta = msg.base[1].position
-            self.hyq_psi= msg.base[2].position
+            self.hyq_psi = msg.base[1].position
+            self.hyq_theta = msg.base[2].position
             self.hyq_x = msg.base[3].position
             self.hyq_y = msg.base[4].position
             self.hyq_z = msg.base[5].position
