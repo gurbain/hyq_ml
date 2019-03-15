@@ -1,5 +1,5 @@
 #!/bin/bash
-IMAGE_NAME='gurbain/gym_hyq'
+IMAGE_NAME='gym_hyq'
 DATA_FOLDER="/home/gurbain/docker_sim"
 HOSTN="`hostname -f`"
 
