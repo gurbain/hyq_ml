@@ -1,7 +1,7 @@
 #!/bin/bash
-IMAGE_NAME='gym_hyq'
-HOSTN="`hostname -f`"
 
+DOCKER_IMG="gym_hyq"
+HOSTN="`hostname -f`"
 
 docker stop $IMAGE_NAME
 case $HOSTN in
@@ -21,7 +21,7 @@ case $HOSTN in
         --add-host=schaap:172.18.20.236 \
         --add-host=schaap.elis.ugent.be:172.18.20.236 \
         --add-host=nas:172.18.20.252 \
-        -t $IMAGE_NAME .
+        -t $DOCKER_IMG .
     ;;
     *"iminds.be"*)
     echo " === Building on the IDLab Virtual Wall === "
@@ -30,11 +30,11 @@ case $HOSTN in
        --add-host=geit:192.168.0.5 \
        --add-host=kat:192.168.0.3 \
        --add-host=schaap:192.168.0.1 \
-       -t $IMAGE_NAME .
+       -t $DOCKER_IMG .
     ;;
     *)
     echo " === Building with no redirection specified === "
-    docker build -t $IMAGE_NAME .
+    docker build -t $DOCKER_IMG .
     ;;
 esac
 

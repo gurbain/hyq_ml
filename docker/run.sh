@@ -1,5 +1,8 @@
 #!/bin/bash
-IMAGE_NAME='gym_hyq'
+
+DOCKER_IMG="gym_hyq"
+DOCKER_TAG="latest"
+
 DATA_FOLDER="/home/gurbain/docker_sim"
 HOSTN="`hostname -f`"
 
@@ -25,7 +28,7 @@ case $HOSTN in
                 --add-host=nas:172.18.20.252 \
                -e DISPLAY=$DISPLAY \
                -v $DATA_FOLDER:$DATA_FOLDER \
-               -it --rm hyq:latest /bin/bash
+               -it --rm $DOCKER_IMG:$DOCKER_TAG /bin/bash
         else
             echo " === Running on the IDLab LAN with no mount === "
             docker run \
@@ -43,7 +46,7 @@ case $HOSTN in
                 --add-host=schaap.elis.ugent.be:172.18.20.236 \
                 --add-host=nas:172.18.20.252 \
                -e DISPLAY=$DISPLAY \
-               -it --rm hyq:latest /bin/bash
+               -it --rm $DOCKER_IMG:$DOCKER_TAG /bin/bash
         fi
     ;;
     *"iminds.be"*)
@@ -56,7 +59,7 @@ case $HOSTN in
                --add-host=schaap:192.168.0.1 \
                -e DISPLAY=$DISPLAY \
                -v $DATA_FOLDER:$DATA_FOLDER \
-               -it --rm hyq:latest /bin/bash
+               -it --rm $DOCKER_IMG:$DOCKER_TAG /bin/bash
         else
             echo " === Running on the Virtual Wall with no mount === "
             docker run \
@@ -65,7 +68,7 @@ case $HOSTN in
                --add-host=kat:192.168.0.3 \
                --add-host=schaap:192.168.0.1 \
                -e DISPLAY=$DISPLAY \
-               -it --rm hyq:latest /bin/bash
+               -it --rm $DOCKER_IMG:$DOCKER_TAG /bin/bash
         fi
     ;;
     *)
@@ -78,7 +81,7 @@ case $HOSTN in
                --add-host=schaap:192.168.0.1 \
                -e DISPLAY=$DISPLAY \
                -v $DATA_FOLDER:$DATA_FOLDER \
-               -it --rm hyq:latest /bin/bash
+               -it --rm $DOCKER_IMG:$DOCKER_TAG /bin/bash
         else
             echo " === Running with no redirection and no mount === "
             docker run \
@@ -87,7 +90,7 @@ case $HOSTN in
                --add-host=kat:192.168.0.3 \
                --add-host=schaap:192.168.0.1 \
                -e DISPLAY=$DISPLAY \
-               -it --rm hyq:latest /bin/bash
+               -it --rm $DOCKER_IMG:$DOCKER_TAG /bin/bash
         fi
     ;;
 esac
