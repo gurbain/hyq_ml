@@ -1,5 +1,5 @@
 #!/bin/bash
-IMAGE_NAME='gym_hyq'
+IMAGE_NAME='gurbain/gym_hyq'
 HOSTN="`hostname -f`"
 
 

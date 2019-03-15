@@ -3,7 +3,7 @@
 REMOTE="origin"
 BRANCH="gym-rl"
 
-DOCKER_IMG="gym_hyq"
+DOCKER_IMG="gurbain/gym_hyq"
 DOCKER_TAG="latest"
 
 

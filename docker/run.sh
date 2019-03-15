@@ -1,12 +1,12 @@
 #!/bin/bash
-IMAGE_NAME='gym_hyq'
+IMAGE_NAME='gurbain/gym_hyq'
 DATA_FOLDER="/home/gurbain/docker_sim"
 HOSTN="`hostname -f`"
 
 
 docker stop $IMAGE_NAME
 case $HOSTN in
-    *"laptop"*)
+    *"laptop"*|"kip"|"paard"|"hond"|"koe"|"geit"|"schaap"|"kat")
         if [ -d "$DATA_FOLDER" ]; then
             echo " === Running on the IDLab LAN with $DATA_FOLDER mounted === "
             docker run \
