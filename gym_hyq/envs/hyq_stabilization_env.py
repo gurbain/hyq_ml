@@ -18,7 +18,7 @@ class HyQStabilizationEnv(HyQBasicEnv):
         # Custom ENV parameters
         control_rate = 25
         sim_speed = 1000
-        sim_speed_adaptive = True
+        sim_speed_adaptive = False
         sim_verbose = 1
         sim_view = False
         sim_rviz = False

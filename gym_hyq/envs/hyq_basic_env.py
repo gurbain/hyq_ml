@@ -6,68 +6,10 @@ The reward is set to 1.
 """
 
 import numpy as np
-from sklearn.base import TransformerMixin, BaseEstimator
 
 from gym import spaces
+from gym_hyq import utils
 from gym_hyq.envs import HyQEnv
-
-
-class HyQStateScaler(BaseEstimator, TransformerMixin):
-
-    def __init__(self):
-
-        self.n_in = 0
-        self.mins = np.array([-1, -100000, -100000, -100000, -100000,
-                              -0.3, 0, -2, -0.3, 0, -2, -0.3, -1, 0, -0.3, -1, 0,
-                              -1.6, -3, -1.6, -1000, -1000, 0])
-        self.maxs = np.array([1, 100000, 100000, 100000, 100000,
-                              0.1, 1, 0, 0.1, 1, 0, 0.1, 0, 2, 0.1, 0, 2,
-                              1.6, 3, 1.6, 1000, 1000, 1])
-        self.x_scaled = None
-
-    def _fit_transform(self, x):
-
-        if isinstance(x, list):
-            x = np.array(x)
-        self.n_in = x.shape[0]
-
-        x_std = (x - self.mins) / (self.maxs - self.mins)
-        self.x_scaled = x_std * 2 - np.ones(x_std.shape)
-
-        return self
-
-    def fit(self, x):
-
-        self = self._fit_transform(x)
-        return self
-
-    def fit_transform(self, x, y=None, **kwargs):
-
-        self = self._fit_transform(x)
-        return self.x_scaled
-
-    def transform(self, x):
-
-        self = self._fit_transform(x)
-        return self.x_scaled
-
-    def inverse_transform(self, x):
-
-        if isinstance(x, list):
-            x = np.array(x)
-
-        x_std = (x + np.ones(x.shape)) / 2
-        return x_std * (self.maxs - self.mins) + self.mins
-
-
-class HyQActionScaler(HyQStateScaler):
-
-    def __init__(self):
-
-        HyQStateScaler.__init__(self)
-
-        self.mins = np.array([-0.3, 0, -2, -0.3, 0, -2, -0.3, -1, 0, -0.3, -1, 0])
-        self.maxs = np.array([0.1, 1, 0, 0.1, 1, 0, 0.1, 0, 2, 0.1, 0, 2])
 
 
 class HyQBasicEnv(HyQEnv):
@@ -82,7 +24,7 @@ class HyQBasicEnv(HyQEnv):
         # Default ENV parameters
         control_rate = 25 if control_rate is None else control_rate
         sim_speed = 1000 if sim_speed is None else sim_speed
-        sim_speed_adaptive = True if sim_speed_adaptive is None else sim_speed_adaptive
+        sim_speed_adaptive = False if sim_speed_adaptive is None else sim_speed_adaptive
         sim_verbose = 1 if sim_verbose is None else sim_verbose
         sim_view = False if sim_view is None else sim_view
         sim_rviz = False if sim_rviz is None else sim_rviz
@@ -117,8 +59,8 @@ class HyQBasicEnv(HyQEnv):
         self.hyq_fall_prev   = False
         self.hyq_power_prev  = 0
 
-        self.state_scaler = HyQStateScaler()
-        self.action_scaler = HyQActionScaler()
+        self.state_scaler = utils.HyQStateScaler()
+        self.action_scaler = utils.HyQActionScaler()
 
     @property
     def _get_state_reward_done_info(self):
@@ -169,25 +111,3 @@ class HyQBasicEnv(HyQEnv):
     def _get_term(self):
 
         return self.sim.hyq_fall
-
-
-
-
-if __name__ == "__main__":
-
-    ss = HyQStateScaler()
-    sa = HyQActionScaler()
-
-    print sa.inverse_transform([-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1])
-    print sa.inverse_transform([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    print sa.inverse_transform([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])
-    print sa.transform([-0.2, 0.6, -1.7, -0.2, 0.6, -1.7, -0.2, -0.6, 1.7,-0.2, -0.6, 1.7])
-
-    print ss.transform([0, -100000, -100000, -100000, -100000,
-                        -0.3, 0, -2, -0.3, 0, -2, -0.3, -1, 0, -0.3, -1, 0,
-                        -1.6, -3, -1.6, -1000, -1000, 0])
-    print ss.transform([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-    print ss.transform([1, 100000, 100000, 100000, 100000,
-                        0.1, 1, 0, 0.1, 1, 0, 0.1, 0, 2, 0.1, 0, 2,
-                        1.6, 3, 1.6, 1000, 1000, 1])
