@@ -6,10 +6,7 @@ import sys
 
 def get_action_base():
 
-    action = [-0.2, 0.6, -1.7, # LF HAA, HFE, KFE
-              -0.2, 0.6, -1.7, # RF HAA, HFE, KFE
-              -0.2, -0.6, 1.7, # LH HAA, HFE, KFE
-              -0.2, -0.6, 1.7] # RH HAA, HFE, KFE
+    action = [-0.5, 0.2, -0.7, -0.5, 0.2, -0.7, -0.5, -0.2, 0.7, -0.5, -0.2, 0.7]
     return action
 
 def get_action_knee_wave(i):
@@ -38,6 +35,9 @@ def run(env_name, steps):
         action = get_action_knee_wave(i)
         state, reward, episode_over, _ = env.step(action)
 
+        if episode_over:
+            env.reset()
+
         if i%30 == 0 and i != 0:
             print("\n[HyQ Gym Test] {}/{} \tReward: {}".format(i, steps, reward))
             print("[HyQ Gym Test] Real Time: {0:.2f}".format(env._elapsed_seconds) + \
@@ -48,6 +48,7 @@ def run(env_name, steps):
             print("[HyQ Gym Test] LF KFE Action: {0:.2f}".format(action[2]) + \
                   " and State: {0:.2f}".format(state[0, 7]))
             print("[HyQ Gym Test] Action space: {}".format(env.action_space))
+            print("[HyQ Gym Test] Random Action: {}".format(env.action_space.sample()))
             prev_t = env.env.sim.sim_time
             prev_i = i
 
@@ -60,4 +61,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         run(str(sys.argv[1]), int(sys.argv[2]))
     else:
-        run('hyq-v0', 500)
+        run('hyq-v0', 1000)

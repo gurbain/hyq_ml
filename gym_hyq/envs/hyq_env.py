@@ -42,9 +42,11 @@ class HyQEnv(gym.Env, utils.EzPickle):
         # set simulation time
         ros.set_param('use_sim_time', True)
 
-        # Subscribe to services
+        # Subscribe to services (HACK: we reset the world and add an offset on the clock
+        # Because the robot state estimator crashes for no reason with the reset_simulation
+        # command)
         self.init_env_proxy = ros.ServiceProxy("/simulation/init_env", Trigger)
-        self.reset_env_proxy = ros.ServiceProxy('/gazebo/reset_simulation', Empty)
+        self.reset_env_proxy = ros.ServiceProxy('/gazebo/reset_world', Empty)
         self.get_robot_state_proxy = ros.ServiceProxy('/gazebo/get_model_state', GetModelState)
 
     def _init_rcf(self):
@@ -96,6 +98,7 @@ class HyQEnv(gym.Env, utils.EzPickle):
         Reset the enviroment
         """
 
+        self.sim.reset_states()
         self.reset_env_proxy()
         self.rate = ros.Rate(self.control_rate)
 

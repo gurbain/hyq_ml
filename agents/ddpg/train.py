@@ -54,7 +54,7 @@ random_process = OrnsteinUhlenbeckProcess(size=env.action_space.shape[0],
                                           theta=conf.get('random_theta'), mu=conf.get('random_mu'),  
                                           sigma=conf.get('random_sigma'))
 agent = DDPGAgent(nb_actions=env.action_space.shape[0], actor=actor, critic=critic, critic_action_input=action_input,
-                  memory=memory, random_process=random_process, gamma=conf.get('gamma'),
+                  memory=memory, gamma=conf.get('gamma'), random_process=random_process, 
                   nb_steps_warmup_critic=conf.get('nb_steps_warmup_critic'),
                   nb_steps_warmup_actor=conf.get('nb_steps_warmup_actor'),
                   target_model_update=conf.get('target_model_update'))

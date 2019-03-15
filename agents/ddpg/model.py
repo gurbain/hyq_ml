@@ -27,7 +27,7 @@ class ModelGenerator():
         actor.add(Dense(32))
         actor.add(Activation('relu'))
         actor.add(Dense(nb_actions))
-        actor.add(Activation('linear'))
+        actor.add(Activation('tanh'))
         print("\n\n[DDPG] Actor Network: ")
         print(actor.summary())
 

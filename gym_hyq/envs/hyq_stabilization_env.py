@@ -32,22 +32,16 @@ class HyQStabilizationEnv(HyQBasicEnv):
 
     def _get_reward(self):
 
-    	reward = 0
-
-        # Penalize movement
-        reward -= abs(self.sim.hyq_x - self.hyq_x_prev)
-        reward -= abs(self.sim.hyq_y - self.hyq_y_prev)
-        reward -= abs(self.sim.hyq_z - self.hyq_z_prev)
-        reward -= abs(self.sim.hyq_phi - self.hyq_phi_prev)
-        reward -= abs(self.sim.hyq_theta - self.hyq_theta_prev)
-        reward -= abs(self.sim.hyq_psi - self.hyq_psi_prev)
+    	reward = 10 if not self.sim.hyq_fall else 0
 
         # Penalize position gap
-        reward -= abs(self.sim.hyq_x - 0)
-        reward -= abs(self.sim.hyq_y - 0)
-        reward -= abs(self.sim.hyq_z - 0.6)
+        reward -= abs(self.sim.hyq_z - 0.5)
         reward -= abs(self.sim.hyq_phi - 0)
         reward -= abs(self.sim.hyq_theta - 0)
         reward -= abs(self.sim.hyq_psi - 0)
 
         return reward
+
+    def _get_term(self):
+
+        return False

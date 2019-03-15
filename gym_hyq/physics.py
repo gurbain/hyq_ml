@@ -86,15 +86,16 @@ class HyQSim(threading.Thread):
             if 'bias' in inputs:
                 self.inputs_len += 1
             if 'imu' in inputs:
-                self.inputs_len += 3
+                self.inputs_len += 6
             if 'grf' in inputs:
                 self.inputs_len += 4
             if 'joints' in inputs:
                 self.inputs_len += 12
         self.hyq_inputs = inputs
-        self.hyq_state = None
+        self.hyq_state = [0] * self.inputs_len
         self.hyq_tgt_action = None
         self.hyq_full_tgt_action = None
+        self.hyq_clk_offset = 0
         self.hyq_x = 0
         self.hyq_y = 0
         self.hyq_z = 0
@@ -470,7 +471,7 @@ class HyQSim(threading.Thread):
 
     def get_sim_time(self):
 
-        return self.sim_time
+        return self.hyq_clk_offset + self.sim_time
 
     def get_hyq_state(self):
 
@@ -532,7 +533,7 @@ class HyQSim(threading.Thread):
         # Create and fill a JointState object
         joints = JointState()
         joints.header = Header()
-        joints.header.stamp = ros.Time(self.get_sim_time())
+        joints.header.stamp = ros.Time(self.sim_time)
 
         pos = list(self.hyq_full_tgt_action.position)
         pos[0] = prediction[0]           # LF Hip AA Joint
@@ -628,8 +629,8 @@ class HyQSim(threading.Thread):
             self.hyq_rf_grf = msg.contacts[1].wrench.force.z
             self.hyq_lh_grf = msg.contacts[2].wrench.force.z
             self.hyq_rh_grf = msg.contacts[3].wrench.force.z
-            if not self.hyq_fall and self.trot_started:
-                if self.hyq_z < 0.35 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
+            if not self.hyq_fall and self.controller_started:
+                if self.hyq_z < 0.2 or abs(self.hyq_phi) > 1.0 or abs(self.hyq_psi) > 1.0:
                     print "[HyQ Gym] The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
                           " or PHI={0:.2f}".format(self.hyq_phi) + " or PSI={0:.2f}".format(self.hyq_psi)
                     self.hyq_fall = True
@@ -687,10 +688,31 @@ class HyQSim(threading.Thread):
                                       gravity=gravity,
                                       ode_config=ode_config)
 
-            self.printv("[HyQ Gym] Changing Gazebo Freq to: {}".format(max_update_rate))
         except ros.ServiceException as e:
             if self.verbose > 0:
-                print("Failed to set physics: %s", e)
+                print("[HyQ Gym] Failed to set physics: %s", e)
+
+    def reset_states(self):
+
+        self.hyq_state = [0] * self.inputs_len
+        self.hyq_tgt_action = None
+        self.hyq_full_tgt_action = None
+        self.hyq_clk_offset = copy.copy(self.sim_time)
+        self.hyq_x = 0
+        self.hyq_y = 0
+        self.hyq_z = 0
+        self.hyq_phi = 0
+        self.hyq_theta = 0
+        self.hyq_psi = 0
+        self.hyq_lf_grf = 0
+        self.hyq_rf_grf = 0
+        self.hyq_lh_grf = 0
+        self.hyq_rh_grf = 0
+        self.hyq_fall = False
+        self.hyq_power = 0
+        self.lpf_power = None
+        self.hyq_state_it = 0
+        self.hyq_action_it = 0
 
     def printv(self, txt):
 
