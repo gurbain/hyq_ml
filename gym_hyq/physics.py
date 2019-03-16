@@ -34,7 +34,7 @@ sys.stderr = open(os.devnull, 'w')
 sys.stderr = stderr
 
 
-class HyQSim(threading.Thread):
+class HyQ(threading.Thread):
 
     def __init__(self, view=False, rviz=False, init_impedance=None, 
                  verbose=1, inputs=None):

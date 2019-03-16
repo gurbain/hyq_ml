@@ -1,7 +1,7 @@
 import gym
 from gym import spaces
 from gym import utils
-from gym_hyq import HyQSim
+from gym_hyq import HyQ
 import rospy as ros
 import numpy as np
 from std_msgs.msg import  Float64
@@ -30,9 +30,9 @@ class HyQEnv(gym.Env, utils.EzPickle):
         self.time_remaining_hist = []
 
         # start simulation node
-        self.sim = HyQSim(view=self.sim_view, rviz=self.sim_rviz,
-                          init_impedance=self.sim_impedance, verbose=self.sim_verbose,
-                          inputs=self.sim_inputs)
+        self.sim = HyQ(view=self.sim_view, rviz=self.sim_rviz,
+                       init_impedance=self.sim_impedance, verbose=self.sim_verbose,
+                       inputs=self.sim_inputs)
 
         self.sim.start_ros(self.sim_verbose==2)
         ros.init_node("simulation", anonymous=True)

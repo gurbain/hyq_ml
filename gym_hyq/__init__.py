@@ -1,6 +1,6 @@
 import logging
 from gym.envs.registration import register
-from physics import HyQSim
+from physics import HyQ
 from callbacks import DataLogger
 import envs
 
