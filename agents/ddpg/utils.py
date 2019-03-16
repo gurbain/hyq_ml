@@ -17,7 +17,7 @@ class Config():
     def set_default(self):
 
         # Environment variables
-        self.config['env_name'] = 'hyq-v2'
+        self.config['env_name'] = 'hyq-v1'
 
         # Neural Network variables
         self.config['model_type'] = 'basic'
