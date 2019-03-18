@@ -16,7 +16,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FOLDER = "/home/gurbain/docker_sim/experiments/kpkd"
+FOLDER = "/home/gurbain/docker_sim/experiments/kpkd2"
 
 
 def select_data(data, phase="train_"):
@@ -98,9 +98,10 @@ def plot(ax, data, field_x, field_y, field_z):
 def scatter_x_y(ax, data, field_x, field_y, field_z):
 
     x_set, z_av_tab, z_std_tab, y_set = analysis.get_graph_data(data, field_x, field_y, field_z)
-    if "grf_max" in field_y or "power" in field_y or "COT" in field_y:
+    print x_set, y_set
+    if "grf_max" in field_y:
         im = ax.pcolormesh(x_set, y_set, z_av_tab.T,
-                           norm=cols.LogNorm(vmin=max(0.0001, np.amin(z_av_tab)), vmax=np.amax(z_av_tab)))
+                           norm=cols.LogNorm(vmin=max(0.0001, np.nanmin(z_av_tab)), vmax=np.nanmax(z_av_tab)))
     else:
         im = ax.pcolormesh(x_set, y_set, z_av_tab.T)
 
@@ -149,7 +150,7 @@ def plot_fall(ax, data, field_x, field_y, field_z):
     ax.set_yscale("log")
     ax.set_xlim([min(min(xf), min(xnf)), max(max(xf), max(xnf))])
     ax.set_ylim([min(min(yf), min(ynf)), max(max(yf), max(ynf))])
-    ax.set_aspect('equal', 'datalim')
+    #ax.set_aspect('equal', 'datalim')
     if field_y == "train_fall":
         ax.set_title("Training Falling Range")
     elif field_y == "cl_fall":
@@ -177,8 +178,7 @@ def plot_kpkd(data):
         if 'im' in locals():
             if im is not None:
                 fig.colorbar(im, cax=axes[j, 3])
-    plt.savefig("/home/gurbain/a.png")
-    #plt.show()
+    plt.show()
     #
     # fig, axes = plt.subplots(nrows=len(fields_y_2), ncols=4, figsize=(12, 36), dpi=60,
     #                          gridspec_kw={"width_ratios": [1, 1, 1, 0.05]})

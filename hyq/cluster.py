@@ -135,8 +135,11 @@ class Sequential(object):
     def __start_proc(self, folder, i):
 
         mounts = {self.mount_dir: {'bind': self.folder, 'mode': self.mount_opt}}
+        log_config = docker.types.LogConfig(type=docker.types.LogConfig.types.JSON,
+                                            config={'max-size': '10m'})
         try:
-            cont = self.engine.containers.run(image=self.img, volumes=mounts, tty=True, remove=True,
+            cont = self.engine.containers.run(image=self.img, volumes=mounts, tty=True,
+                                              remove=True, log_config=log_config,
                                               detach=True, command=self.cmd + str(folder) + "'")
         except KeyboardInterrupt:
             # The asynchronous function create the container but do not get the python object
