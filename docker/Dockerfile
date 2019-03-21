@@ -64,5 +64,12 @@ COPY /resources/bin/entrypoint.sh /usr/local/bin/
 RUN sudo chmod a+x /usr/local/bin/entrypoint.sh
 ENTRYPOINT ["/bin/bash", "entrypoint.sh"]
 
+# #------------------------
+# # New libraries added later on
+# #------------------------
+RUN git clone https://github.com/gurbain/entropy
+RUN sudo bash -c 'cd entropy && pip install -r requirements.txt && \
+                  python setup.py develop'
+
 
 

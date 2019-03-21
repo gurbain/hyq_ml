@@ -9,6 +9,7 @@ from collections import deque
 import ConfigParser
 import copy
 import datetime
+from entropy import *
 import math
 import matplotlib.pyplot as plt
 from parabolic import parabolic
@@ -27,10 +28,10 @@ import threading
 import time
 
 
-
 from std_msgs.msg import Bool, Float64, Float64MultiArray, MultiArrayLayout, Header
 from std_srvs.srv import Trigger, TriggerResponse
 
+import entropy
 import physics
 import utils
 import force
@@ -196,7 +197,6 @@ class Simulation(object):
         self.inputs = eval(self.config["Simulation"]["inputs"])
 
         self.init_impedance = eval(self.config["Physics"]["init_impedance"])
-        print self.init_impedance, self.t_sim
         self.remote = eval(self.config["Physics"]["remote_server"])
         self.real_time = eval(self.config["Physics"]["real_time"])
         self.noise = float(self.config["Physics"]["noise"])
@@ -550,6 +550,7 @@ class Simulation(object):
                     res = self._compute_diff_fft_sig(np.array(self.save_action_pred)[:, h])
                     action_fft_rms.append(res[3])
 
+
                 train_dist = math.sqrt((self.save_states_x[self.save_stop_train_i] -
                                         self.save_states_x[self.save_trot_i])**2 +
                                        (self.save_states_y[self.save_stop_train_i] -
@@ -580,6 +581,8 @@ class Simulation(object):
                                             (self.t_hist[self.save_stop_train_i] -
                                              self.t_hist[self.save_trot_i]),
                            "train_dist": train_dist,
+                           "train_entropy_pred": self._compute_entropy("train", "pred"),
+                           "train_entropy_target": self._compute_entropy("train", "target"),
                            "train_speed": train_dist / (self.t_hist[self.save_stop_train_i] -
                                                         self.t_hist[self.save_trot_i]),
                            "train_power": sum(self.save_states_pow[self.save_trot_i:self.save_stop_train_i]) /
@@ -612,6 +615,8 @@ class Simulation(object):
                                          (self.t_hist[self.save_start_test_i] -
                                           self.t_hist[self.save_stop_train_i]),
                            "cl_dist": cl_dist,
+                           "cl_entropy_pred": self._compute_entropy("cl", "pred"),
+                           "cl_entropy_target": self._compute_entropy("cl", "target"),
                            "cl_speed": cl_dist / (self.t_hist[self.save_start_test_i] -
                                                   self.t_hist[self.save_stop_train_i]),
                            "cl_power": sum(self.save_states_pow[self.save_stop_train_i:self.save_start_test_i]) /
@@ -638,6 +643,8 @@ class Simulation(object):
                            "test_y_speed": (self.save_states_y[-1] - self.save_states_y[self.save_start_test_i]) /
                                            (self.t_hist[-1] - self.t_hist[self.save_start_test_i]),
                            "test_dist": test_dist,
+                           "test_entropy_pred": self._compute_entropy("test", "pred"),
+                           "test_entropy_target": self._compute_entropy("test", "target"),
                            "test_speed": test_dist / (self.t_hist[-1] -
                                                       self.t_hist[self.save_start_test_i]),
                            "test_power": sum(self.save_states_pow[self.save_start_test_i:]) /
@@ -693,7 +700,9 @@ class Simulation(object):
                                               max(abs(self.save_states_lf_grf[self.save_trot_i:])),
                                               max(abs(self.save_states_rh_grf[self.save_trot_i:])),
                                               max(abs(self.save_states_rf_grf[self.save_trot_i:]))),
-                               "t_fall": self.t_fall
+                               "t_fall": self.t_fall,
+                               "entropy_pred": self._compute_entropy("", "pred"),
+                               "entropy_target": self._compute_entropy("", "target")
                                }
                 else:
                     to_save = {"roll_range": np.nan, "pitch_range": np.nan, "nrmse": np.nan,
@@ -752,6 +761,31 @@ class Simulation(object):
                 abs(sig1_fft[f_min_eval:f_max_eval]),
                 abs(sig2_fft[f_min_eval:f_max_eval]),
                 math.sqrt(fft_rms_diff / len(sig1_fft[f_min_eval:f_max_eval])))
+
+    def _compute_entropy(self, phase="train", mode="pred"):
+
+        sig = eval("self.save_action_" + mode)
+        if phase == "train":
+            phase_sig = np.mat(sig[self.save_trot_i:self.save_stop_train_i])
+        elif phase == "cl":
+            phase_sig = np.mat(sig[self.save_stop_train_i:self.save_start_test_i])
+        elif phase == "test":
+            phase_sig = np.mat(sig[self.save_start_test_i:])
+        else:
+            phase_sig = np.mat(sig)
+
+        entropy = np.empty((5, phase_sig.shape[1]))
+        for i in range(phase_sig.shape[1]):
+            r = np.ravel(phase_sig[:, i])
+            entropy[0, i] = perm_entropy(r, order=3, normalize=True)
+            entropy[1, i] = svd_entropy(r, order=3, delay=1, normalize=True)
+            entropy[2, i] = app_entropy(r, order=2, metric='chebyshev')
+            entropy[3, i] = sample_entropy(r, order=2, metric='chebyshev')
+            entropy[4, i] = spectral_entropy(r, 100, method='welch', normalize=True)
+
+        entropy = np.nanmean(entropy, axis=1)
+        print phase, mode, np.ravel(entropy).tolist()
+        return np.ravel(entropy).tolist()
 
     def _compute_grf_stats(self, train_dist, cl_dist, test_dist):
 

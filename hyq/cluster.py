@@ -25,7 +25,7 @@ IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
 SAVE_FOLDER = "/home/gurbain/docker_sim/"
-TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
+TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
 
