@@ -784,7 +784,6 @@ class Simulation(object):
             entropy[4, i] = spectral_entropy(r, 100, method='welch', normalize=True)
 
         entropy = np.nanmean(entropy, axis=1)
-        print phase, mode, np.ravel(entropy).tolist()
         return np.ravel(entropy).tolist()
 
     def _compute_grf_stats(self, train_dist, cl_dist, test_dist):
