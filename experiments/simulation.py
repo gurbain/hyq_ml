@@ -57,7 +57,7 @@ if __name__ == "__main__":
         s = Sim(str(sys.argv[1]))
         s.fit()
 
-    if len(sys.argv) == 3:
+    elif len(sys.argv) == 3:
         if str(sys.argv[1]) == "train":
             s = Sim(str(sys.argv[2]))
             s.fit()

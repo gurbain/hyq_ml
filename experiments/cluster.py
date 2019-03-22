@@ -12,16 +12,13 @@ import threading
 import utils
 
 
-IMAGE = "hyq:latest"
-IDLE_CMD = ""
+IMAGE = "gym_hyq:latest"
 RUN_CMD = "/bin/bash -c 'source /opt/ros/dls-distro/setup.bash;" + \
-          "cd /home/gurbain/hyq_ml/hyq; roscore >> /dev/null 2>&1 & " \
+          "cd /home/gurbain/hyq_ml/experiments; roscore >> /dev/null 2>&1 & " \
           "timeout 10m python simulation.py "
-IDLE_TASK = ["sleep", "infinity"]
 RUN_TASK = [""]
 
 SAVE_FOLDER = "/home/gurbain/docker_sim/"
-TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
 
@@ -56,7 +53,7 @@ class Cluster(object):
         print " ----------------------------\n"
 
         # Create experiment dir
-        exp_root_folder = self.folder + "experiments/"
+        exp_root_folder = self.folder + "gym_exp/"
         utils.mkdir(exp_root_folder)
         self.exp_dir = exp_root_folder + utils.timestamp()
         self.task_dirs = self.__create_task_folders(self.exp_dir, config_list)

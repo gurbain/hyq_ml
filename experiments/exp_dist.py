@@ -4,29 +4,28 @@ import numpy as np
 from cluster import Cluster
 
 
-DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
-
+DEF_CONFIG = "/home/gabs48/hyq_ml/config/default_conf.txt"
 
 
 if __name__ == '__main__':
 
     # Create a docker task manager
-    task_manager = Cluster(n_proc=4)
+    task_manager = Cluster(n_proc=2)
 
     # Create a list of experiments
     exp_list = []
     for i in range(2):
-        for kp in randomly(np.linspace(75, 4000, 30)):
-                    # Open the config file and retrieve the data
-                    config1 = ConfigParser.ConfigParser()
-                    config1.read(DEF_CONFIG)
-                    config1.set("Force", "delay_line_n", str(50))
-                    config1.set("Force", "delay_line_step", "1")
-                    config1.set("Force", "elm_n", str(50))
-                    config1.set("Physics", "init_impedance", str([150, 10, kp, 7.5, kp, 7.5]))
+        for lr1 in np.logspace(-6, -1, 6):
+            for lr2 in np.logspace(-6, -1, 6):
 
-                    # Add it to the experiment list
-                    exp_list.append(config1)
+                conf = ConfigParser.ConfigParser()
+                conf.read(DEF_CONFIG)
+                conf.set("Agent", "lr1", str(lr1))
+                conf.set("Agent", "lr2", str(lr2))
+
+                # Add it to the experiment list
+                exp_list.append(conf)
 
     # Process all in parallel
+    print "[HyQ Exp] Starting Cluster Experiment with " + str(len(exp_list)) + " simulations"
     exp_res_dirs = task_manager.process(exp_list)
