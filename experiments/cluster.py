@@ -1,19 +1,15 @@
-import ConfigParser
-import copy
+"""
+Distribute the simulations over multiple docker processes (encapsulation safety)
+"""
+
 import datetime
-import dateutil.parser
 import docker
 import os
-from picker import *
-import random
-import string
 import time
-import shutil
-import signal
-import sys
-import subprocess
 import sys
 import threading
+
+import utils
 
 
 IMAGE = "hyq:latest"
@@ -28,28 +24,6 @@ SAVE_FOLDER = "/home/gurbain/docker_sim/"
 TEST_SIM_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_default.txt"
 MOUNT_FOLDER = "/home/gurbain/docker_sim/"
 MOUNT_OPT = "rw"
-
-
-class Run(object):
-
-    def __init__(self):
-
-        print "this implements a run"
-
-    def setup(self):
-        return
-
-    def save(self):
-        return
-
-    def fit(self):
-        return
-
-    def load(self):
-        return
-
-    def replay(self):
-        return
 
 
 class Cluster(object):
@@ -84,7 +58,7 @@ class Cluster(object):
         # Create experiment dir
         exp_root_folder = self.folder + "experiments/"
         utils.mkdir(exp_root_folder)
-        self.exp_dir = exp_root_folder + util.timestamp()
+        self.exp_dir = exp_root_folder + utils.timestamp()
         self.task_dirs = self.__create_task_folders(self.exp_dir, config_list)
 
         # Launch all experiments sequentially
@@ -124,10 +98,6 @@ class Cluster(object):
               "-----------------------------------------------------\n"
 
         return self.exp_dir
-
-    def __curr_date(self):
-
-        return datetime.datetime.now().strftime('%d/%m %H:%M:%S')
 
     def __start_proc(self, folder, i):
 
@@ -202,7 +172,8 @@ class Cluster(object):
                                                      " | "))
                 if self.logging:
                     log += l
-        except ConnectionError:
+
+        except Exception:
             try:
                 container.stop(timeout=4)
                 container.kill()
@@ -215,18 +186,23 @@ class Cluster(object):
 
         # Save the full log
         if self.logging:
-            with open(folder + "/log.txt", 'w') as file:
-                file.write(log)
+            with open(folder + "/log.txt", 'w') as f:
+                f.write(log)
                 print "\r" + num_str + " | " + id_str + " | " + \
                       self.__curr_date() + " | Log in " + folder + "/log.txt"
 
-    def __create_task_folders(self, root_folder, config):
+    def __has_living_threads(self):
+
+        return True in [t.isAlive() for t in self.cont_log_threads]
+
+    @staticmethod
+    def __create_task_folders(root_folder, config):
 
         utils.mkdir(root_folder)
         liste = []
         for c in config:
-            hashe = os.path.join(root_folder, gen_hash([o for o in os.listdir(root_folder)
-                                                        if os.path.isdir(os.path.join(root_folder,o))]))
+            hashe = os.path.join(root_folder, utils.gen_hash([o for o in os.listdir(root_folder)
+                                                              if os.path.isdir(os.path.join(root_folder, o))]))
             liste.append(hashe)
             utils.mkdir(hashe)
 
@@ -236,6 +212,7 @@ class Cluster(object):
 
         return liste
 
-    def __has_living_threads(self):
+    @staticmethod
+    def __curr_date():
 
-        return True in [t.isAlive() for t in self.cont_log_threads]
+        return datetime.datetime.now().strftime('%d/%m %H:%M:%S')

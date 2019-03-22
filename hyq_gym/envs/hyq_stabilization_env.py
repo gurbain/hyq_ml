@@ -8,10 +8,10 @@ position gap around (0, 0, 0.6, 0, 0, 0)
 import numpy as np
 
 from gym import spaces
-from gym_hyq.envs import HyQBasicEnv
+from hyq_gym.envs import HyQBasicEnv
 
 
-class HyQXDistEnv(HyQBasicEnv):
+class HyQStabilizationEnv(HyQBasicEnv):
 
     def __init__(self):
 
@@ -25,6 +25,8 @@ class HyQXDistEnv(HyQBasicEnv):
         sim_impedance = None
         sim_inputs = ['bias', 'imu', 'grf', 'joints']
 
+        self.reward_range = (-5, 2)
+
         HyQBasicEnv.__init__(self, control_rate=control_rate, sim_speed=sim_speed,
                              sim_speed_adaptive=sim_speed_adaptive, sim_verbose=sim_verbose,
                              sim_view=sim_view, sim_rviz=sim_rviz, sim_impedance=sim_impedance,
@@ -32,6 +34,20 @@ class HyQXDistEnv(HyQBasicEnv):
 
     def _get_reward(self):
 
-    	reward = self.sim.hyq_x - self.hyq_x_prev
+        reward = 2 if not self.sim.hyq_fall else 0
+
+        # Penalize position gap
+        reward -= abs(self.sim.hyq_z - 0.5)
+        reward -= abs(self.sim.hyq_phi - 0)
+        reward -= abs(self.sim.hyq_theta - 0)
+        reward -= abs(self.sim.hyq_psi - 0)
+
+        # Penalize too unstable solution
+        # The robot will receive a wrench of val 50 in the next 40 to 60 iterations
+        self.sim.apply_noise(50, 40, 60)
 
         return reward
+
+    def _get_term(self):
+
+        return False

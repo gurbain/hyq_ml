@@ -8,8 +8,8 @@ The reward is set to 1.
 import numpy as np
 
 from gym import spaces
-from gym_hyq import utils
-from gym_hyq.envs import HyQEnv
+from hyq_gym import utils
+from hyq_gym.envs import HyQEnv
 
 
 class HyQBasicEnv(HyQEnv):

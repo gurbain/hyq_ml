@@ -1,0 +1,30 @@
+## DEFAULT HYQ GYM SIMULATION CONFIG FILE
+##
+## Edit the following section to change the GYM Environment or training AGENT
+## and metaparameters
+##
+
+
+## This section includes all information about the HyQ Env
+[Gym]
+env_name = hyq-v2
+seed = 123
+
+## This section includes the agent, its architecture and meta-parameters
+[Agent]
+agent = DDPG
+model_type = basic
+agent = ddpg
+nb_steps = 10000000
+nb_steps_warmup_critic = 1000
+nb_steps_warmup_actor = 1000
+gamma = 0.99
+target_model_update = 0.001
+lr1 = 0.0001
+lr2 = 0.001
+metrics = mae
+memory_limit = 100000
+memory_window = 1
+random_theta = 0.15
+random_mu = 0.0
+random_sigma = 0.1

@@ -1,12 +1,9 @@
 import gym
-from gym import spaces
 from gym import utils
-from gym_hyq import HyQ
+from hyq_gym import HyQ
 import rospy as ros
 import numpy as np
-from std_msgs.msg import  Float64
 from std_srvs.srv import Trigger, Empty
-from gazebo_msgs.srv import GetModelState
 import time
 
 class HyQEnv(gym.Env, utils.EzPickle):
@@ -15,7 +12,7 @@ class HyQEnv(gym.Env, utils.EzPickle):
                  sim_verbose=0, sim_view=False, sim_rviz=False,
                  sim_impedance=None, sim_inputs=None):
 
-        #params
+        # params
         self.control_rate = control_rate
         self.sim_speed = sim_speed
         self.sim_speed_adaptive = sim_speed_adaptive
@@ -58,7 +55,7 @@ class HyQEnv(gym.Env, utils.EzPickle):
 
         return 0
 
-    def _close(self):
+    def close(self):
 
         print('close')
 
@@ -101,7 +98,7 @@ class HyQEnv(gym.Env, utils.EzPickle):
         self.rate = ros.Rate(self.control_rate)
 
         # adaptive speedup
-        if(self.time_step_hist):
+        if self.time_step_hist:
             step_time = 1. / self.control_rate
             step_times = np.diff(self.time_step_hist)
             rate = 1. / np.array(np.diff(step_times))
@@ -142,7 +139,7 @@ class HyQEnv(gym.Env, utils.EzPickle):
         
         return 0
 
-    def _render(self, mode='human', close=False):
+    def render(self, mode='human', close=False):
         """
         Viewer only supports human mode currently
         """

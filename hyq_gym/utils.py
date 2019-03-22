@@ -1,5 +1,5 @@
 """
-Useful functions and classes to process information in gym_hyq environments
+Useful functions and classes to process information in hyq_gym environments
 """
 
 import numpy as np

@@ -646,7 +646,10 @@ class HyQ(threading.Thread):
             power += j.velocity * j.effort
 
         self.hyq_power = power
-        self.pub_power.publish(power)
+        try:
+            self.pub_power.publish(power)
+        except ros.ROSException:
+            pass
 
     def _reg_hyq_tgt_action(self, msg):
 

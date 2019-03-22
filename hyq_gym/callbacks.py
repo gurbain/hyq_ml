@@ -6,8 +6,10 @@ import pandas as pd
 
 
 class DataLogger(Callback):
+
     def __init__(self, filepath, interval=100):
-        self.filepath = filepath
+
+        self.filepath = filepath + "/"
         self.interval = interval
 
         # Some algorithms compute multiple episodes at once since they are multi-threaded.
@@ -35,12 +37,15 @@ class DataLogger(Callback):
         self.step = 0
 
     def on_train_begin(self, logs):
+
         self.metrics_names = self.model.metrics_names
 
     def on_train_end(self, logs):
+
         self.save_data()
 
     def on_episode_begin(self, episode, logs):
+
         assert episode not in self.metrics
         assert episode not in self.start_episode
 
@@ -55,6 +60,7 @@ class DataLogger(Callback):
         self.info[episode] = []
 
     def on_episode_end(self, episode, logs):
+
         self.episode_time[episode] = timeit.default_timer() - self.start_episode[episode]
 
         self.data[episode] = {"episode": episode,
@@ -84,10 +90,12 @@ class DataLogger(Callback):
         del self.info[episode]
 
     def on_step_begin(self, step, logs):
+
         self.start_step_real[step] = timeit.default_timer()
         self.start_step_sim[step] = rospy.get_time()
 
     def on_step_end(self, step, logs):
+
         episode = logs['episode']
         duration_step_sim = rospy.get_time() - self.start_step_sim[step]
         duration_step_real = timeit.default_timer() - self.start_step_real[step]
@@ -107,6 +115,7 @@ class DataLogger(Callback):
         del self.start_step_real[step]
 
     def save_data(self):
+
         if len(self.data.keys()) == 0:
             return
 

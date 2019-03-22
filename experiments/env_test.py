@@ -1,5 +1,4 @@
 import gym
-import gym_hyq
 import math
 import sys
 
@@ -8,6 +7,7 @@ def get_action_base():
 
     action = [-0.5, 0.2, -0.7, -0.5, 0.2, -0.7, -0.5, -0.2, 0.7, -0.5, -0.2, 0.7]
     return action
+
 
 def get_action_knee_wave(i):
 
@@ -19,6 +19,7 @@ def get_action_knee_wave(i):
     action[8] += 0.2 * math.sin(2 * math.pi * f * i / r)
     action[11] += 0.2 * math.sin(2 * math.pi * f * i / r)
     return action
+
 
 def run(env_name, steps):
 
