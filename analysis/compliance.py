@@ -46,21 +46,26 @@ def aggregate_falls(data):
     return new_data
 
 
-def plot(ax, data, field_x, field_y):
+def plot(ax, data, field_x, field_y, phases=["train_", "test_"], j=0):
 
     leg = ["Training Phase", "Testing Phase"]
+    if "entropy" in field_y:
+        leg = [field_y]
     div = 1.0
     if field_y == "COT":
         div = 6.0
-    for i, phase in enumerate(["train_", "test_"]):
-
-        x, y_av, y_std = analysis.get_graph_data(data, field_x, phase + field_y, "No Field")
-        ax.plot(x, y_av, linestyle=analysis.get_lines(i),
-                linewidth=2, color=analysis.get_cols(i),
-                label=leg[i])
-        ax.fill_between(x, y_av - y_std / div, y_av + y_std / div,
-                        alpha=0.2, edgecolor=analysis.get_cols(i),
-                        facecolor=analysis.get_cols(i))
+    if field_y == "entropy_target":
+        for k, name in enumerate(["perm", "svd", "app", "sample", "spectral"]):
+            plot(ax, data, field_x, field_y + "_" + name, ["train_"], k)
+    else:
+        for i, phase in enumerate(phases):
+            x, y_av, y_std = analysis.get_graph_data(data, field_x, phase + field_y, "No Field")
+            ax.plot(x, y_av, linestyle=analysis.get_lines(i + j),
+                    linewidth=2, color=analysis.get_cols(i + j),
+                    label=leg[i])
+            ax.fill_between(x, y_av - y_std / div, y_av + y_std / div,
+                            alpha=0.2, edgecolor=analysis.get_cols(i + j),
+                            facecolor=analysis.get_cols(i + j))
 
     ax.set_xlabel('Stiffness [N.m/rad]')
     ax.set_title(str(field_y))
@@ -71,7 +76,7 @@ def plot_compliance(data):
 
     field_x = 'physics_kp'
     fields_y = ["nrmse", "speed", "power", "grf_max",
-                "COT", "grf_step_len"]
+                "entropy_target", "grf_step_len"]
 
     fig_data = aggregate_falls(select_data(data))
     fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(15, 12), dpi=80)

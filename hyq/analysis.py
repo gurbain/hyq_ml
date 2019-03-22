@@ -223,6 +223,9 @@ def clean_data(data):
                 else:
                     d["physics_kp"] = (imp[2] + imp[4]) / 2
                     d["physics_kd"] = (imp[3] + imp[5]) / 2
+            if "entropy" in k:
+                for i, name in enumerate(["perm", "svd", "app", "sample", "spectral"]):
+                    d[k + "_" + name] = d[k][i]
 
         d["diff_dist"] = abs(d["test_dist"] - d["train_dist"])
         d["diff_speed"] = abs(d["test_speed"] - d["train_speed"])
