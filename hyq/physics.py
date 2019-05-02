@@ -666,7 +666,7 @@ class HyQSim(threading.Thread):
             self.hyq_lh_grf = msg.contacts[2].wrench.force.z
             self.hyq_rh_grf = msg.contacts[3].wrench.force.z
             if not self.hyq_fall and self.trot_started:
-                if self.hyq_z < 0.25 or abs(self.hyq_phi) > 0.7 or abs(self.hyq_theta) > 0.7:
+                if self.hyq_z < 0.35 or abs(self.hyq_phi) > 0.8 or abs(self.hyq_theta) > 0.8:
                     print " [Physics]   The robot has touched the ground because of Z={0:.2f}".format(self.hyq_z) + \
                           " or PHI={0:.2f}".format(self.hyq_phi) + " or THETA={0:.2f}".format(self.hyq_theta)
                     self.hyq_fall = True
