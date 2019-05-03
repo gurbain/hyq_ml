@@ -5,6 +5,7 @@ def warn(*args, **kwargs):
 import warnings
 warnings.warn = warn
 
+import traceback
 from collections import deque
 import ConfigParser
 import copy
@@ -505,6 +506,7 @@ class Simulation(object):
                 self._save_sim()
         except Exception as e:
             print "\nCould not save simulation data! Check: " + str(e)
+            traceback.print_exc()
             pass
 
         # Stop plotjuggler
