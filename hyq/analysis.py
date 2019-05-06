@@ -241,6 +241,9 @@ def clean_data(data):
         d["diff_pitch_range"] = abs(d["test_pitch_range"] - d["train_pitch_range"])
         d["diff_roll_range"] = abs(d["test_roll_range"] - d["train_roll_range"])
 
+        d["test_stability"] =  d["test_z_range"] + 0.5*np.tan(min(0.8, d["test_pitch_range"])) + 0.25*np.tan(min(0.8, d["test_roll_range"]))
+        d["train_stability"] = d["train_z_range"] + 0.5*np.tan(min(0.8, d["train_pitch_range"])) + 0.25*np.tan(min(0.8, d["train_roll_range"]))
+        d["cl_stability"] = d["cl_z_range"] + 0.5*np.tan(min(0.8, d["cl_pitch_range"])) + 0.25*np.tan(min(0.8, d["cl_roll_range"]))
 
 def get_graph_data(data, field_x, field_y, field_z):
 
@@ -263,6 +266,11 @@ def get_graph_data(data, field_x, field_y, field_z):
 
         y_av = np.nanmean(y_val, axis=2)
         y_std = np.nanstd(y_val, axis=2)
+
+        for i in range(y_av.shape[0]):
+            for j in range(y_av.shape[1]):
+                if y_av[i, j] < 0:
+                    print y_av[i, j], y_val[i, j, :]
 
         return np.array(x_set), y_av, y_std, z_set
 

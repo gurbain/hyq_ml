@@ -545,13 +545,26 @@ class Simulation(object):
         if self.save_metrics:
             if self.t_train > 0 and not self.ol and self.t_start_cl < self.t_sim and \
                     self.save_start_test_i > self.save_stop_train_i > self.save_trot_i:
-                (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.save_states_psi)
-                (p_f, p_train_fft, p_test_fft, p_rms) = self._compute_diff_fft_sig(self.save_states_phi)
+                try:
+                    (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.save_states_psi)
+                except ValueError:
+                    print('FFT roll interpolation error, filling with NaN')
+                    r_rms = np.nan
+
+                try:
+                    (p_f, p_train_fft, p_test_fft, p_rms) = self._compute_diff_fft_sig(self.save_states_phi)
+                except ValueError:
+                    print('FFT roll interpolation error, filling with NaN')
+                    p_rms = np.nan
+
                 action_fft_rms = []
                 for h in range(len(self.save_action_pred[0])):
-                    res = self._compute_diff_fft_sig(np.array(self.save_action_pred)[:, h])
-                    action_fft_rms.append(res[3])
-
+                    try:
+                        res = self._compute_diff_fft_sig(np.array(self.save_action_pred)[:, h])
+                        action_fft_rms.append(res[3])
+                    except ValueError:
+                        print('FFT action interpolation error, filling with NaN')
+                        action_fft_rms.append(np.nan)
 
                 train_dist = math.sqrt((self.save_states_x[self.save_stop_train_i] -
                                         self.save_states_x[self.save_trot_i])**2 +
