@@ -12,6 +12,7 @@ import rosgraph
 import string
 import sys
 import time
+import tf
 import threading
 import traceback
 
@@ -76,10 +77,13 @@ class HyQSim(threading.Thread):
         self.hyq_hfed_err_name = "/hyq/nn_rcf_hfe_vel_error"
         self.hyq_kfed_err_name = "/hyq/nn_rcf_kfe_vel_error"
         self.hyq_tot_err_name = "/hyq/nn_rcf_tot_error"
+        self.hyq_foot_pos_1 = [0, 0, 0]
+        self.hyq_foot_pos_2 = [0, 0, 0]
         self.sub_clock = None
         self.sub_state = None
         self.sub_power_state = None
         self.sub_tgt_action = None
+        self.list_tf = None
         self.pub_nn = None
         self.pub_nn_w = None
         self.pub_power = None
@@ -182,6 +186,9 @@ class HyQSim(threading.Thread):
                                            Float32,
                                            queue_size=1)
 
+            # Create TF Listener
+            self.list_tf = tf.TransformListener()
+
             if self.publish_error:
 
                 self.pub_js_err = ros.Publisher(self.hyq_js_err_name,
@@ -218,8 +225,8 @@ class HyQSim(threading.Thread):
 
         except Exception, e:
             if self.verbose > 0:
-                print "Exception encountered during simulation!" #+ str(e)
-                # traceback.print_exc()
+                print "Exception encountered during simulation!" + str(e)
+                traceback.print_exc()
             if self.sim_ps is not None:
                 if self.sim_ps.isalive():
                     self.stop_sim()
@@ -521,6 +528,21 @@ class HyQSim(threading.Thread):
                copy.deepcopy(self.hyq_theta), \
                copy.deepcopy(self.hyq_psi)
 
+    def get_hyq_foot_pos(self):
+
+        try:
+            (t_trunk_foot, r) = self.list_tf.lookupTransform('/trunk', '/lf_foot', ros.Time(0))
+            (t_foot, r) = self.list_tf.lookupTransform('/world', '/lf_foot', ros.Time(0))
+            (t_trunk, r) = self.list_tf.lookupTransform('/world', '/trunk', ros.Time(0))
+
+            self.hyq_foot_pos_1 = [t_foot[0] - t_trunk[0], t_foot[1] - t_trunk[1], t_foot[2]]
+            self.hyq_foot_pos_2 = [t_trunk_foot[0], t_trunk_foot[1], t_trunk_foot[2]]
+
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            pass
+
+        return copy.deepcopy(self.hyq_foot_pos_1), copy.deepcopy(self.hyq_foot_pos_2)
+
     def send_hyq_nn_pred(self, prediction, weight, error=None):
 
         if type(prediction) is np.ndarray:
@@ -686,7 +708,6 @@ class HyQSim(threading.Thread):
             self.pub_power.publish(power)
         except ros.ROSException:
             pass
-
 
     def _reg_hyq_tgt_action(self, msg):
 

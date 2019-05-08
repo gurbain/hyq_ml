@@ -28,7 +28,7 @@ if __name__ == '__main__':
                     config1.read(DEF_CONFIG)
                     config1.set("Force", "delay_line_n", str(50))
                     config1.set("Force", "delay_line_step", "1")
-                    config1.set("Force", "elm_n", str(50))
+                    config1.set("Force", "elm_n", str(40))
                     config1.set("Physics", "init_impedance", str([150, 10, kp, 7.5, kp, 7.5]))
 
                     # Add it to the experiment list

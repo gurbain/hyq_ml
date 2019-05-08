@@ -45,6 +45,14 @@ def get_yellow():
     return get_cols(3)
 
 
+def get_gray():
+    return get_cols(4)
+
+
+def get_purple():
+    return get_cols(5)
+
+
 def get_lines(i):
 
     lines = ["-", "--", ":", "-."]
@@ -267,11 +275,6 @@ def get_graph_data(data, field_x, field_y, field_z):
         y_av = np.nanmean(y_val, axis=2)
         y_std = np.nanstd(y_val, axis=2)
 
-        for i in range(y_av.shape[0]):
-            for j in range(y_av.shape[1]):
-                if y_av[i, j] < 0:
-                    print y_av[i, j], y_val[i, j, :]
-
         return np.array(x_set), y_av, y_std, z_set
 
     else:
@@ -287,6 +290,13 @@ def get_graph_data(data, field_x, field_y, field_z):
             x_index = x_set.index(d[field_x])
             y_val[x_index, sampling_index[x_index]] = d[field_y]
             sampling_index[x_index] += 1
+
+        # Filter out the unconsitent values found via FFT peaks
+        if field_y == "train_grf_steps" or field_y == "test_grf_steps" or field_y == "cl_grf_steps":
+            y_val[y_val > 70] = np.nan
+
+        if field_y == "train_grf_step_len" or field_y == "test_grf_step_len" or field_y == "cl_grf_step_len":
+            y_val[y_val < 0.01] = np.nan
 
         y_av = np.nanmean(y_val, axis=1)
         y_std = np.nanstd(y_val, axis=1)

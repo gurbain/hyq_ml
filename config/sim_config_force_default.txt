@@ -29,6 +29,7 @@ pub_error = True
 save_states = False
 save_ctrl = False
 save_metrics = True
+save_feet = False
 sim_file = None
 train = True
 
@@ -52,7 +53,7 @@ noise_it_max = 250
 [Force]
 regularization = 0.0001
 elm = True
-elm_n = 40
+elm_n = 50
 elm_fct = tanh
 elm_scaling = True
 lpf = False
@@ -64,7 +65,7 @@ x_scaling = False
 y_scaling = False
 in_fct = lin
 out_fct = lin
-delay_line_n = 60
+delay_line_n = 50
 delay_line_step = 1
 train_dropout_period = 10
 save_folder = None

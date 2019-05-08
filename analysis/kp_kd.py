@@ -54,7 +54,7 @@ def get_fall_data(data, field_x, field_y, field_z):
     not_fall_y = []
     for i, x in enumerate(data[0]):
         for j, y in enumerate(data[3]):
-            if data[1][i, j] == 1.0:
+            if data[1][i, j] > 0.2:
                 fall_x.append(x)
                 fall_y.append(y)
             else:

@@ -93,6 +93,9 @@ class Simulation(object):
         self.save_states_rh_grf = []
         self.save_states_lf_grf = []
         self.save_states_rf_grf = []
+        self.save_feet = False
+        self.save_feet_lf_1 = []
+        self.save_feet_lf_2 = []
         self.save_cont_time = []
         self.save_states_t_trot = 0
         self.save_metrics = False
@@ -191,6 +194,7 @@ class Simulation(object):
         self.publish_error = eval(self.config["Simulation"]["pub_error"])
         self.save_ctrl = eval(self.config["Simulation"]["save_ctrl"])
         self.save_states = eval(self.config["Simulation"]["save_states"])
+        self.save_feet = eval(self.config["Simulation"]["save_feet"])
         self.save_metrics = eval(self.config["Simulation"]["save_metrics"])
         self.time_step = float(self.config["Simulation"]["time_step"])
         self.sim_file = self.config["Simulation"]["sim_file"]
@@ -378,6 +382,11 @@ class Simulation(object):
             else:
                 self.save_action_pred.append(tgt_action)
 
+        if self.save_feet:
+            (ft_1, ft2) = self.physics.get_hyq_foot_pos()
+            self.save_feet_lf_1.append(ft_1)
+            self.save_feet_lf_2.append(ft2)
+
         # Save physics states and metrics
         self.t_hist.append(self.t)
         if self.save_states or self.save_metrics:
@@ -398,6 +407,7 @@ class Simulation(object):
             self.save_states_lf_grf.append(curr_lf)
             self.save_states_rf_grf.append(curr_rf)
             self.save_index += 1
+        if self.save_states or self.save_metrics or self.save_feet:
             if self.nn_weight > 0 and self.save_stop_train_i == 0:
                 self.save_stop_train_i = self.save_index
             if self.nn_weight >= 1.0 and self.save_start_test_i == 0:
@@ -523,6 +533,13 @@ class Simulation(object):
                 p.kill()
 
     def _save_sim(self):
+
+        # Save the states and actions (IOs of the controller)
+        if self.save_feet:
+            with open(self.folder + "/feet.pkl", "wb") as f:
+                pickle.dump([np.mat(self.save_feet_lf_1), np.mat(self.save_feet_lf_2),
+                             self.save_trot_i, self.save_stop_train_i, self.save_start_test_i],
+                            f, protocol=2)
 
         # Save the states and actions (IOs of the controller)
         if self.save_ctrl:
