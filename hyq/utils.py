@@ -99,6 +99,15 @@ def nrmse(arr1, arr2):
 
     return rmse / (max_val - min_val)
 
+def signaltonoise(a, axis=0, ddof=0):
+    """ Compute a Signal to Noise Ratio using only mean and std deviation
+    """
+    a = np.asanyarray(a)
+    m = a.mean(axis)
+    sd = a.std(axis=axis, ddof=ddof)
+    return np.where(sd == 0, 0, m/sd)
+
+
 class Timeout():
     """Timeout class using ALARM signal."""
 

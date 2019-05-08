@@ -527,7 +527,6 @@ class Simulation(object):
         process = psutil.Process()
         children = process.children(recursive=True)
         if len(children) > 0:
-            self.printv("\n ===== Failed Miserably. Killing children blindly! =====\n")
             time.sleep(0.2)
             for p in children:
                 p.kill()
@@ -562,6 +561,7 @@ class Simulation(object):
         if self.save_metrics:
             if self.t_train > 0 and not self.ol and self.t_start_cl < self.t_sim and \
                     self.save_start_test_i > self.save_stop_train_i > self.save_trot_i:
+
                 try:
                     (r_f, r_train_fft, r_test_fft, r_rms) = self._compute_diff_fft_sig(self.save_states_psi)
                 except ValueError:
@@ -630,6 +630,8 @@ class Simulation(object):
                            "train_average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:
                                                                                          self.save_stop_train_i]),
                            "train_fall": 0 < self.t_fall < self.t_start_cl and self.physics.hyq_fall,
+                           "train_snr_sensors": self._compute_snr("train", "sensors"),
+                           "train_snr_actuators": self._compute_snr("train", "actuators"),
                            "cl_roll_range": max(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]) -
                                             min(self.save_states_phi[self.save_stop_train_i:self.save_start_test_i]),
                            "cl_pitch_range": max(self.save_states_psi[self.save_stop_train_i:self.save_start_test_i]) -
@@ -664,6 +666,8 @@ class Simulation(object):
                                                     np.mat(self.save_action_pred[self.save_stop_train_i:
                                                                                  self.save_start_test_i])),
                            "cl_fall": self.t_start_cl < self.t_fall < self.t_stop_cl and self.physics.hyq_fall,
+                           "cl_snr_sensors": self._compute_snr("cl", "sensors"),
+                           "cl_snr_actuators": self._compute_snr("cl", "actuators"),
                            "test_roll_range": max(self.save_states_phi[self.save_start_test_i:]) -
                                               min(self.save_states_phi[self.save_start_test_i:]),
                            "test_pitch_range": max(self.save_states_psi[self.save_start_test_i:]) -
@@ -689,6 +693,8 @@ class Simulation(object):
                                                      np.mat(self.save_action_pred[self.save_start_test_i:])),
                            "test_average_computation_time": np.mean(self.save_cont_time[self.save_start_test_i:]),
                            "test_fall": self.t_train < self.t_fall < self.t_sim and self.physics.hyq_fall,
+                           "test_snr_sensors": self._compute_snr("test", "sensors"),
+                           "test_snr_actuators": self._compute_snr("test", "actuators"),
                            "pitch_fft_rms": p_rms, "roll_fft_rms": r_rms, "action_fft_rms": action_fft_rms,
                            "t_train": self.t_hist[self.save_stop_train_i] - self.t_hist[self.save_trot_i],
                            "t_cl": self.t_hist[self.save_start_test_i] - self.t_hist[self.save_stop_train_i],
@@ -728,10 +734,6 @@ class Simulation(object):
                                "average_computation_time": np.mean(self.save_cont_time[self.save_trot_i:]),
                                "t_sim": self.t_hist[-1] - self.t_hist[self.save_trot_i],
                                "fall": self.physics.hyq_fall,
-                               "max_grf": max(max(abs(self.save_states_lh_grf[self.save_trot_i:])),
-                                              max(abs(self.save_states_lf_grf[self.save_trot_i:])),
-                                              max(abs(self.save_states_rh_grf[self.save_trot_i:])),
-                                              max(abs(self.save_states_rf_grf[self.save_trot_i:]))),
                                "t_fall": self.t_fall,
                                "entropy_pred": self._compute_entropy("", "pred"),
                                "entropy_target": self._compute_entropy("", "target")
@@ -744,6 +746,30 @@ class Simulation(object):
                                "fall": np.nan, "t_fall": np.nan, "max_grf": np.nan
                                }
             pickle.dump(to_save, open(self.folder + "/metrics.pkl", "wb"), protocol=2)
+
+    def _compute_snr(self, phase="test", origin="sensors"):
+
+        if phase == "test":
+            i_1 = self.save_trot_i
+            i_2 = self.save_stop_train_i
+        elif phase == "cl":
+            i_1 = self.save_stop_train_i
+            i_2 = self.save_start_test_i
+        else:
+            i_1 = self.save_start_test_i
+            i_2 = -1
+
+        if origin == "sensors":
+            lh_snr = abs(utils.signaltonoise(self.save_states_lh_grf[i_1:i_2]))
+            rh_snr = abs(utils.signaltonoise(self.save_states_rh_grf[i_1:i_2]))
+            lf_snr = abs(utils.signaltonoise(self.save_states_lf_grf[i_1:i_2]))
+            rf_snr = abs(utils.signaltonoise(self.save_states_rf_grf[i_1:i_2]))
+            snr = (lh_snr + rh_snr + lf_snr + rf_snr) / 4
+            return snr
+        else:
+            snr1 = np.mean(np.abs(utils.signaltonoise(self.save_action_pred[i_1:i_2])))
+            snr2 = np.mean(np.abs(np.mat(self.save_action_pred[i_1:i_2]) - np.mat(self.save_action_target[i_1:i_2])))
+            return [snr1, snr2]
 
     def _compute_diff_fft_sig(self, sig):
 

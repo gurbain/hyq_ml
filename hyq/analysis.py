@@ -138,6 +138,52 @@ def get_data(folder):
     return data, changing_config
 
 
+def get_foot_data(folder):
+
+    # Read the folder datas
+    foot_data = []
+    config_data = []
+    for subdir in tqdm(os.listdir(folder)):
+        config_filename = os.path.join(os.path.join(folder, subdir), "config.txt")
+        foot_filename = os.path.join(os.path.join(folder, subdir), "feet.pkl")
+        if os.path.isfile(config_filename) and os.path.isfile(foot_filename):
+            config = ConfigParser.ConfigParser()
+            config.read(config_filename)
+            config_data.append(get_config_items(config))
+
+            d = pickle.load(open(foot_filename, "rb"))
+            foot_data.append({"f1": d[0], "f2": d[1], "t_train": d[2], "t_cl": d[3], "t_test": d[4]})
+
+    # Find changing parameter in config
+    changing_config = []
+    i = 0
+    for a, b in tqdm(itertools.combinations(config_data, 2)):
+        if i > 300000:
+            break
+        for key, value in a.iteritems():
+            if key in b:
+                if a[key] != b[key]:
+                    if key not in changing_config:
+                        changing_config.append(key)
+            else:
+                print " === ERROR: All the configuration files of the experiment " \
+                      " directories must have the same fields!"
+                return -1
+        i += 1
+
+    # Mix all in a big dictionary
+    data = foot_data
+    for i, d in enumerate(data):
+        for key in changing_config:
+            c = config_data[i][key]
+            if c.isdigit():
+                d[key] = float(c)
+            else:
+                d[key] = str(c)
+
+    return foot_data, changing_config
+
+
 def save_conf(folder, field_x, field_y, field_z):
 
     with open(os.path.join(os.path.dirname(folder), "plot_conf.pkl"), "wb") as f:
