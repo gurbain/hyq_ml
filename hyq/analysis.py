@@ -280,6 +280,9 @@ def clean_data(data):
             if "entropy" in k:
                 for i, name in enumerate(["perm", "svd", "app", "sample", "spectral"]):
                     d[k + "_" + name] = d[k][i]
+            if "snr_actuators" in k:
+                    d[k + "_" + "mean_std"] = d[k][0]
+                    d[k + "_" + "tgt_pred"] = 0.3 / d[k][1]
 
         d["diff_dist"] = abs(d["test_dist"] - d["train_dist"])
         d["diff_speed"] = abs(d["test_speed"] - d["train_speed"])
