@@ -26,10 +26,10 @@ pub_actions = True
 pub_states = True
 pub_loss = True
 pub_error = True
-save_states = False
-save_ctrl = False
+save_states = True
+save_ctrl = True
 save_metrics = True
-save_feet = False
+save_feet = True
 sim_file = None
 train = True
 
@@ -37,14 +37,14 @@ train = True
 [Debug]
 view = False
 verbose = 1
-plot = False
+plot = True
 
 ## This section includes the parameters of the HyQ Gazebo simulation
 [Physics]
-remote_server = False
+remote_server = True
 real_time = False
 init_impedance = None
-rviz = False
+rviz = True
 noise = 0.0
 noise_it_min = 25
 noise_it_max = 250

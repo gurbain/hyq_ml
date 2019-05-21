@@ -16,7 +16,7 @@ plt.rc('savefig', facecolor='white')
 plt.rc('figure', autolayout=True)
 
 
-FOLDER = "/home/gurbain/docker_sim/experiments/kpkd2"
+FOLDER = "/home/gurbain/docker_sim/experiments/kpkd"
 
 
 def select_data(data, phase="train_"):

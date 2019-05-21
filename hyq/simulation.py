@@ -333,6 +333,8 @@ class Simulation(object):
 
         # Send the NN prediction to the RCF controller
         if len(pred_action) == 8:
+            if self.t > self.t_start_cl:
+                self.nn_weight = 1
             self.physics.send_hyq_nn_pred(mix_action, 1,
                                           np.array(tgt_action) - np.array(mix_action))
 
@@ -437,13 +439,20 @@ class Simulation(object):
 
         self.printv("\n ===== Running the Simulation Loop =====\n")
 
+        h = 0
+        while not self.physics.sim_started:
+            if h%200 == 10:
+                print("Waiting for the simulation to be started...\n")
+            time.sleep(0.01)
+            h += 1
+
         self.last_debug_it = 0
         self.last_debug_t = 0
         step_it = 0
         step_t = 0
         self.t_init = time.time()
         trot_flag = False
-        while not ros.is_shutdown() and self.t < self.t_sim and not self.finished:
+        while (not ros.is_shutdown()) and self.t < self.t_sim and (not self.finished):
 
             self.t = self.physics.get_sim_time()
             if self.it % 1000 == 0:
@@ -492,6 +501,11 @@ class Simulation(object):
         self.stop()
 
     def stop(self, sig=None, frame=None):
+
+        # Reset the controller to RCF
+        if self.remote:
+            self.printv("\n ===== Resettting RCF Controller =====")
+            self.physics.reset_hyq_nn_weight()
 
         # Stop the physics
         self.finished = True
@@ -545,9 +559,6 @@ class Simulation(object):
             with open(self.folder + "/ctrl.pkl", "wb") as f:
                 pickle.dump([np.mat(self.save_ctrl_state), np.mat(self.save_ctrl_action), np.array(self.t_hist)],
                             f, protocol=2)
-
-            if self.sim_file is not None and not self.ol:
-                self.network.save()
 
         # Save the physics states
         if self.save_states:
@@ -966,7 +977,7 @@ class Simulation(object):
                 return
 
         # Create plotjuggler process
-        proc = "rosrun plotjuggler PlotJuggler -n --buffer_size 9 -l plot.xml"
+        proc = "rosrun plotjuggler PlotJuggler -n --buffer_size 9 -l /home/gabs48/src/quadruped/hyq/hyq_ml/hyq/plot.xml"
 
         self.printv("\n ===== Starting PlotJuggler =====\n")
 

@@ -99,6 +99,7 @@ class HyQSim(threading.Thread):
 
         # Simulation state
         self.sim_time = 0
+        self.sim_time_init = 0
         self.hyq_inputs = inputs
         self.inputs_len = 0
         if 'bias' in inputs:
@@ -182,9 +183,6 @@ class HyQSim(threading.Thread):
             self.pub_nn_w = ros.Publisher(self.hyq_nn_w_pub_name,
                                           Float32,
                                           queue_size=1)
-            self.pub_power = ros.Publisher(self.hyq_pow_pub_name,
-                                           Float32,
-                                           queue_size=1)
 
             # Create TF Listener
             self.list_tf = tf.TransformListener()
@@ -215,6 +213,13 @@ class HyQSim(threading.Thread):
                 self.pub_kfed_err = ros.Publisher(self.hyq_kfed_err_name,
                                                   Float32,
                                                   queue_size=1)
+
+            # Initialize time
+            if not self.rt:
+                if self.sim_time != 0:
+                    self.printv(" ===== Reseting Init Sim Time to " + str(self.sim_time) + " =====\n")
+                    self.sim_time_init = copy.copy(self.sim_time)
+
             # Start the physics
             self.start_sim()
 
@@ -337,6 +342,9 @@ class HyQSim(threading.Thread):
 
     def start_controller(self):
 
+        if self.remote:
+            return
+
         self.sim_ps.expect("PrepController>>", timeout=25)
         self.send_controller_cmd("trunkCont", "PrepController>>")
         self.send_controller_cmd("changeController", "Indice")
@@ -350,6 +358,9 @@ class HyQSim(threading.Thread):
         self.controller_started = True
 
     def start_rcf_trot(self):
+
+        if self.remote:
+            return True
 
         if self.controller_started:
             self.send_controller_cmd("stw", "WALKING TROT Started!!!")
@@ -477,7 +488,7 @@ class HyQSim(threading.Thread):
     def get_sim_time(self):
 
         if not self.rt:
-            return self.sim_time
+            return self.sim_time - self.sim_time_init
         else:
             return time.time() - self.t_init
 
@@ -542,6 +553,13 @@ class HyQSim(threading.Thread):
             pass
 
         return copy.deepcopy(self.hyq_foot_pos_1), copy.deepcopy(self.hyq_foot_pos_2)
+
+    def reset_hyq_nn_weight(self):
+
+        for i in range(400):
+            self.pub_nn_w.publish(Float32(0))
+            time.sleep(0.01)
+
 
     def send_hyq_nn_pred(self, prediction, weight, error=None):
 
@@ -704,10 +722,6 @@ class HyQSim(threading.Thread):
             power += j.velocity * j.effort
 
         self.hyq_power = power
-        try:
-            self.pub_power.publish(power)
-        except ros.ROSException:
-            pass
 
     def _reg_hyq_tgt_action(self, msg):
 
