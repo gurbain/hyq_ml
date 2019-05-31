@@ -443,6 +443,8 @@ class Simulation(object):
         while not self.physics.sim_started:
             if h%200 == 10:
                 print("Waiting for the simulation to be started...\n")
+            if h > 100:
+                break
             time.sleep(0.01)
             h += 1
 

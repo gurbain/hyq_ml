@@ -23,7 +23,7 @@ MAX_DL = 120
 MIN_ELM = 0
 MAX_ELM = 100
 PHYS_REG = 0
-COMPLIANCE = 4000
+COMPLIANCE = 75
 FOLDER = "/home/gurbain/docker_sim/experiments/mem_nl"
 
 
