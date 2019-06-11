@@ -560,7 +560,6 @@ class HyQSim(threading.Thread):
             self.pub_nn_w.publish(Float32(0))
             time.sleep(0.01)
 
-
     def send_hyq_nn_pred(self, prediction, weight, error=None):
 
         if type(prediction) is np.ndarray:

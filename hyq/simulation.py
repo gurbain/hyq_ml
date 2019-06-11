@@ -330,6 +330,8 @@ class Simulation(object):
                 self.nn_weight = (self.t - self.t_start_cl) / self.t_cl
                 self.network.set_dropout_rate(self.nn_weight)
                 mix_action = pred_action
+            else:
+                mix_action = tgt_action
 
         # Send the NN prediction to the RCF controller
         if len(pred_action) == 8:
@@ -443,7 +445,7 @@ class Simulation(object):
         while not self.physics.sim_started:
             if h%200 == 10:
                 print("Waiting for the simulation to be started...\n")
-            if h > 100:
+            if h > 1000:
                 break
             time.sleep(0.01)
             h += 1

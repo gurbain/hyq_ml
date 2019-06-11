@@ -16,7 +16,7 @@ t_stop_cl = 31
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
-inputs = ["bias", "grf"]
+inputs = ["bias", "joints"]
 time_step = 0.004
 trunk_cont_gains = []
 trunk_cont_it_period = 350
@@ -42,7 +42,7 @@ plot = True
 ## This section includes the parameters of the HyQ Gazebo simulation
 [Physics]
 remote_server = True
-real_time = False
+real_time = True
 init_impedance = None
 rviz = True
 noise = 0.0
