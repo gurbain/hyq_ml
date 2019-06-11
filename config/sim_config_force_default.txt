@@ -30,6 +30,7 @@ save_states = False
 save_ctrl = False
 save_metrics = True
 save_feet = False
+save_bag = True
 sim_file = None
 train = True
 
