@@ -364,13 +364,11 @@ class HyQSim(threading.Thread):
 
         if self.controller_started:
             self.send_controller_cmd("stw", "WALKING TROT Started!!!")
-            self.send_controller_cmd("ctp", "Stance Hs")
-            self.send_controller_cmd("", "Comp. touch-down errors")
-            self.send_controller_cmd("", "Step Height ")
+            self.send_controller_cmd("ctp", "Step Height")
             self.send_controller_cmd("", "Forward Velocity")
             self.send_controller_cmd("0.25", "Step Frequency")
-            for i in range(8):
-                self.send_controller_cmd("", ":")
+            self.send_controller_cmd("", "dutyF")
+            self.send_controller_cmd("", "full menu")
             self.send_controller_cmd("", "RCFController>>")
             self.trot_started = True
             return True

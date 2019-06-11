@@ -5,7 +5,7 @@ import random
 from hyq import cluster
 
 
-DEF_CONFIG = "/home/gurbain/hyq_ml/config/sim_config_force_default.txt"
+DEF_CONFIG = "/home/dls-operator/gabriel_experiment/hyq_ml/configsim_config_force_default.txt"
 
 
 def randomly(seq):
