@@ -30,6 +30,7 @@ save_states = True
 save_ctrl = True
 save_metrics = True
 save_feet = True
+save_bag = True
 sim_file = None
 train = True
 
@@ -65,7 +66,7 @@ x_scaling = False
 y_scaling = False
 in_fct = lin
 out_fct = lin
-delay_line_n = 80
+delay_line_n = 200
 delay_line_step = 1
 train_dropout_period = 10
 save_folder = None

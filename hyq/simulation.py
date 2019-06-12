@@ -27,6 +27,7 @@ from scipy import signal as ssig
 import sys
 import threading
 import time
+from subprocess import Popen, PIPE
 
 
 from std_msgs.msg import Bool, Float64, Float64MultiArray, MultiArrayLayout, Header
@@ -77,6 +78,7 @@ class Simulation(object):
         self.noise_it_max = 0
 
         # Saving
+        self.save_bag = False
         self.save_ctrl = False
         self.save_ctrl_state = []
         self.save_ctrl_action = []
@@ -147,6 +149,10 @@ class Simulation(object):
         self.plot_ps = None
         self.ps_to_kill = "plotjuggler"
 
+        # Bag tools
+        self.bag_ps = None
+        self.bag_ps_to_kill = "rosbag"
+
         # ROS variables
         self.curr_state_pub_name = "/sim_debug/curr_states"
         self.pred_pub_name = "/sim_debug/prediction"
@@ -196,6 +202,7 @@ class Simulation(object):
         self.save_states = eval(self.config["Simulation"]["save_states"])
         self.save_feet = eval(self.config["Simulation"]["save_feet"])
         self.save_metrics = eval(self.config["Simulation"]["save_metrics"])
+        self.save_bag = eval(self.config["Simulation"]["save_bag"])
         self.time_step = float(self.config["Simulation"]["time_step"])
         self.sim_file = self.config["Simulation"]["sim_file"]
         self.train = eval(self.config["Simulation"]["train"])
@@ -470,6 +477,11 @@ class Simulation(object):
                     if self.plot:
                         self._start_plotter()
 
+                # Save Bag if necessary
+                if self.train_it == 1:
+                    if self.save_bag:
+                        self._start_bag()
+
                 # Start trotting when everything initialized
                 if not self.remote and not trot_flag:
                     trot_flag = self.physics.start_rcf_trot()
@@ -536,6 +548,10 @@ class Simulation(object):
             print "\nCould not save simulation data! Check: " + str(e)
             traceback.print_exc()
             pass
+
+        # Stop rosbag
+        if self.save_bag:
+            self._stop_bag()
 
         # Stop plotjuggler
         if self.plot:
@@ -1000,6 +1016,34 @@ class Simulation(object):
                 name = " ".join(proc.cmdline())
                 if self.ps_to_kill in name:
                     proc.kill()
+
+    def _start_bag(self):
+
+        # Do not start several times
+        if self.bag_ps is not None:
+            if self.bag_ps.isalive():
+                return
+
+        # Create plotjuggler process
+        proc = ["rosbag", "record", "/hyq/des_joint_states", "/hyq/des_nn_joint_states", "/hyq/des_rcf_joint_states",
+               "/hyq/nn_rcf_haa_pos_error", "/hyq/nn_rcf_haa_vel_error", "/hyq/nn_rcf_hfe_pos_error",
+               "/hyq/nn_rcf_hfe_vel_error", "/hyq/nn_rcf_js_error", "/hyq/nn_rcf_kfe_pos_error", "/hyq/nn_rcf_kfe_vel_error",
+               "/hyq/nn_rcf_tot_error", "/hyq/nn_weight", "/hyq/robot_states", "/sim_debug/prediction", "/sim_debug/prediction_acc", "" + \
+               "/sim_debug/prediction_loss", "/hyq/power", "-O", str(self.folder) + "/record.bag"]
+
+
+        self.printv("\n ===== Starting rosbag =====\n")
+
+        self.bag_ps = Popen(proc, stdout=PIPE, stderr=PIPE)
+
+    def _stop_bag(self):
+
+        if self.bag_ps is not None:
+            self.printv("\n\n ===== Stopping rosbag  =====\n")
+
+            self.bag_ps.send_signal(signal.SIGINT)
+            time.sleep(4)
+            self.bag_ps = None
 
     def _publish_actions(self, pred, target, action):
 
