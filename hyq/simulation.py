@@ -1040,19 +1040,10 @@ class Simulation(object):
 
         if self.bag_ps is not None:
             self.printv("\n\n ===== Stopping rosbag  =====\n")
-            try:
-                stdout, stderr = self.bag_ps .communicate()
-            except:
-                pass
-            if self.verbose == 2:
-                print stdout
-            time.sleep(1)
 
-            # Kill the process if not finished correctly
-            for proc in psutil.process_iter():
-                name = " ".join(proc.cmdline())
-                if self.bag_ps_to_kill in name:
-                    proc.kill()
+            self.bag_ps.send_signal(signal.SIGINT)
+            time.sleep(4)
+            self.bag_ps = None
 
     def _publish_actions(self, pred, target, action):
 

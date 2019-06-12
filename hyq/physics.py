@@ -15,6 +15,7 @@ import time
 import tf
 import threading
 import traceback
+import queue
 
 from gazebo_msgs.srv import ApplyBodyWrench
 from geometry_msgs.msg import Vector3, Wrench
@@ -22,7 +23,7 @@ from rosgraph_msgs.msg import Clock
 from dls_msgs.msg import StringDoubleArray
 from dwl_msgs.msg import WholeBodyState
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32, Header
+from std_msgs.msg import Float32, Header, Float32MultiArray
 from std_srvs.srv import Empty
 
 
@@ -69,6 +70,7 @@ class HyQSim(threading.Thread):
         self.hyq_nn_pub_name = "/hyq/des_nn_joint_states"
         self.hyq_nn_w_pub_name = "/hyq/nn_weight"
         self.hyq_pow_pub_name = "/hyq/power"
+        self.hyq_grf_th_pub_name = "/hyq/grf_th"
         self.hyq_js_err_name = "/hyq/nn_rcf_js_error"
         self.hyq_haa_err_name = "/hyq/nn_rcf_haa_pos_error"
         self.hyq_hfe_err_name = "/hyq/nn_rcf_hfe_pos_error"
@@ -95,6 +97,7 @@ class HyQSim(threading.Thread):
         self.pub_hfed_err = None
         self.pub_kfed_err = None
         self.pub_tot_err = None
+        self.pub_grf_th = None
         self.srv_noise = None
 
         # Simulation state
@@ -108,6 +111,14 @@ class HyQSim(threading.Thread):
             self.inputs_len += 3
         if 'grf' in inputs:
             self.inputs_len += 4
+        if 'grf_th' in inputs:
+            self.inputs_len += 4
+            self.th_n = 15
+            self.th_val = 300
+            self.c1_buff = [0] * self.th_n
+            self.c2_buff = [0] * self.th_n
+            self.c3_buff = [0] * self.th_n
+            self.c4_buff = [0] * self.th_n
         if 'joints' in inputs:
             self.inputs_len += 8
         self.hyq_state = None
@@ -183,6 +194,10 @@ class HyQSim(threading.Thread):
             self.pub_nn_w = ros.Publisher(self.hyq_nn_w_pub_name,
                                           Float32,
                                           queue_size=1)
+            if 'grf_th' in self.hyq_inputs:
+                self.pub_grf_th = ros.Publisher(self.hyq_grf_th_pub_name,
+                                                Float32MultiArray,
+                                                queue_size=1)
 
             # Create TF Listener
             self.list_tf = tf.TransformListener()
@@ -660,6 +675,43 @@ class HyQSim(threading.Thread):
 
         self.error_it += 1
 
+    def _compute_grf_th(self, contacts):
+
+        c1 = contacts[0].wrench.force.z
+        c2 = contacts[1].wrench.force.z
+        c3 = contacts[2].wrench.force.z
+        c4 = contacts[3].wrench.force.z
+
+        self.c1_buff.append(c1)
+        self.c2_buff.append(c2)
+        self.c3_buff.append(c3)
+        self.c4_buff.append(c4)
+
+        c1_mean = sum(self.c1_buff) / len(self.c1_buff)
+        c2_mean = sum(self.c2_buff) / len(self.c2_buff)
+        c3_mean = sum(self.c3_buff) / len(self.c3_buff)
+        c4_mean = sum(self.c4_buff) / len(self.c4_buff)
+
+        # inp = [c1_mean if c1_mean > self.th_val else 0]
+        # inp += [c2_mean if c2_mean > self.th_val else 0]
+        # inp += [c3_mean if c3_mean  > self.th_val else 0]
+        # inp += [c4_mean if c4_mean  > self.th_val else 0]
+
+        inp = [self.th_val if c1_mean > self.th_val else 0]
+        inp += [self.th_val if c2_mean > self.th_val else 0]
+        inp += [self.th_val if c3_mean  > self.th_val else 0]
+        inp += [self.th_val if c4_mean  > self.th_val else 0]
+
+
+        self.c1_buff.pop(0)
+        self.c2_buff.pop(0)
+        self.c3_buff.pop(0)
+        self.c4_buff.pop(0)
+
+        self.pub_grf_th.publish(Float32MultiArray(data=inp))
+
+        return inp
+
     def _reg_sim_time(self, time):
 
         self.sim_time = time.clock.secs + time.clock.nsecs/1000000000.0
@@ -676,6 +728,9 @@ class HyQSim(threading.Thread):
             inp += [msg.contacts[1].wrench.force.z]  # RF Foot Z Force
             inp += [msg.contacts[2].wrench.force.z]  # LH Foot Z Force
             inp += [msg.contacts[3].wrench.force.z]  # RH Foot Z Force
+
+        if "grf_th" in self.hyq_inputs:
+            inp += self._compute_grf_th(msg.contacts) # Processed Feet Z Forces
 
         if "joints" in self.hyq_inputs:
             inp += [msg.joints[1].position]          # LF Hip FE Joint
