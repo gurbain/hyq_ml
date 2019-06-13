@@ -7,7 +7,7 @@ import time
 from hyq import simulation
 
 
-DEF_CONFIG = "/home/dls-operator/gabriel_experiment/hyq_ml/configreal_passive_config_force.txt"
+DEF_CONFIG = "/home/dls-operator/gabriel_experiment/hyq_ml/config/real_passive_config_force.txt"
 SAVE_FOLDER = "/home/dls-operator/gabriel_experiment/experiments/"
 
 

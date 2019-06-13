@@ -16,6 +16,7 @@ class FORCE(object):
                  x_scaling=True, y_scaling=True, in_fct='lin', out_fct='lin',
                  delay_line_n=20, delay_line_step=2, train_dropout_period=50,
                  lpf=True, lpf_fc=5, lpf_ord=5, lpf_ts=0.04,
+                 wf=True, wf_ord=5,
                  elm=True, elm_n=50, elm_fct='tanh', elm_scaling=True,
                  save_folder="", verbose=2, random_state=12):
 
@@ -61,6 +62,10 @@ class FORCE(object):
         self.lpf = lpf
         if self.lpf:
             self.lpf_out = processing.LowPassFilter(fc=lpf_fc, ts=lpf_ts, ord=lpf_ord)
+
+        self.wf = wf
+        if self.wf:
+            self.wf_out = processing.WindowFilter(ord=wf_ord)
         self.err_window = err_window
 
         # ALGO DATA
@@ -167,16 +172,20 @@ class FORCE(object):
 
     def transform_out(self, y):
 
-        # Low pass filtering
-        if self.lpf:
-            y = self.lpf_out.transform(np.array(y))
-
         # Neuronal function
         y = self.inv_neuron_fct(y, self.out_fct)
 
         # Scaling
         if self.y_scaling:
             y = self.y_scaler.inverse_transform(y)
+
+        # Low pass filtering
+        if self.lpf:
+            y = self.lpf_out.transform(np.array(y))
+
+        # Window filtering
+        if self.wf:
+            y = self.wf_out.transform(np.array(y))
 
         return y
 

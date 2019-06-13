@@ -239,6 +239,8 @@ class Simulation(object):
                                    lpf_fc=float(self.config["Force"]["lpc_fc"]),
                                    lpf_ts=float(self.config["Force"]["lpf_ts"]),
                                    lpf_ord=int(self.config["Force"]["lpf_ord"]),
+                                   wf=eval(self.config["Force"]["wf"]),
+                                   wf_ord=int(self.config["Force"]["wf_ord"]),
                                    err_window=int(self.config["Force"]["err_window"]),
                                    x_scaling=bool(self.config["Force"]["x_scaling"]),
                                    y_scaling=bool(self.config["Force"]["y_scaling"]),
@@ -328,24 +330,26 @@ class Simulation(object):
         # EXECUTION
         # Define the weight between NN prediction and RCF Controller
         mix_action = tgt_action
-        if not self.ol and len(pred_action) == 8:
+        if not self.ol and len(pred_action) == 16:
             if self.t > self.t_stop_cl:
                 self.nn_weight = 1
                 self.network.set_dropout_rate(self.nn_weight)
+                print "a"
                 mix_action = pred_action
             elif self.t > self.t_start_cl:
-                self.nn_weight = (self.t - self.t_start_cl) / self.t_cl
+                self.nn_weight = 1
                 self.network.set_dropout_rate(self.nn_weight)
                 mix_action = pred_action
             else:
+                self.nn_weight = 0
                 mix_action = tgt_action
 
         # Send the NN prediction to the RCF controller
-        if len(pred_action) == 8:
+        if len(pred_action) == 16:
             if self.t > self.t_start_cl:
                 self.nn_weight = 1
-            self.physics.send_hyq_nn_pred(mix_action, 1,
-                                          np.array(tgt_action) - np.array(mix_action))
+            self.physics.send_hyq_nn_pred(mix_action, self.nn_weight,
+                                          np.array(tgt_action) - np.array(pred_action))
 
         # DEBUG AND LOGGING
         self.debug_step(curr_state, pred_action, tgt_action, mix_action)
@@ -360,13 +364,13 @@ class Simulation(object):
         mix_action = tgt_action
         self.nn_weight = 0
 
-        if not self.ol and len(pred_action) == 8:
+        if not self.ol and len(pred_action) == 16:
             if self.t > self.t_start_cl:
                 self.nn_weight = 1
                 mix_action = np.array(pred_action)
 
         # Send the NN prediction to the RCF controller
-        if len(pred_action) == 8:
+        if len(pred_action) == 16:
             self.physics.send_hyq_nn_pred(pred_action,
                                           self.nn_weight,
                                           np.array(tgt_action) -
@@ -388,7 +392,7 @@ class Simulation(object):
             self.save_ctrl_action.append(mix_action)
         if self.save_states or self.save_metrics:
             self.save_action_target.append(tgt_action)
-            if len(pred_action) == 8:
+            if len(pred_action) == 16:
                 self.save_action_pred.append(pred_action)
             else:
                 self.save_action_pred.append(tgt_action)
@@ -997,7 +1001,7 @@ class Simulation(object):
                 return
 
         # Create plotjuggler process
-        proc = "rosrun plotjuggler PlotJuggler -n --buffer_size 9 -l /home/gabs48/src/quadruped/hyq/hyq_ml/hyq/plot.xml"
+        proc = "rosrun plotjuggler PlotJuggler -n --buffer_size 9 -l /home/dls-operator/gabriel_experiment/hyq_ml/hyq/plot.xml"
 
         self.printv("\n ===== Starting PlotJuggler =====\n")
 
@@ -1026,11 +1030,12 @@ class Simulation(object):
 
         # Create plotjuggler process
         proc = ["rosbag", "record", "/hyq/des_joint_states", "/hyq/des_nn_joint_states", "/hyq/des_rcf_joint_states",
-               "/hyq/nn_rcf_haa_pos_error", "/hyq/nn_rcf_haa_vel_error", "/hyq/nn_rcf_hfe_pos_error",
-               "/hyq/nn_rcf_hfe_vel_error", "/hyq/nn_rcf_js_error", "/hyq/nn_rcf_kfe_pos_error", "/hyq/nn_rcf_kfe_vel_error",
-               "/hyq/nn_rcf_tot_error", "/hyq/nn_weight", "/hyq/robot_states", "/sim_debug/prediction", "/sim_debug/prediction_acc", "" + \
-               "/sim_debug/prediction_loss", "/hyq/power", "-O", str(self.folder) + "/record.bag"]
+               "/hyq/nn_weight", "/hyq/robot_states", "/sim_debug/prediction",  "/hyq/grf_th", "-O", str(self.folder) + "/record.bag"]
 
+        #"/hyq/nn_rcf_haa_pos_error", "/hyq/nn_rcf_haa_vel_error", "/hyq/nn_rcf_hfe_pos_error",
+        #       "/hyq/nn_rcf_hfe_vel_error", "/hyq/nn_rcf_js_error", "/hyq/nn_rcf_kfe_pos_error", "/hyq/nn_rcf_kfe_vel_error",
+        #       "/hyq/nn_rcf_tot_error","/sim_debug/prediction_acc", "" + \
+        #       "/sim_debug/prediction_loss", "/hyq/power", /image_raw/compressed",
 
         self.printv("\n ===== Starting rosbag =====\n")
 

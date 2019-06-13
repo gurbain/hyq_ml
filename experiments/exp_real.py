@@ -7,7 +7,7 @@ import time
 from hyq import simulation
 
 
-DEF_CONFIG = "/home/dls-operator/gabriel_experiment/hyq_ml/configreal_config_force_default.txt"
+DEF_CONFIG = "/home/dls-operator/gabriel_experiment/hyq_ml/config/real_config_force_default.txt"
 SAVE_FOLDER = "/home/dls-operator/gabriel_experiment/experiments/"
 
 
