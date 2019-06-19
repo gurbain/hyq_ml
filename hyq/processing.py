@@ -163,6 +163,43 @@ class LowPassFilter(BaseEstimator, TransformerMixin):
         return np.mat(y)
 
 
+class WindowFilter(BaseEstimator, TransformerMixin):
+
+    def __init__(self, ord=5):
+
+        self.ord = ord               # Filter order        
+        self.buff = None
+
+    def fit(self):
+
+        return self
+
+    def fit_transform(self, x, y=None, **kwargs):
+
+        y = self.transform(x)
+        return y
+
+    def transform(self, x):
+
+        n = x.shape[0]
+        dim = x.shape[1]
+        y = np.zeros((n, dim))
+
+        if self.buff is None:
+            self.buff = []
+            for _ in range(dim):
+                self.buff.append([0] * self.ord)
+
+        for i in range(dim):
+            for j in range(n):
+                self.buff[i].append(x[j, i])
+                self.buff[i].pop(0)
+                y[j, i] = sum(self.buff[i]) / len(self.buff[i])
+
+
+        return np.mat(y)
+
+
 class FFT(BaseEstimator, TransformerMixin):
 
     def __init__(self, ts=1, n_samples=12):

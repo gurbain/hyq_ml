@@ -16,7 +16,7 @@ t_stop_cl = 31
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
-inputs = ["bias", "joints"]
+inputs = ["bias", "grf"]
 time_step = 0.004
 trunk_cont_gains = []
 trunk_cont_it_period = 350
@@ -28,9 +28,9 @@ pub_loss = True
 pub_error = True
 save_states = False
 save_ctrl = False
-save_metrics = True
+save_metrics = False
 save_feet = False
-save_bag = True
+save_bag = False
 sim_file = None
 train = True
 
@@ -61,6 +61,8 @@ lpf = False
 lpc_fc = 5
 lpf_ts = 0.004
 lpf_ord = 10
+wf = False
+wf_ord = 10
 err_window = 10
 x_scaling = False
 y_scaling = False

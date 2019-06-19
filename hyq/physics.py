@@ -15,7 +15,6 @@ import time
 import tf
 import threading
 import traceback
-import queue
 
 from gazebo_msgs.srv import ApplyBodyWrench
 from geometry_msgs.msg import Vector3, Wrench
@@ -113,8 +112,8 @@ class HyQSim(threading.Thread):
             self.inputs_len += 4
         if 'grf_th' in inputs:
             self.inputs_len += 4
-            self.th_n = 15
-            self.th_val = 300
+            self.th_n = 10
+            self.th_val = 60
             self.c1_buff = [0] * self.th_n
             self.c2_buff = [0] * self.th_n
             self.c3_buff = [0] * self.th_n
@@ -160,6 +159,9 @@ class HyQSim(threading.Thread):
         self.daemon = True
         self.stopped = False
 
+        self.vel_wf = processing.WindowFilter(ord=20)
+        self.vel_lpf = processing.LowPassFilter(fc=3, ts=0.004, ord=20)
+
     def run(self):
 
         try:
@@ -194,6 +196,8 @@ class HyQSim(threading.Thread):
             self.pub_nn_w = ros.Publisher(self.hyq_nn_w_pub_name,
                                           Float32,
                                           queue_size=1)
+
+            self.pub_vel = ros.Publisher("/hyq/vel", Float32MultiArray, queue_size=1)
             if 'grf_th' in self.hyq_inputs:
                 self.pub_grf_th = ros.Publisher(self.hyq_grf_th_pub_name,
                                                 Float32MultiArray,
@@ -557,8 +561,8 @@ class HyQSim(threading.Thread):
     def get_hyq_foot_pos(self):
 
         try:
-            (t_trunk_foot, r) = self.list_tf.lookupTransform('/trunk', '/lf_foot', ros.Time(0))
-            (t_foot, r) = self.list_tf.lookupTransform('/world', '/lf_foot', ros.Time(0))
+            (t_trunk_foot, r) = self.list_tf.lookupTransform('/trunk', '/lh_foot', ros.Time(0))
+            (t_foot, r) = self.list_tf.lookupTransform('/world', '/lh_foot', ros.Time(0))
             (t_trunk, r) = self.list_tf.lookupTransform('/world', '/trunk', ros.Time(0))
 
             self.hyq_foot_pos_1 = [t_foot[0] - t_trunk[0], t_foot[1] - t_trunk[1], t_foot[2]]
@@ -580,9 +584,9 @@ class HyQSim(threading.Thread):
         if type(prediction) is np.ndarray:
             prediction = prediction.tolist()
 
-        if len(prediction) != 8:
-                ros.logerr("This method is designed to receive 8 joint" +
-                           " position in a specific format!")
+        if len(prediction) != 16:
+                ros.logerr("This method is designed to receive 16 joint" +
+                           " position and velocity in a specific format!")
                 return
 
         # Create and fill a JointState object
@@ -604,8 +608,28 @@ class HyQSim(threading.Thread):
         pos[11] = prediction[7]          # RH Knee FE Joint
 
         joints.position = tuple(pos)
-        joints.velocity = self.hyq_full_tgt_action.velocity
+        #print self.hyq_full_tgt_action.position, joints.position
+        #joints.velocity = self.hyq_full_tgt_action.velocity 
+        vel = list(self.hyq_full_tgt_action.velocity)
+        vel[1] = prediction[8]           # LF Hip FE Joint
+        vel[2] = prediction[9]           # LF Knee FE Joint
+        vel[4] = prediction[10]           # RF Hip FE Joint
+        vel[5] = prediction[11]           # RF Knee FE Joint
+        vel[7] = prediction[12]           # LH Hip FE Joint
+        vel[8] = prediction[13]           # LH Knee FE Joint
+        vel[10] = prediction[14]          # RH Hip FE Joint
+        vel[11] = prediction[15]          # RH Knee FE Joint
+        joints.velocity = vel
+
         joints.effort = self.hyq_full_tgt_action.effort
+
+        # joints.position = tuple(pos)
+        # t = self.get_sim_time()
+        # dt = (t - self.prev_pos_t)
+        # #tuple([0] * 12)
+        # self.pub_vel.publish(data=self.vel_lpf.transform(np.mat(self.vel_wf.transform(np.mat([(a - b) / dt if dt != 0 else 0 for a, b in zip(pos, self.prev_pos)])))).tolist()[0])
+        #self.prev_pos = pos
+        #self.prev_pos_t = t
 
         # Publish
         self.pub_nn.publish(joints)
@@ -708,7 +732,10 @@ class HyQSim(threading.Thread):
         self.c3_buff.pop(0)
         self.c4_buff.pop(0)
 
-        self.pub_grf_th.publish(Float32MultiArray(data=inp))
+        try:
+            self.pub_grf_th.publish(Float32MultiArray(data=inp))
+        except:
+            pass
 
         return inp
 
@@ -788,6 +815,16 @@ class HyQSim(threading.Thread):
         out += [msg.position[8]]          # LH Knee FE Joint
         out += [msg.position[10]]         # RH Hip FE Joint
         out += [msg.position[11]]         # RH Knee FE Joint
+
+
+        out += [msg.velocity[1]]           # LF Hip FE Joint
+        out += [msg.velocity[2]]          # LF Knee FE Joint
+        out += [msg.velocity[4]]          # RF Hip FE Joint
+        out += [msg.velocity[5]]          # RF Knee FE Joint
+        out += [msg.velocity[7]]          # LH Hip FE Joint
+        out += [msg.velocity[8]]          # LH Knee FE Joint
+        out += [msg.velocity[10]]         # RH Hip FE Joint
+        out += [msg.velocity[11]]         # RH Knee FE Joint
 
         self.process_action_flag.acquire()
         try:

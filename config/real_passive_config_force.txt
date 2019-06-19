@@ -16,7 +16,7 @@ t_stop_cl = 102
 ## This section includes high-level parameters about the simulation
 ## execution
 [Simulation]
-inputs = ["bias", "grf"]
+inputs = ["bias", "grf_th"]
 time_step = 0.004
 trunk_cont_gains = []
 trunk_cont_it_period = 350
@@ -26,11 +26,11 @@ pub_actions = True
 pub_states = True
 pub_loss = True
 pub_error = True
-save_states = True
-save_ctrl = True
-save_metrics = True
-save_feet = True
-save_bag = True
+save_states = False
+save_ctrl = False
+save_metrics = False
+save_feet = False
+save_bag = False
 sim_file = None
 train = True
 
@@ -38,7 +38,7 @@ train = True
 [Debug]
 view = False
 verbose = 1
-plot = True
+plot = False
 
 ## This section includes the parameters of the HyQ Gazebo simulation
 [Physics]
@@ -52,21 +52,23 @@ noise_it_max = 250
 
 ## This section includes most of the custom Neural Network trained with Force parameters
 [Force]
-regularization = 0.0001
+regularization = 1
 elm = True
-elm_n = 80
-elm_fct = tanh
+elm_n = 120
+elm_fct = relu
 elm_scaling = True
 lpf = False
-lpc_fc = 25
+lpc_fc = 100
 lpf_ts = 0.004
 lpf_ord = 10
+wf = False
+wf_ord = 10
 err_window = 10
 x_scaling = False
 y_scaling = False
 in_fct = lin
 out_fct = lin
-delay_line_n = 200
+delay_line_n = 80
 delay_line_step = 1
 train_dropout_period = 10
 save_folder = None
