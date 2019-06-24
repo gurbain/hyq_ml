@@ -76,6 +76,7 @@ class Simulation(object):
         self.noise = 0
         self.noise_it_min = 0
         self.noise_it_max = 0
+        self.publish_markers = False
 
         # Saving
         self.save_bag = False
@@ -188,6 +189,7 @@ class Simulation(object):
 
         # Class variable
         self.plot = eval(self.config["Debug"]["plot"])
+        self.publish_markers = eval(self.config["Debug"]["plot_rviz"])
         self.verbose = int(self.config["Debug"]["verbose"])
         self.view = eval(self.config["Debug"]["view"])
         self.sm = eval(self.config["Simulation"]["sm"])
@@ -224,7 +226,8 @@ class Simulation(object):
                                       verbose=self.verbose,
                                       rt=self.real_time,
                                       publish_error=self.publish_error,
-                                      inputs=self.inputs)
+                                      inputs=self.inputs,
+                                      publish_markers=self.publish_markers)
         ros.init_node("simulation", anonymous=True)
         signal.signal(signal.SIGINT, self.stop)
         self.physics.start()
@@ -336,7 +339,7 @@ class Simulation(object):
                 self.network.set_dropout_rate(self.nn_weight)
                 mix_action = pred_action
             elif self.t > self.t_start_cl:
-                self.nn_weight = 1
+                self.nn_weight = (self.t - self.t_start_cl) / self.t_cl
                 self.network.set_dropout_rate(self.nn_weight)
                 mix_action = pred_action
             else:
@@ -345,9 +348,7 @@ class Simulation(object):
 
         # Send the NN prediction to the RCF controller
         if len(pred_action) == 16:
-            if self.t > self.t_start_cl:
-                self.nn_weight = 1
-            self.physics.send_hyq_nn_pred(mix_action, self.nn_weight,
+            self.physics.send_hyq_nn_pred(mix_action, (self.nn_weight > 0),
                                           np.array(tgt_action) - np.array(pred_action))
 
         # DEBUG AND LOGGING
@@ -420,12 +421,15 @@ class Simulation(object):
             self.save_states_rh_grf.append(curr_rh)
             self.save_states_lf_grf.append(curr_lf)
             self.save_states_rf_grf.append(curr_rf)
+
+        if self.save_states or self.save_metrics or self.save_feet or self.publish_markers:
             self.save_index += 1
-        if self.save_states or self.save_metrics or self.save_feet:
             if self.nn_weight > 0 and self.save_stop_train_i == 0:
                 self.save_stop_train_i = self.save_index
+                self.physics.draw_plane(add=True)
             if self.nn_weight >= 1.0 and self.save_start_test_i == 0:
                 self.save_start_test_i = self.save_index
+                self.physics.draw_plane(add=True)
             if self.physics.hyq_fall and self.t_fall == 0:
                 self.t_fall = self.t
 
@@ -493,6 +497,7 @@ class Simulation(object):
                         if self.save_states or self.save_metrics:
                             self.save_states_t_trot = copy.copy(self.t)
                             self.save_trot_i = self.save_index
+                            self.physic.draw_plane(add=True)
 
                 # Apply noise on the robot
                 if not self.remote and trot_flag:

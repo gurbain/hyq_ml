@@ -17,14 +17,14 @@ import threading
 import traceback
 
 from gazebo_msgs.srv import ApplyBodyWrench
-from geometry_msgs.msg import Vector3, Wrench
+from geometry_msgs.msg import Vector3, Wrench, Quaternion, Pose, Point, Polygon, PolygonStamped
 from rosgraph_msgs.msg import Clock
 from dls_msgs.msg import StringDoubleArray
 from dwl_msgs.msg import WholeBodyState
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32, Header, Float32MultiArray
+from std_msgs.msg import Float32, Header, Float32MultiArray, ColorRGBA
 from std_srvs.srv import Empty
-
+from visualization_msgs.msg import Marker
 
 import processing
 import utils
@@ -39,7 +39,7 @@ class HyQSim(threading.Thread):
 
     def __init__(self, view=False, rviz=False, rt=True, remote=False, fast=False,
                  init_impedance=None, verbose=1, publish_error=False,
-                 inputs=None):
+                 publish_markers=True, inputs=None):
 
         threading.Thread.__init__(self)
 
@@ -63,12 +63,20 @@ class HyQSim(threading.Thread):
                                "/../config/hyq_sim_options.ini"
 
         # ROS Topics
+        self.publish_markers = publish_markers
         self.clock_sub_name = 'clock'
         self.hyq_state_sub_name = "/hyq/robot_states"
         self.hyq_tgt_action_sub_name = "/hyq/des_rcf_joint_states"
         self.hyq_nn_pub_name = "/hyq/des_nn_joint_states"
         self.hyq_nn_w_pub_name = "/hyq/nn_weight"
+        self.hyq_vel_pub_name = "/hyq/vel"
         self.hyq_pow_pub_name = "/hyq/power"
+        self.hyq_lh_mark_pub_name = "/hyq/lh_mark"
+        self.hyq_rh_mark_pub_name = "/hyq/rh_mark"
+        self.hyq_lf_mark_pub_name = "/hyq/lf_mark"
+        self.hyq_rf_mark_pub_name = "/hyq/rf_mark"
+        self.hyq_base_mark_pub_name = "/hyq/base_mark"
+        self.hyq_phase_poly_pub_name = "/hyq/phase_poly"
         self.hyq_grf_th_pub_name = "/hyq/grf_th"
         self.hyq_js_err_name = "/hyq/nn_rcf_js_error"
         self.hyq_haa_err_name = "/hyq/nn_rcf_haa_pos_error"
@@ -97,6 +105,13 @@ class HyQSim(threading.Thread):
         self.pub_kfed_err = None
         self.pub_tot_err = None
         self.pub_grf_th = None
+        self.pub_lh_mark = None
+        self.pub_lf_mark = None
+        self.pub_rh_mark = None
+        self.pub_rf_mark = None
+        self.pub_base_mark = None
+        self.pub_mark_rate = None
+        self.pub_poly = None
         self.srv_noise = None
 
         # Simulation state
@@ -158,6 +173,7 @@ class HyQSim(threading.Thread):
         self.verbose = verbose
         self.daemon = True
         self.stopped = False
+        self.t_stopped = False
 
         self.vel_wf = processing.WindowFilter(ord=20)
         self.vel_lpf = processing.LowPassFilter(fc=3, ts=0.004, ord=20)
@@ -197,7 +213,12 @@ class HyQSim(threading.Thread):
                                           Float32,
                                           queue_size=1)
 
-            self.pub_vel = ros.Publisher("/hyq/vel", Float32MultiArray, queue_size=1)
+            self.pub_vel = ros.Publisher(self.hyq_vel_pub_name,
+                                         Float32MultiArray,
+                                         queue_size=1)
+            if self.publish_markers:
+                self.pub_mark_thread = threading.Thread(target=self.pub_mark)
+                self.pub_mark_thread.start()
             if 'grf_th' in self.hyq_inputs:
                 self.pub_grf_th = ros.Publisher(self.hyq_grf_th_pub_name,
                                                 Float32MultiArray,
@@ -255,11 +276,16 @@ class HyQSim(threading.Thread):
                 if self.sim_ps.isalive():
                     self.stop_sim()
 
+        i = 0
         while not self.stopped:
+            if i%100 == 99:
+                self.draw_plane(add=False)
             time.sleep(0.1)
+            i += 1
 
     def stop(self):
 
+        self.t_stopped = True
         self.stop_sim()
         self.stopped = True
 
@@ -303,6 +329,9 @@ class HyQSim(threading.Thread):
             return
 
         self.printv(" ===== Stopping Physics =====")
+
+        if self.publish_markers:
+            self.pub_mark_thread.join()
 
         if clean_stop:
             self.sim_ps.sendcontrol("c")
@@ -833,6 +862,106 @@ class HyQSim(threading.Thread):
             self.hyq_action_it += 1
         finally:
             self.process_action_flag.release()
+
+    def pub_mark(self):
+
+        # Init publishers
+        self.pub_lh_mark = ros.Publisher(self.hyq_lh_mark_pub_name, Marker,
+                                         queue_size=1)
+        self.pub_rh_mark = ros.Publisher(self.hyq_rh_mark_pub_name, Marker,
+                                         queue_size=1)
+        self.pub_lf_mark = ros.Publisher(self.hyq_lf_mark_pub_name, Marker,
+                                         queue_size=1)
+        self.pub_rf_mark = ros.Publisher(self.hyq_rf_mark_pub_name, Marker,
+                                         queue_size=1)
+        self.pub_base_mark = ros.Publisher(self.hyq_base_mark_pub_name, Marker,
+                                         queue_size=1)
+        self.pub_mark_rate = ros.Rate(25)
+        self.pub_lh_points = []
+        self.pub_rh_points = []
+        self.pub_lf_points = []
+        self.pub_rf_points = []
+        self.pub_base_points = []
+
+        # Markers values to be reused
+        t = Marker.LINE_STRIP
+        a = Marker.ADD
+        d = ros.Duration(0.04)
+        s = Vector3(0.01, 0.01, 0.01)
+        h = Header(frame_id='world')
+        c_lh = ColorRGBA(0.0, 1.0, 0.0, 1)
+        c_rh = ColorRGBA(0.0, 0.4, 0.7, 1)
+        c_lf = ColorRGBA(0.5, 0.0, 0.5, 1)
+        c_rf = ColorRGBA(1.0, 0.0, 0.2, 1)
+        c_base = ColorRGBA(0.0, 1.0, 0.0, 1)
+        p = Pose(Point(0, 0, 0), Quaternion(0, 0, 0, 1)) 
+
+        while not self.t_stopped:
+
+            try:
+                # Get TFs
+                (lh, r) = self.list_tf.lookupTransform('/world', '/lh_foot', ros.Time(0))
+                (rh, r) = self.list_tf.lookupTransform('/world', '/rh_foot', ros.Time(0))
+                (lf, r) = self.list_tf.lookupTransform('/world', '/lf_foot', ros.Time(0))
+                (rf, r) = self.list_tf.lookupTransform('/world', '/rf_foot', ros.Time(0))
+                (base, r) = self.list_tf.lookupTransform('/world', '/trunk', ros.Time(0))
+                self.pub_lh_points.append(Point(lh[0], lh[1], lh[2]))
+                self.pub_rh_points.append(Point(rh[0], rh[1], rh[2]))
+                self.pub_lf_points.append(Point(lf[0], lf[1], lf[2]))
+                self.pub_rf_points.append(Point(rf[0], rf[1], rf[2]))
+                self.pub_base_points.append(Point(base[0], base[1], base[2]))
+
+                # Publish markers
+                m_lh = Marker(type=t, action=a, lifetime=d, pose=p, scale=s, header=h, color=c_lh,
+                              points=self.pub_lh_points)
+                m_rh = Marker(type=t, action=a, lifetime=d, pose=p, scale=s, header=h, color=c_rh,
+                              points=self.pub_rh_points)
+                m_lf = Marker(type=t, action=a, lifetime=d, pose=p, scale=s, header=h, color=c_lf,
+                              points=self.pub_lf_points)
+                m_rf = Marker(type=t, action=a, lifetime=d, pose=p, scale=s, header=h, color=c_rf,
+                              points=self.pub_rf_points)
+                m_base = Marker(type=t, action=a, lifetime=d, pose=p, scale=s, header=h, color=c_base,
+                                points=self.pub_base_points)
+                self.pub_lh_mark.publish(m_lh)
+                self.pub_rh_mark.publish(m_rh)
+                self.pub_lf_mark.publish(m_lf)
+                self.pub_rf_mark.publish(m_rf)
+                self.pub_base_mark.publish(m_base)
+
+            except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+                pass
+
+            # Sleep
+            self.pub_mark_rate.sleep()
+
+    def draw_plane(self, add=False):
+
+        if self.pub_poly is None:
+            self.pub_poly = ros.Publisher(self.hyq_phase_poly_pub_name, Marker,
+                                          queue_size=20)
+            self.poly_points = []
+
+        try:
+            if add:
+                x, y, z = self.get_hyq_x_y_z()
+
+                t = Marker.TRIANGLE_LIST
+                a = Marker.ADD
+                d = ros.Duration(100)
+                s = Vector3(1, 1, 1)
+                h = Header(frame_id='world')
+                c = ColorRGBA(0.0, 0.0, 1.0, 0.8)
+                p = Pose(Point(0, 0, 0), Quaternion(0, 0, 0, 1)) 
+                self.poly_points += [Point(x, y - 0.7, z - 0.7), Point(x, y + 0.7, z + 0.1),
+                                     Point(x, y - 0.7, z + 0.1), Point(x, y + 0.7, z + 0.1), 
+                                     Point(x, y - 0.7, z - 0.7), Point(x, y + 0.7, z - 0.7)]
+
+            m = Marker(type=t, action=a, lifetime=d, pose=p, scale=s, header=h,
+                       color=c, points=self.poly_points)
+            self.pub_poly.publish(m)
+
+        except Exception:
+            pass
 
     def printv(self, txt):
 
