@@ -497,7 +497,7 @@ class Simulation(object):
                         if self.save_states or self.save_metrics:
                             self.save_states_t_trot = copy.copy(self.t)
                             self.save_trot_i = self.save_index
-                            self.physic.draw_plane(add=True)
+                            self.physics.draw_plane(add=True)
 
                 # Apply noise on the robot
                 if not self.remote and trot_flag:
