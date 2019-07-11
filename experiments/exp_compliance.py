@@ -22,7 +22,7 @@ if __name__ == '__main__':
     # Create a list of experiments
     exp_list = []
     for i in range(10):
-        for kp in randomly(np.linspace(75, 4000, 30)):
+        for kp in randomly(np.linspace(75, 1500, 30)):
                     # Open the config file and retrieve the data
                     config1 = ConfigParser.ConfigParser()
                     config1.read(DEF_CONFIG)
