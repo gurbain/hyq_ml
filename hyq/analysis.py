@@ -243,7 +243,12 @@ def get_fields(data, config_fields, conf):
 
 def clean_data(data):
 
+    print len(data)
+    #data = [d for d in data if len(d) == 115]
+    print len(data)
+
     for d in data:
+        print len(d)
         d["test_grf_steps"] = (d["test_lh_grf_steps"] + d["test_lf_grf_steps"] +
                                d["test_rf_grf_steps"] + d["test_rh_grf_steps"]) / 4
 
