@@ -42,6 +42,7 @@ RUN cd hyq_ml/docker/resources/install && \
 # #------------------------
 # # DLS HyQ Install
 # #------------------------
+RUN cd hyq_ml && git pull origin master
 RUN cd hyq_ml/docker/resources/install && \
     bash install_dls.sh
 RUN sudo chmod a+x hyq_ml/docker/resources/bin/hyq
