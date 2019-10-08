@@ -10,6 +10,8 @@ case $HOSTN in
         if [ -d "$DATA_FOLDER" ]; then
             echo " === Running on the IDLab LAN with $DATA_FOLDER mounted === "
             docker run \
+                --network="host" \
+                --add-host=gu-laptop:127.0.1.1 \
                 --add-host=koe:172.18.20.19 \
                 --add-host=koe.elis.ugent.be:172.18.20.19 \
                 --add-host=paard:172.18.20.20 \
@@ -29,6 +31,8 @@ case $HOSTN in
         else
             echo " === Running on the IDLab LAN with no mount === "
             docker run \
+                --network="host" \
+                --add-host=gu-laptop:127.0.1.1 \
                 --add-host=koe:172.18.20.19 \
                 --add-host=koe.elis.ugent.be:172.18.20.19 \
                 --add-host=paard:172.18.20.20 \

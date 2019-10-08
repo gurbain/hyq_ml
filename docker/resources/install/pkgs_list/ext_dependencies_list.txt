@@ -42,7 +42,7 @@ libjs-mathjax
 libboost-thread-dev
 
 # Java
-oracle-java8-installer
+# oracle-java8-installer # Package is deprecated
 
 # OpenCV
 #libopencv-nonfree-dev
