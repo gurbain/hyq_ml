@@ -8,6 +8,8 @@ case $HOSTN in
     *"laptop"*)
     echo " === Building on the IDLab LAN === "
     docker build \
+        --network="host" \
+        --add-host=gu-laptop:127.0.1.1 \
         --add-host=koe:172.18.20.19 \
         --add-host=koe.elis.ugent.be:172.18.20.19 \
         --add-host=paard:172.18.20.20 \
